@@ -13,7 +13,7 @@ h2 = "2.4.240"
 jakarta-persistence = "3.1.0"
 spring-data = "3.5.10"
 spring-framework = "6.2.17"
-postgresql-driver = "42.7.7"
+postgresql-driver = "42.7.10"
 
 [libraries]
 spring-boot-starter-test = { module = "org.springframework.boot:spring-boot-starter-test" }
