@@ -1,0 +1,121 @@
+package com.borjaglez.specrepository.core;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatNullPointerException;
+
+import org.junit.jupiter.api.Test;
+import org.springframework.data.domain.Sort;
+
+class QueryPlanBuilderTest {
+
+  @Test
+  void shouldBuildImmutableQueryPlan() {
+    QueryPlan<String> plan =
+        SpecificationQueryBuilder.forEntity(String.class)
+            .where("name", Operators.CONTAINS, "Borja", true, false)
+            .and(group -> group.where("email", Operators.CONTAINS, "@example.com"))
+            .leftJoin("profile")
+            .leftFetch("roles")
+            .groupBy("status")
+            .select("name", "email")
+            .sort(Sort.by("name"))
+            .distinct()
+            .build();
+
+    assertThat(plan.entityType()).isEqualTo(String.class);
+    assertThat(plan.rootCondition().conditions()).hasSize(2);
+    assertThat(plan.joins()).containsExactly(new JoinInstruction("profile", JoinMode.LEFT));
+    assertThat(plan.fetches()).containsExactly(new FetchInstruction("roles", JoinMode.LEFT));
+    assertThat(plan.groupBy()).containsExactly("status");
+    assertThat(plan.projections()).containsExactly("name", "email");
+    assertThat(plan.sort().getOrderFor("name")).isNotNull();
+    assertThat(plan.distinct()).isTrue();
+  }
+
+  @Test
+  void shouldRejectNullEntityType() {
+    assertThatNullPointerException()
+        .isThrownBy(() -> new QueryPlanBuilder<>(null))
+        .withMessage("entityType must not be null");
+  }
+
+  @Test
+  void whereWithThreeArgsShouldDelegateToRootGroup() {
+    QueryPlan<String> plan =
+        new QueryPlanBuilder<>(String.class).where("field", Operators.EQUALS, "val").build();
+
+    assertThat(plan.rootCondition().conditions()).hasSize(1);
+    PredicateCondition pc = (PredicateCondition) plan.rootCondition().conditions().get(0);
+    assertThat(pc.ignoreCase()).isFalse();
+    assertThat(pc.includeNulls()).isFalse();
+  }
+
+  @Test
+  void orShouldAddNestedOrGroup() {
+    QueryPlan<String> plan =
+        new QueryPlanBuilder<>(String.class)
+            .or(g -> g.where("a", Operators.EQUALS, 1).where("b", Operators.EQUALS, 2))
+            .build();
+
+    GroupCondition nested = (GroupCondition) plan.rootCondition().conditions().get(0);
+    assertThat(nested.logicalOperator()).isEqualTo(LogicalOperator.OR);
+    assertThat(nested.conditions()).hasSize(2);
+  }
+
+  @Test
+  void innerJoinShouldAddJoinsWithInnerMode() {
+    QueryPlan<String> plan = new QueryPlanBuilder<>(String.class).innerJoin("a", "b").build();
+
+    assertThat(plan.joins())
+        .containsExactly(
+            new JoinInstruction("a", JoinMode.INNER), new JoinInstruction("b", JoinMode.INNER));
+  }
+
+  @Test
+  void rightJoinShouldAddJoinsWithRightMode() {
+    QueryPlan<String> plan = new QueryPlanBuilder<>(String.class).rightJoin("x").build();
+
+    assertThat(plan.joins()).containsExactly(new JoinInstruction("x", JoinMode.RIGHT));
+  }
+
+  @Test
+  void innerFetchShouldAddFetchesWithInnerMode() {
+    QueryPlan<String> plan = new QueryPlanBuilder<>(String.class).innerFetch("a", "b").build();
+
+    assertThat(plan.fetches())
+        .containsExactly(
+            new FetchInstruction("a", JoinMode.INNER), new FetchInstruction("b", JoinMode.INNER));
+  }
+
+  @Test
+  void rightFetchShouldAddFetchesWithRightMode() {
+    QueryPlan<String> plan = new QueryPlanBuilder<>(String.class).rightFetch("z").build();
+
+    assertThat(plan.fetches()).containsExactly(new FetchInstruction("z", JoinMode.RIGHT));
+  }
+
+  @Test
+  void sortShouldRejectNull() {
+    assertThatNullPointerException()
+        .isThrownBy(() -> new QueryPlanBuilder<>(String.class).sort(null))
+        .withMessage("sort must not be null");
+  }
+
+  @Test
+  void buildWithoutDistinctShouldDefaultToFalse() {
+    QueryPlan<String> plan = new QueryPlanBuilder<>(String.class).build();
+    assertThat(plan.distinct()).isFalse();
+    assertThat(plan.sort()).isEqualTo(Sort.unsorted());
+    assertThat(plan.joins()).isEmpty();
+    assertThat(plan.fetches()).isEmpty();
+    assertThat(plan.projections()).isEmpty();
+    assertThat(plan.groupBy()).isEmpty();
+  }
+
+  @Test
+  void specificationQueryBuilderForEntityShouldReturnBuilder() {
+    QueryPlanBuilder<Integer> builder = SpecificationQueryBuilder.forEntity(Integer.class);
+    QueryPlan<Integer> plan = builder.build();
+    assertThat(plan.entityType()).isEqualTo(Integer.class);
+  }
+}

@@ -1,0 +1,57 @@
+[versions]
+spring-boot = "3.5.12"
+spring-boot4 = "4.0.4"
+spring-dependency-management = "1.1.7"
+lombok = "9.2.0"
+spotless = "8.4.0"
+maven-publish = "0.36.0"
+testcontainers = "1.21.3"
+junit = "5.14.3"
+assertj = "3.27.7"
+mockito = "5.23.0"
+h2 = "2.4.240"
+jakarta-persistence = "3.1.0"
+spring-data = "3.5.10"
+spring-framework = "6.2.17"
+postgresql-driver = "42.7.7"
+
+[libraries]
+spring-boot-starter-test = { module = "org.springframework.boot:spring-boot-starter-test" }
+spring-boot-starter-web = { module = "org.springframework.boot:spring-boot-starter-web" }
+spring-boot-starter-data-jpa = { module = "org.springframework.boot:spring-boot-starter-data-jpa" }
+spring-boot-autoconfigure = { module = "org.springframework.boot:spring-boot-autoconfigure" }
+spring-boot-configuration-processor = { module = "org.springframework.boot:spring-boot-configuration-processor" }
+spring-boot-devtools = { module = "org.springframework.boot:spring-boot-devtools" }
+spring-boot-docker-compose = { module = "org.springframework.boot:spring-boot-docker-compose" }
+
+spring-data-commons = { module = "org.springframework.data:spring-data-commons", version.ref = "spring-data" }
+spring-data-jpa = { module = "org.springframework.data:spring-data-jpa", version.ref = "spring-data" }
+spring-context = { module = "org.springframework:spring-context", version.ref = "spring-framework" }
+spring-core = { module = "org.springframework:spring-core", version.ref = "spring-framework" }
+jakarta-persistence-api = { module = "jakarta.persistence:jakarta.persistence-api", version.ref = "jakarta-persistence" }
+
+spring-boot4-autoconfigure = { module = "org.springframework.boot:spring-boot-autoconfigure", version.ref = "spring-boot4" }
+spring-boot4-configuration-processor = { module = "org.springframework.boot:spring-boot-configuration-processor", version.ref = "spring-boot4" }
+spring-boot4-starter-test = { module = "org.springframework.boot:spring-boot-starter-test", version.ref = "spring-boot4" }
+spring-boot4-starter-web = { module = "org.springframework.boot:spring-boot-starter-web", version.ref = "spring-boot4" }
+spring-boot4-starter-data-jpa = { module = "org.springframework.boot:spring-boot-starter-data-jpa", version.ref = "spring-boot4" }
+spring-boot4-devtools = { module = "org.springframework.boot:spring-boot-devtools", version.ref = "spring-boot4" }
+spring-boot4-docker-compose = { module = "org.springframework.boot:spring-boot-docker-compose", version.ref = "spring-boot4" }
+
+junit-bom = { module = "org.junit:junit-bom", version.ref = "junit" }
+junit-jupiter = { module = "org.junit.jupiter:junit-jupiter" }
+junit-platform-launcher = { module = "org.junit.platform:junit-platform-launcher" }
+assertj-core = { module = "org.assertj:assertj-core", version.ref = "assertj" }
+mockito-junit-jupiter = { module = "org.mockito:mockito-junit-jupiter", version.ref = "mockito" }
+testcontainers-bom = { module = "org.testcontainers:testcontainers-bom", version.ref = "testcontainers" }
+testcontainers-junit = { module = "org.testcontainers:junit-jupiter", version.ref = "testcontainers" }
+testcontainers-postgresql = { module = "org.testcontainers:postgresql", version.ref = "testcontainers" }
+h2 = { module = "com.h2database:h2", version.ref = "h2" }
+postgresql = { module = "org.postgresql:postgresql", version.ref = "postgresql-driver" }
+
+[plugins]
+spring-boot = { id = "org.springframework.boot", version.ref = "spring-boot" }
+spring-dependency-management = { id = "io.spring.dependency-management", version.ref = "spring-dependency-management" }
+lombok = { id = "io.freefair.lombok", version.ref = "lombok" }
+spotless = { id = "com.diffplug.spotless", version.ref = "spotless" }
+maven-publish = { id = "com.vanniktech.maven.publish", version.ref = "maven-publish" }

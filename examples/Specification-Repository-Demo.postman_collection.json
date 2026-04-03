@@ -1,0 +1,417 @@
+{
+  "info": {
+    "name": "Specification Repository Demo",
+    "description": "Test collection for the spring-boot-specification-repository demo API.\n\nStart the boot3-demo (port 8080) or boot4-demo (port 8081) before running.\n\nThe `baseUrl` variable defaults to boot3-demo. Change it to test boot4.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Basic CRUD",
+      "item": [
+        {
+          "name": "Get all products",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Returns 15 products', () => {",
+            "    pm.expect(pm.response.json()).to.be.an('array').with.lengthOf(15);",
+            "});"
+          ]}}],
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/products" }
+        },
+        {
+          "name": "Get product by ID (exists)",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Returns MacBook Pro 16', () => {",
+            "    const data = pm.response.json();",
+            "    pm.expect(data.name).to.eql('MacBook Pro 16');",
+            "    pm.expect(data.price).to.eql(2499.99);",
+            "});"
+          ]}}],
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/products/1" }
+        },
+        {
+          "name": "Get product by ID (not found)",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 404', () => pm.response.to.have.status(404));"
+          ]}}],
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/products/999" }
+        }
+      ]
+    },
+    {
+      "name": "EQUALS operator",
+      "item": [
+        {
+          "name": "Find ACTIVE products",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('All are ACTIVE', () => {",
+            "    const data = pm.response.json();",
+            "    pm.expect(data.length).to.eql(11);",
+            "    data.forEach(p => pm.expect(p.status).to.eql('ACTIVE'));",
+            "});"
+          ]}}],
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/products/status/ACTIVE" }
+        },
+        {
+          "name": "Find DISCONTINUED products",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Returns 2 discontinued', () => {",
+            "    const data = pm.response.json();",
+            "    pm.expect(data.length).to.eql(2);",
+            "    data.forEach(p => pm.expect(p.status).to.eql('DISCONTINUED'));",
+            "});"
+          ]}}],
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/products/status/DISCONTINUED" }
+        },
+        {
+          "name": "Find INACTIVE products",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Returns 2 inactive', () => {",
+            "    pm.expect(pm.response.json().length).to.eql(2);",
+            "});"
+          ]}}],
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/products/status/INACTIVE" }
+        }
+      ]
+    },
+    {
+      "name": "CONTAINS operator",
+      "item": [
+        {
+          "name": "Search by name - 'Pro'",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('All results contain Pro in name', () => {",
+            "    const data = pm.response.json();",
+            "    pm.expect(data.length).to.be.greaterThan(0);",
+            "    data.forEach(p => pm.expect(p.name).to.include('Pro'));",
+            "});",
+            "pm.test('Results sorted by name', () => {",
+            "    const names = pm.response.json().map(p => p.name);",
+            "    const sorted = [...names].sort();",
+            "    pm.expect(names).to.eql(sorted);",
+            "});"
+          ]}}],
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/api/products/search/name?q=Pro", "host": ["{{baseUrl}}"], "path": ["api","products","search","name"], "query": [{"key":"q","value":"Pro"}] } }
+        },
+        {
+          "name": "Search by name - 'iPhone'",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Finds iPhone 15 Pro', () => {",
+            "    const data = pm.response.json();",
+            "    pm.expect(data.length).to.eql(1);",
+            "    pm.expect(data[0].name).to.include('iPhone');",
+            "});"
+          ]}}],
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/api/products/search/name?q=iPhone", "host": ["{{baseUrl}}"], "path": ["api","products","search","name"], "query": [{"key":"q","value":"iPhone"}] } }
+        },
+        {
+          "name": "Search by name - no matches",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Returns empty array', () => {",
+            "    pm.expect(pm.response.json()).to.be.an('array').with.lengthOf(0);",
+            "});"
+          ]}}],
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/api/products/search/name?q=zzzzz", "host": ["{{baseUrl}}"], "path": ["api","products","search","name"], "query": [{"key":"q","value":"zzzzz"}] } }
+        }
+      ]
+    },
+    {
+      "name": "OR group (name OR description)",
+      "item": [
+        {
+          "name": "Search 'Spring' in name or description",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Finds Spring in Action and Spring framework guide', () => {",
+            "    const data = pm.response.json();",
+            "    pm.expect(data.length).to.be.greaterThan(0);",
+            "    pm.expect(data.some(p => p.name.includes('Spring') || (p.description && p.description.includes('Spring')))).to.be.true;",
+            "});"
+          ]}}],
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/api/products/search?q=Spring", "host": ["{{baseUrl}}"], "path": ["api","products","search"], "query": [{"key":"q","value":"Spring"}] } }
+        },
+        {
+          "name": "Search 'software' (description match)",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Finds books with software in description', () => {",
+            "    const data = pm.response.json();",
+            "    pm.expect(data.length).to.be.greaterThan(0);",
+            "    data.forEach(p => pm.expect(p.description.toLowerCase()).to.include('software'));",
+            "});"
+          ]}}],
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/api/products/search?q=software", "host": ["{{baseUrl}}"], "path": ["api","products","search"], "query": [{"key":"q","value":"software"}] } }
+        },
+        {
+          "name": "Search 'nonexistent' (no results)",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Returns empty array', () => {",
+            "    pm.expect(pm.response.json()).to.be.an('array').with.lengthOf(0);",
+            "});"
+          ]}}],
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/api/products/search?q=nonexistent", "host": ["{{baseUrl}}"], "path": ["api","products","search"], "query": [{"key":"q","value":"nonexistent"}] } }
+        }
+      ]
+    },
+    {
+      "name": "STARTS_WITH operator",
+      "item": [
+        {
+          "name": "Products starting with 'Mac'",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('All names start with Mac', () => {",
+            "    const data = pm.response.json();",
+            "    pm.expect(data.length).to.be.greaterThan(0);",
+            "    data.forEach(p => pm.expect(p.name).to.match(/^Mac/));",
+            "});"
+          ]}}],
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/api/products/search/name-starts-with?prefix=Mac", "host": ["{{baseUrl}}"], "path": ["api","products","search","name-starts-with"], "query": [{"key":"prefix","value":"Mac"}] } }
+        },
+        {
+          "name": "Products starting with 'S'",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Multiple products start with S', () => {",
+            "    const data = pm.response.json();",
+            "    pm.expect(data.length).to.be.greaterThan(1);",
+            "    data.forEach(p => pm.expect(p.name).to.match(/^S/));",
+            "});"
+          ]}}],
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/api/products/search/name-starts-with?prefix=S", "host": ["{{baseUrl}}"], "path": ["api","products","search","name-starts-with"], "query": [{"key":"prefix","value":"S"}] } }
+        }
+      ]
+    },
+    {
+      "name": "Price range (GTE + LTE)",
+      "item": [
+        {
+          "name": "Products between 20 and 100",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('All prices in range [20, 100]', () => {",
+            "    const data = pm.response.json();",
+            "    pm.expect(data.length).to.be.greaterThan(0);",
+            "    data.forEach(p => {",
+            "        pm.expect(p.price).to.be.at.least(20);",
+            "        pm.expect(p.price).to.be.at.most(100);",
+            "    });",
+            "});",
+            "pm.test('Sorted by price ascending', () => {",
+            "    const prices = pm.response.json().map(p => p.price);",
+            "    for (let i = 1; i < prices.length; i++) pm.expect(prices[i]).to.be.at.least(prices[i-1]);",
+            "});"
+          ]}}],
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/api/products/price-range?min=20&max=100", "host": ["{{baseUrl}}"], "path": ["api","products","price-range"], "query": [{"key":"min","value":"20"},{"key":"max","value":"100"}] } }
+        },
+        {
+          "name": "Products over 1000",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Only expensive products (2)', () => {",
+            "    const data = pm.response.json();",
+            "    pm.expect(data.length).to.eql(2);",
+            "    data.forEach(p => pm.expect(p.price).to.be.at.least(1000));",
+            "});"
+          ]}}],
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/api/products/price-range?min=1000&max=99999", "host": ["{{baseUrl}}"], "path": ["api","products","price-range"], "query": [{"key":"min","value":"1000"},{"key":"max","value":"99999"}] } }
+        }
+      ]
+    },
+    {
+      "name": "Nested path (category join + fetch)",
+      "item": [
+        {
+          "name": "Products in Electronics category",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Returns 6 electronics with category fetched', () => {",
+            "    const data = pm.response.json();",
+            "    pm.expect(data.length).to.eql(6);",
+            "    data.forEach(p => {",
+            "        pm.expect(p.category).to.not.be.null;",
+            "        pm.expect(p.category.name).to.eql('Electronics');",
+            "    });",
+            "});"
+          ]}}],
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/products/category/Electronics" }
+        },
+        {
+          "name": "Products in Books category",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Returns 4 books', () => {",
+            "    pm.expect(pm.response.json().length).to.eql(4);",
+            "});"
+          ]}}],
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/products/category/Books" }
+        }
+      ]
+    },
+    {
+      "name": "Combined filters",
+      "item": [
+        {
+          "name": "Active Electronics between 500 and 2000",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('All match combined criteria', () => {",
+            "    const data = pm.response.json();",
+            "    pm.expect(data.length).to.be.greaterThan(0);",
+            "    data.forEach(p => {",
+            "        pm.expect(p.status).to.eql('ACTIVE');",
+            "        pm.expect(p.category.name).to.eql('Electronics');",
+            "        pm.expect(p.price).to.be.at.least(500);",
+            "        pm.expect(p.price).to.be.at.most(2000);",
+            "    });",
+            "});"
+          ]}}],
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/api/products/category/Electronics/price-range?min=500&max=2000", "host": ["{{baseUrl}}"], "path": ["api","products","category","Electronics","price-range"], "query": [{"key":"min","value":"500"},{"key":"max","value":"2000"}] } }
+        },
+        {
+          "name": "Active Books under 50",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Only active books under 50', () => {",
+            "    const data = pm.response.json();",
+            "    data.forEach(p => {",
+            "        pm.expect(p.status).to.eql('ACTIVE');",
+            "        pm.expect(p.price).to.be.at.most(50);",
+            "    });",
+            "});"
+          ]}}],
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/api/products/category/Books/price-range?min=0&max=50", "host": ["{{baseUrl}}"], "path": ["api","products","category","Books","price-range"], "query": [{"key":"min","value":"0"},{"key":"max","value":"50"}] } }
+        }
+      ]
+    },
+    {
+      "name": "Pagination",
+      "item": [
+        {
+          "name": "Page 0 with size 5",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Page structure correct', () => {",
+            "    const data = pm.response.json();",
+            "    pm.expect(data.content).to.be.an('array');",
+            "    pm.expect(data.content.length).to.eql(5);",
+            "    pm.expect(data.totalElements).to.be.greaterThan(0);",
+            "});",
+            "pm.test('Excludes DISCONTINUED', () => {",
+            "    pm.response.json().content.forEach(p => pm.expect(p.status).to.not.eql('DISCONTINUED'));",
+            "});"
+          ]}}],
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/api/products/paginated?page=0&size=5", "host": ["{{baseUrl}}"], "path": ["api","products","paginated"], "query": [{"key":"page","value":"0"},{"key":"size","value":"5"}] } }
+        },
+        {
+          "name": "Page 1 with size 5",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Page 1 has content', () => {",
+            "    const data = pm.response.json();",
+            "    pm.expect(data.content.length).to.be.greaterThan(0);",
+            "    pm.expect(data.number).to.eql(1);",
+            "});"
+          ]}}],
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/api/products/paginated?page=1&size=5", "host": ["{{baseUrl}}"], "path": ["api","products","paginated"], "query": [{"key":"page","value":"1"},{"key":"size","value":"5"}] } }
+        }
+      ]
+    },
+    {
+      "name": "Count query",
+      "item": [
+        {
+          "name": "Count ACTIVE products",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Count is 11', () => pm.expect(parseInt(pm.response.text())).to.eql(11));"
+          ]}}],
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/products/count/ACTIVE" }
+        },
+        {
+          "name": "Count DISCONTINUED products",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Count is 2', () => pm.expect(parseInt(pm.response.text())).to.eql(2));"
+          ]}}],
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/products/count/DISCONTINUED" }
+        }
+      ]
+    },
+    {
+      "name": "IS_NULL operator",
+      "item": [
+        {
+          "name": "Products without description",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Returns 2 products with null description', () => {",
+            "    const data = pm.response.json();",
+            "    pm.expect(data.length).to.eql(2);",
+            "    data.forEach(p => pm.expect(p.description).to.be.null);",
+            "});"
+          ]}}],
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/products/without-description" }
+        }
+      ]
+    },
+    {
+      "name": "IN operator + distinct",
+      "item": [
+        {
+          "name": "Products in Electronics and Books",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Returns 10 products from 2 categories', () => {",
+            "    pm.expect(pm.response.json().length).to.eql(10);",
+            "});"
+          ]}}],
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/api/products/in-categories?categories=Electronics&categories=Books", "host": ["{{baseUrl}}"], "path": ["api","products","in-categories"], "query": [{"key":"categories","value":"Electronics"},{"key":"categories","value":"Books"}] } }
+        },
+        {
+          "name": "Products in all 4 categories",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Returns all 15 products', () => {",
+            "    pm.expect(pm.response.json().length).to.eql(15);",
+            "});"
+          ]}}],
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/api/products/in-categories?categories=Electronics&categories=Books&categories=Sports&categories=Clothing", "host": ["{{baseUrl}}"], "path": ["api","products","in-categories"], "query": [{"key":"categories","value":"Electronics"},{"key":"categories","value":"Books"},{"key":"categories","value":"Sports"},{"key":"categories","value":"Clothing"}] } }
+        }
+      ]
+    },
+    {
+      "name": "findOne (single result)",
+      "item": [
+        {
+          "name": "Cheapest active product",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Returns Summer T-Shirt at 19.99', () => {",
+            "    const data = pm.response.json();",
+            "    pm.expect(data.name).to.eql('Summer T-Shirt');",
+            "    pm.expect(data.price).to.eql(19.99);",
+            "    pm.expect(data.status).to.eql('ACTIVE');",
+            "});"
+          ]}}],
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/products/cheapest-active" }
+        }
+      ]
+    }
+  ]
+}

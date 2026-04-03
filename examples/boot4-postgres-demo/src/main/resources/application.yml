@@ -1,0 +1,16 @@
+spring:
+  application:
+    name: boot4-postgres-demo
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: true
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+  docker:
+    compose:
+      file: examples/boot4-postgres-demo/compose.yml
+      lifecycle-management: start-and-stop
+server:
+  port: 8083
