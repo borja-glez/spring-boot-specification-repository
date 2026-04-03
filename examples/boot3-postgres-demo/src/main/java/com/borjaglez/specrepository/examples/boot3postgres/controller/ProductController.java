@@ -1,11 +1,13 @@
 package com.borjaglez.specrepository.examples.boot3postgres.controller;
 
-import com.borjaglez.specrepository.examples.boot3postgres.entity.Product;
-import com.borjaglez.specrepository.examples.boot3postgres.service.ProductService;
 import java.util.List;
+
 import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+
+import com.borjaglez.specrepository.examples.boot3postgres.entity.Product;
+import com.borjaglez.specrepository.examples.boot3postgres.service.ProductService;
 
 @RestController
 @RequestMapping("/api/products")
