@@ -22,14 +22,15 @@ tasks.register("coverage") {
 
 tasks.register("quality") {
     group = LifecycleBasePlugin.VERIFICATION_GROUP
-    description = "Runs tests and coverage verification."
+    description = "Runs tests, coverage verification, and formatting checks."
     dependsOn(
         ":specification-repository-core:test",
         ":specification-repository-jpa:test",
         ":specification-repository-boot3-starter:test",
         ":specification-repository-boot4-starter:test",
         ":specification-repository-test-support:test",
-        "coverage"
+        "coverage",
+        "spotlessCheckAll"
     )
 }
 
