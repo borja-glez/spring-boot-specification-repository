@@ -1,6 +1,6 @@
 [versions]
 spring-boot = "3.5.12"
-spring-boot4 = "4.0.4"
+spring-boot4 = "4.0.5"
 spring-dependency-management = "1.1.7"
 lombok = "9.2.0"
 spotless = "8.4.0"
