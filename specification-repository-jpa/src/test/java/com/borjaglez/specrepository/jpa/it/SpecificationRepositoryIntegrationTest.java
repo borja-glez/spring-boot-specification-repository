@@ -286,7 +286,7 @@ class SpecificationRepositoryIntegrationTest {
 
   @Test
   void shouldChainFluentMethods() {
-    List<TestCustomer> results =
+    QueryPlan<TestCustomer> plan =
         repository
             .query()
             .where("status", Operators.EQUALS, "ACTIVE")
@@ -300,10 +300,67 @@ class SpecificationRepositoryIntegrationTest {
             .select("name")
             .distinct()
             .sort(Sort.by("name"))
-            .findAll();
+            .plan();
 
     // This tests that all fluent methods return SpecificationExecutableQuery
-    assertThat(results).isNotNull();
+    assertThat(plan).isNotNull();
+  }
+
+  @Test
+  void shouldProjectSingleSelectedField() {
+    List<?> results =
+        repository
+            .query()
+            .where("status", Operators.EQUALS, "ACTIVE")
+            .sort(Sort.by("name"))
+            .select("name")
+            .findAll();
+
+    assertThat(results).extracting(Object::toString).containsExactly("Borja", "Lucia");
+  }
+
+  @Test
+  void shouldProjectMultipleSelectedFields() {
+    List<?> results =
+        repository
+            .query()
+            .where("status", Operators.EQUALS, "ACTIVE")
+            .sort(Sort.by("name"))
+            .select("name", "profile.city")
+            .findAll();
+
+    assertThat(results)
+        .hasSize(2)
+        .allSatisfy(result -> assertThat(result).isInstanceOf(Object[].class));
+    assertThat((Object[]) results.get(0)).containsExactly("Borja", "Madrid");
+    assertThat((Object[]) results.get(1)).containsExactly("Lucia", "Barcelona");
+  }
+
+  @Test
+  void shouldProjectPagedResults() {
+    Page<?> page =
+        repository
+            .query()
+            .where("status", Operators.IS_NOT_NULL, null)
+            .sort(Sort.by("name"))
+            .select("name")
+            .findAll(PageRequest.of(0, 2));
+
+    assertThat(page.getContent()).extracting(Object::toString).containsExactly("Borja", "John");
+    assertThat(page.getTotalElements()).isEqualTo(3);
+  }
+
+  @Test
+  void shouldProjectFindOneResult() {
+    Optional<?> result =
+        repository
+            .query()
+            .where("status", Operators.EQUALS, "ACTIVE")
+            .sort(Sort.by("name"))
+            .select("name")
+            .findOne();
+
+    assertThat(result).hasValueSatisfying(value -> assertThat(value).isEqualTo("Borja"));
   }
 
   // -- findAll and count with QueryPlan directly --
