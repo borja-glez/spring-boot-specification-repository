@@ -12,7 +12,7 @@ mockito = "5.23.0"
 h2 = "2.4.240"
 jakarta-persistence = "3.1.0"
 spring-data = "3.5.10"
-spring-framework = "6.2.17"
+spring-framework = "7.0.6"
 postgresql-driver = "42.7.7"
 
 [libraries]
