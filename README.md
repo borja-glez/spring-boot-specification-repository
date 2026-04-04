@@ -113,6 +113,25 @@ List<Product> products = productRepository.query()
 
 The builder creates an immutable query plan. The repository executes it.
 
+### Projection Queries
+
+`select(...)` now affects the executed JPA query.
+
+```java
+List<?> names = productRepository.query()
+    .where("status", Operators.EQUALS, "ACTIVE")
+    .sort(Sort.by("name"))
+    .select("name")
+    .findAll();
+```
+
+Current projection behavior is intentionally minimal:
+
+- one selected field returns scalar values at runtime (for example `List<String>`)
+- multiple selected fields return `Object[]` rows at runtime
+- the repository API remains entity-typed today, so assign projection results to `List<?>`, `Page<?>`, or `Optional<?>`
+- fetch joins are intended for entity loading and should not be combined with projections
+
 ## Usage Examples
 
 Assume the following entity model (used across all demo applications):
@@ -242,6 +261,19 @@ Page<Product> page = productRepository.query()
 ```
 
 When using `Pageable`, its sort takes priority over any sort set on the builder.
+
+### Grouped Counts
+
+`groupBy(...)` is applied to the underlying JPA Criteria query, so grouped counts honor the same filters as `findAll()`:
+
+```java
+long grouped = productRepository.query()
+    .where("status", Operators.IS_NOT_NULL, null)
+    .groupBy("status")
+    .count();
+```
+
+Current limitation: repository execution still returns root entities, so `groupBy(...)` currently supports grouped counts, but not aggregate/projection results.
 
 ### Single Result and Count
 
