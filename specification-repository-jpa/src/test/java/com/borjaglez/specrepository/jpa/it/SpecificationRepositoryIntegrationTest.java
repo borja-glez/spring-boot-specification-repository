@@ -306,6 +306,24 @@ class SpecificationRepositoryIntegrationTest {
     assertThat(results).isNotNull();
   }
 
+  @Test
+  void shouldCountGroupsAfterFiltering() {
+    long count =
+        repository.query().where("status", Operators.IS_NOT_NULL, null).groupBy("status").count();
+
+    assertThat(count).isEqualTo(2);
+  }
+
+  @Test
+  void shouldCountGroupedQueryPlan() {
+    QueryPlan<TestCustomer> plan =
+        repository.query().where("status", Operators.IS_NOT_NULL, null).groupBy("status").plan();
+
+    long count = repository.count(plan);
+
+    assertThat(count).isEqualTo(2);
+  }
+
   // -- findAll and count with QueryPlan directly --
 
   @Test

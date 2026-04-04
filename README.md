@@ -244,6 +244,19 @@ Page<Product> page = productRepository.query()
 
 When using `Pageable`, its sort takes priority over any sort set on the builder.
 
+### Grouped Counts
+
+`groupBy(...)` is applied to the underlying JPA Criteria query, so grouped counts honor the same filters as `findAll()`:
+
+```java
+long grouped = productRepository.query()
+    .where("status", Operators.IS_NOT_NULL, null)
+    .groupBy("status")
+    .count();
+```
+
+Current limitation: repository execution still returns root entities, so `groupBy(...)` currently supports grouped counts, but not aggregate/projection results.
+
 ### Single Result and Count
 
 ```java

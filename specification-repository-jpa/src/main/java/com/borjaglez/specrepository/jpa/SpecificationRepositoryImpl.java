@@ -92,11 +92,24 @@ public class SpecificationRepositoryImpl<T, ID extends Serializable>
 
   @Override
   public long count(QueryPlan<T> plan) {
+    if (!plan.groupBy().isEmpty()) {
+      return countGrouped(plan);
+    }
+
     CriteriaBuilder builder = entityManager.getCriteriaBuilder();
     CriteriaQuery<Long> query = builder.createQuery(Long.class);
     Root<T> root = query.from(getDomainClass());
     specificationFactory.create(plan).toPredicate(root, query, builder);
     query.select(plan.distinct() ? builder.countDistinct(root) : builder.count(root));
     return entityManager.createQuery(query).getSingleResult();
+  }
+
+  private long countGrouped(QueryPlan<T> plan) {
+    CriteriaBuilder builder = entityManager.getCriteriaBuilder();
+    CriteriaQuery<Long> query = builder.createQuery(Long.class);
+    Root<T> root = query.from(getDomainClass());
+    specificationFactory.create(plan).toPredicate(root, query, builder);
+    query.select(builder.literal(1L));
+    return entityManager.createQuery(query).getResultList().size();
   }
 }
