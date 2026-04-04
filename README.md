@@ -113,6 +113,25 @@ List<Product> products = productRepository.query()
 
 The builder creates an immutable query plan. The repository executes it.
 
+### Projection Queries
+
+`select(...)` now affects the executed JPA query.
+
+```java
+List<?> names = productRepository.query()
+    .where("status", Operators.EQUALS, "ACTIVE")
+    .sort(Sort.by("name"))
+    .select("name")
+    .findAll();
+```
+
+Current projection behavior is intentionally minimal:
+
+- one selected field returns scalar values at runtime (for example `List<String>`)
+- multiple selected fields return `Object[]` rows at runtime
+- the repository API remains entity-typed today, so assign projection results to `List<?>`, `Page<?>`, or `Optional<?>`
+- fetch joins are intended for entity loading and should not be combined with projections
+
 ## Usage Examples
 
 Assume the following entity model (used across all demo applications):
@@ -168,8 +187,7 @@ List<Product> results = productRepository.query()
 
 ```java
 List<Product> inRange = productRepository.query()
-    .where("price", Operators.GREATER_THAN_OR_EQUAL, "50")
-    .where("price", Operators.LESS_THAN_OR_EQUAL, "200")
+    .where("price", Operators.BETWEEN, List.of("50", "200"))
     .sort(Sort.by("price"))
     .findAll();
 ```
@@ -275,6 +293,19 @@ Page<Product> page = productRepository.query()
 
 When using `Pageable`, its sort takes priority over any sort set on the builder.
 
+### Grouped Counts
+
+`groupBy(...)` is applied to the underlying JPA Criteria query, so grouped counts honor the same filters as `findAll()`:
+
+```java
+long grouped = productRepository.query()
+    .where("status", Operators.IS_NOT_NULL, null)
+    .groupBy("status")
+    .count();
+```
+
+Current limitation: repository execution still returns root entities, so `groupBy(...)` currently supports grouped counts, but not aggregate/projection results.
+
 ### Single Result and Count
 
 ```java
@@ -336,51 +367,45 @@ long count = productRepository.count(activePlan);
 This is the safest way to keep list and count endpoints aligned when they must share exactly the
 same filters.
 
-### Custom `BETWEEN` Example
+### Built-In `BETWEEN`
 
-`BETWEEN` is not a built-in operator today, but the DSL already supports it through the custom
-operator extension point:
+`BETWEEN` is now available as a standard operator for inclusive numeric and date ranges:
 
 ```java
-FilterOperator BETWEEN = Operators.custom("between");
-
-OperatorHandler betweenHandler = new OperatorHandler() {
-    @Override
-    public FilterOperator operator() {
-        return BETWEEN;
-    }
-
-    @Override
-    @SuppressWarnings({"rawtypes", "unchecked"})
-    public Predicate create(OperatorContext ctx) {
-        List<? extends Comparable> range = (List<? extends Comparable>) ctx.value();
-        return ctx.criteriaBuilder().between((Expression<? extends Comparable>) ctx.path(), range.get(0), range.get(1));
-    }
-};
-
 List<Product> createdThisYear = productRepository.query()
-    .where("createdAt", BETWEEN, List.of(LocalDate.parse("2024-01-01"), LocalDate.parse("2024-12-31")))
+    .where("createdAt", Operators.BETWEEN, List.of("2024-01-01", "2024-12-31"))
     .findAll();
 ```
 
-Register the handler in your custom `OperatorRegistry` when extending the default JPA pipeline.
+Important notes:
+
+- `BETWEEN` expects an `Iterable` with exactly 2 values
+- invalid inputs fail fast with a clear `IllegalArgumentException`
+- bounds are used as provided; they are not reordered automatically
 
 ### Current `select(...)` and `groupBy(...)` Behavior
 
-The builder exposes `select(...)` and `groupBy(...)`, but the current default repository behavior is intentionally limited:
+The default JPA repository now executes both capabilities, but with intentionally minimal runtime semantics:
 
 ```java
-QueryPlan<Product> reportingPlan = productRepository.query()
-    .select("category.name")
-    .groupBy("category.name")
-    .plan();
+List<?> projected = productRepository.query()
+    .where("status", Operators.EQUALS, "ACTIVE")
+    .select("name", "category.name")
+    .findAll();
+
+long grouped = productRepository.query()
+    .where("status", Operators.IS_NOT_NULL, null)
+    .groupBy("status")
+    .count();
 ```
 
-- `groupBy(...)` is applied to the generated `CriteriaQuery`.
-- `select(...)` is stored in `QueryPlan.projections()`.
-- The default `SpecificationRepositoryImpl` still executes `query.select(root)`, so out-of-the-box execution continues to return entity results rather than DTO/tuple projections.
-
-In other words: `groupBy` is available as query metadata today, but projection-based reporting still requires a custom repository/execution layer.
+- `select(...)` affects the executed JPA query
+- one selected field returns scalar values at runtime
+- multiple selected fields return `Object[]` rows at runtime
+- `groupBy(...)` is applied to the generated `CriteriaQuery`
+- grouped `count()` is supported and honors the same filters as `findAll()`
+- the repository API remains entity-typed, so projection consumers should use `List<?>`, `Page<?>`, or `Optional<?>`
+- grouped aggregate/projection result sets are not yet supported by the default repository API
 
 ## Available Operators
 
@@ -396,6 +421,7 @@ In other words: `groupBy` is available as query metadata today, but projection-b
 | `GREATER_THAN_OR_EQUAL` | `>=` comparison | `.where("price", Operators.GREATER_THAN_OR_EQUAL, "50")` |
 | `LESS_THAN` | `<` comparison | `.where("price", Operators.LESS_THAN, "500")` |
 | `LESS_THAN_OR_EQUAL` | `<=` comparison | `.where("price", Operators.LESS_THAN_OR_EQUAL, "200")` |
+| `BETWEEN` | Inclusive range comparison | `.where("price", Operators.BETWEEN, List.of("50", "200"))` |
 | `IS_NULL` | `IS NULL` check | `.where("description", Operators.IS_NULL, null)` |
 | `IS_NOT_NULL` | `IS NOT NULL` check | `.where("description", Operators.IS_NOT_NULL, null)` |
 | `IS_EMPTY` | `IS EMPTY` on collections | `.where("orders", Operators.IS_EMPTY, null)` |
