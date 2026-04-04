@@ -12,7 +12,7 @@ jobs:
         with:
           distribution: temurin
           java-version: "21"
-      - uses: gradle/actions/setup-gradle@v4
+      - uses: gradle/actions/setup-gradle@v6
       - name: Verify library quality
         run: ./gradlew quality
 
@@ -31,7 +31,7 @@ jobs:
         with:
           distribution: temurin
           java-version: "21"
-      - uses: gradle/actions/setup-gradle@v4
+      - uses: gradle/actions/setup-gradle@v6
       - name: Verify Boot 3 compatibility
         if: matrix.boot-line == 'boot3'
         run: ./gradlew verifyBoot3Compatibility

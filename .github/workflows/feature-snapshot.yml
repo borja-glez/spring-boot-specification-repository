@@ -20,7 +20,7 @@ jobs:
           java-version: '21'
           distribution: 'temurin'
 
-      - uses: gradle/actions/setup-gradle@v4
+      - uses: gradle/actions/setup-gradle@v6
 
       - name: Resolve feature snapshot version
         id: version
