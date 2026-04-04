@@ -7,6 +7,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import com.borjaglez.specrepository.examples.boot3postgres.entity.Product;
+import com.borjaglez.specrepository.examples.boot3postgres.service.AdvancedProductSearchResponse;
 import com.borjaglez.specrepository.examples.boot3postgres.service.ProductService;
 
 @RestController
@@ -66,6 +67,15 @@ public class ProductController {
   public List<Product> findActiveInCategory(
       @PathVariable String categoryName, @RequestParam String min, @RequestParam String max) {
     return productService.findActiveInCategoryWithPriceRange(categoryName, min, max);
+  }
+
+  @GetMapping("/advanced/filter-demo")
+  public AdvancedProductSearchResponse findAdvancedFilterDemo(
+      @RequestParam String keyword,
+      @RequestParam String category,
+      @RequestParam String min,
+      @RequestParam String max) {
+    return productService.findAdvancedFilterDemo(keyword, category, min, max);
   }
 
   @GetMapping("/paginated")
