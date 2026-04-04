@@ -22,14 +22,35 @@ tasks.register("coverage") {
 
 tasks.register("quality") {
     group = LifecycleBasePlugin.VERIFICATION_GROUP
-    description = "Runs tests and coverage verification."
+    description = "Runs tests, coverage verification, and formatting checks."
     dependsOn(
         ":specification-repository-core:test",
         ":specification-repository-jpa:test",
         ":specification-repository-boot3-starter:test",
         ":specification-repository-boot4-starter:test",
         ":specification-repository-test-support:test",
-        "coverage"
+        "coverage",
+        "spotlessCheckAll"
+    )
+}
+
+tasks.register("verifyBoot3Compatibility") {
+    group = LifecycleBasePlugin.VERIFICATION_GROUP
+    description = "Verifies the Boot 3 starter and demo application paths."
+    dependsOn(
+        ":specification-repository-boot3-starter:test",
+        ":examples:boot3-demo:test",
+        ":examples:boot3-postgres-demo:test"
+    )
+}
+
+tasks.register("verifyBoot4Compatibility") {
+    group = LifecycleBasePlugin.VERIFICATION_GROUP
+    description = "Verifies the Boot 4 starter and demo application paths."
+    dependsOn(
+        ":specification-repository-boot4-starter:test",
+        ":examples:boot4-demo:test",
+        ":examples:boot4-postgres-demo:test"
     )
 }
 

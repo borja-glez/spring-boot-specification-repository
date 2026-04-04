@@ -1,8 +1,10 @@
 plugins {
-    id("specification-boot3-library-conventions")
+    id("specification-library-conventions")
     id("specification-publish-conventions")
 }
 
 dependencies {
-    api(libs.spring.data.commons)
+    compileOnlyApi(libs.spring.data.commons)
+
+    testImplementation(libs.spring.data.commons)
 }
