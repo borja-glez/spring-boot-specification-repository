@@ -34,6 +34,26 @@ tasks.register("quality") {
     )
 }
 
+tasks.register("verifyBoot3Compatibility") {
+    group = LifecycleBasePlugin.VERIFICATION_GROUP
+    description = "Verifies the Boot 3 starter and demo application paths."
+    dependsOn(
+        ":specification-repository-boot3-starter:test",
+        ":examples:boot3-demo:test",
+        ":examples:boot3-postgres-demo:test"
+    )
+}
+
+tasks.register("verifyBoot4Compatibility") {
+    group = LifecycleBasePlugin.VERIFICATION_GROUP
+    description = "Verifies the Boot 4 starter and demo application paths."
+    dependsOn(
+        ":specification-repository-boot4-starter:test",
+        ":examples:boot4-demo:test",
+        ":examples:boot4-postgres-demo:test"
+    )
+}
+
 tasks.register("spotlessCheckAll") {
     group = LifecycleBasePlugin.VERIFICATION_GROUP
     description = "Runs Spotless check on all modules that have the plugin applied."
