@@ -1,14 +1,16 @@
 package com.borjaglez.specrepository.examples.boot3postgres;
 
+import java.math.BigDecimal;
+import java.time.LocalDate;
+
+import org.springframework.boot.CommandLineRunner;
+import org.springframework.stereotype.Component;
+
 import com.borjaglez.specrepository.examples.boot3postgres.entity.Category;
 import com.borjaglez.specrepository.examples.boot3postgres.entity.Product;
 import com.borjaglez.specrepository.examples.boot3postgres.entity.ProductStatus;
 import com.borjaglez.specrepository.examples.boot3postgres.repository.CategoryRepository;
 import com.borjaglez.specrepository.examples.boot3postgres.repository.ProductRepository;
-import java.math.BigDecimal;
-import java.time.LocalDate;
-import org.springframework.boot.CommandLineRunner;
-import org.springframework.stereotype.Component;
 
 @Component
 public class DataInitializer implements CommandLineRunner {

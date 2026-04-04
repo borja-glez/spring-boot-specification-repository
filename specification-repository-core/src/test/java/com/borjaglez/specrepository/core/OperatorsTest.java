@@ -25,6 +25,7 @@ class OperatorsTest {
     "gte",
     "lt",
     "lte",
+    "between",
     "in",
     "notin"
   })
@@ -45,6 +46,7 @@ class OperatorsTest {
           case "gte" -> Operators.GREATER_THAN_OR_EQUAL;
           case "lt" -> Operators.LESS_THAN;
           case "lte" -> Operators.LESS_THAN_OR_EQUAL;
+          case "between" -> Operators.BETWEEN;
           case "in" -> Operators.IN;
           case "notin" -> Operators.NOT_IN;
           default -> throw new IllegalArgumentException("Unknown: " + expected);

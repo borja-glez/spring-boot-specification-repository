@@ -1,15 +1,18 @@
 package com.borjaglez.specrepository.examples.boot3postgres.service;
 
-import com.borjaglez.specrepository.core.Operators;
-import com.borjaglez.specrepository.examples.boot3postgres.entity.Product;
-import com.borjaglez.specrepository.examples.boot3postgres.repository.ProductRepository;
 import java.util.List;
 import java.util.Optional;
+
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import com.borjaglez.specrepository.core.Operators;
+import com.borjaglez.specrepository.core.QueryPlan;
+import com.borjaglez.specrepository.examples.boot3postgres.entity.Product;
+import com.borjaglez.specrepository.examples.boot3postgres.repository.ProductRepository;
 
 @Service
 @Transactional(readOnly = true)
@@ -89,6 +92,35 @@ public class ProductService {
         .leftFetch("category")
         .sort(Sort.by("price"))
         .findAll();
+  }
+
+  /**
+   * Advanced filter demo: nested path + and/or groups + explicit join/fetch + reusable query plan.
+   */
+  public AdvancedProductSearchResponse findAdvancedFilterDemo(
+      String keyword, String category, String minPrice, String maxPrice) {
+    QueryPlan<Product> plan =
+        productRepository
+            .query()
+            .where("status", Operators.EQUALS, "ACTIVE")
+            .and(
+                group ->
+                    group
+                        .where("category.name", Operators.EQUALS, category)
+                        .or(
+                            or ->
+                                or.where("name", Operators.CONTAINS, keyword, true, false)
+                                    .where(
+                                        "description", Operators.CONTAINS, keyword, true, false)))
+            .where("price", Operators.GREATER_THAN_OR_EQUAL, minPrice)
+            .where("price", Operators.LESS_THAN_OR_EQUAL, maxPrice)
+            .leftJoin("category")
+            .leftFetch("category")
+            .sort(Sort.by("price"))
+            .plan();
+
+    return new AdvancedProductSearchResponse(
+        productRepository.count(plan), productRepository.findAll(plan));
   }
 
   /** Paginated results. */
