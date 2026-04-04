@@ -168,8 +168,7 @@ List<Product> results = productRepository.query()
 
 ```java
 List<Product> inRange = productRepository.query()
-    .where("price", Operators.GREATER_THAN_OR_EQUAL, "50")
-    .where("price", Operators.LESS_THAN_OR_EQUAL, "200")
+    .where("price", Operators.BETWEEN, List.of("50", "200"))
     .sort(Sort.by("price"))
     .findAll();
 ```
@@ -311,6 +310,7 @@ long count = productRepository.count(activePlan);
 | `GREATER_THAN_OR_EQUAL` | `>=` comparison | `.where("price", Operators.GTE, "50")` |
 | `LESS_THAN` | `<` comparison | `.where("price", Operators.LESS_THAN, "500")` |
 | `LESS_THAN_OR_EQUAL` | `<=` comparison | `.where("price", Operators.LTE, "200")` |
+| `BETWEEN` | Inclusive range comparison | `.where("price", Operators.BETWEEN, List.of("50", "200"))` |
 | `IS_NULL` | `IS NULL` check | `.where("description", Operators.IS_NULL, null)` |
 | `IS_NOT_NULL` | `IS NOT NULL` check | `.where("description", Operators.IS_NOT_NULL, null)` |
 | `IS_EMPTY` | `IS EMPTY` on collections | `.where("orders", Operators.IS_EMPTY, null)` |

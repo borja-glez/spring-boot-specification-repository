@@ -51,6 +51,7 @@ public final class DefaultOperatorHandlers {
             Operators.GREATER_THAN_OR_EQUAL, context -> comparable(context, ComparisonMode.GTE)),
         handler(Operators.LESS_THAN, context -> comparable(context, ComparisonMode.LT)),
         handler(Operators.LESS_THAN_OR_EQUAL, context -> comparable(context, ComparisonMode.LTE)),
+        handler(Operators.BETWEEN, DefaultOperatorHandlers::between),
         handler(Operators.IN, context -> in(context, false)),
         handler(Operators.NOT_IN, context -> in(context, true)));
   }
@@ -115,6 +116,38 @@ public final class DefaultOperatorHandlers {
     return negate ? predicate.not() : predicate;
   }
 
+  @SuppressWarnings({"rawtypes", "unchecked"})
+  private static Predicate between(OperatorContext context) {
+    RangeValues range = rangeValues(context.value());
+    Path path = context.path();
+    return context.criteriaBuilder().between(path, range.lower(), range.upper());
+  }
+
+  private static RangeValues rangeValues(Object value) {
+    if (!(value instanceof Iterable<?> iterable)) {
+      throw new IllegalArgumentException("BETWEEN operator requires exactly 2 values");
+    }
+    List<?> values =
+        iterable instanceof List<?> list
+            ? list
+            : java.util.stream.StreamSupport.stream(iterable.spliterator(), false).toList();
+    if (values.size() != 2) {
+      throw new IllegalArgumentException("BETWEEN operator requires exactly 2 values");
+    }
+    return new RangeValues(comparable(values.get(0)), comparable(values.get(1)));
+  }
+
+  @SuppressWarnings("rawtypes")
+  private static Comparable comparable(Object value) {
+    if (value == null) {
+      throw new IllegalArgumentException("BETWEEN operator values must not be null");
+    }
+    if (!(value instanceof Comparable comparable)) {
+      throw new IllegalArgumentException("BETWEEN operator values must implement Comparable");
+    }
+    return comparable;
+  }
+
   private static Expression<String> normalized(CriteriaBuilder criteriaBuilder, Path<?> path) {
     return criteriaBuilder.function(
         UNACCENT, String.class, criteriaBuilder.upper(path.as(String.class)));
@@ -126,4 +159,7 @@ public final class DefaultOperatorHandlers {
     LT,
     LTE
   }
+
+  @SuppressWarnings("rawtypes")
+  private record RangeValues(Comparable lower, Comparable upper) {}
 }

@@ -1,6 +1,7 @@
 package com.borjaglez.specrepository.jpa.support;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doReturn;
@@ -8,6 +9,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
 
@@ -43,9 +45,9 @@ class DefaultOperatorHandlersTest {
   }
 
   @Test
-  void shouldContainAllSixteenOperators() {
+  void shouldContainAllSeventeenOperators() {
     Collection<OperatorHandler> handlers = DefaultOperatorHandlers.defaults();
-    assertThat(handlers).hasSize(16);
+    assertThat(handlers).hasSize(17);
   }
 
   // EQUALS
@@ -271,6 +273,66 @@ class DefaultOperatorHandlersTest {
     Predicate result = registry.get(Operators.LESS_THAN_OR_EQUAL).create(context(10));
 
     assertThat(result).isSameAs(predicate);
+  }
+
+  // BETWEEN
+
+  @SuppressWarnings({"unchecked", "rawtypes"})
+  @Test
+  void betweenShouldCreateBetweenPredicate() {
+    when(cb.between(any(Expression.class), any(Comparable.class), any(Comparable.class)))
+        .thenReturn(predicate);
+
+    Predicate result = registry.get(Operators.BETWEEN).create(context(List.of(10, 20)));
+
+    assertThat(result).isSameAs(predicate);
+  }
+
+  @Test
+  void betweenShouldRejectNonIterableValue() {
+    assertThatIllegalArgumentException()
+        .isThrownBy(() -> registry.get(Operators.BETWEEN).create(context(10)))
+        .withMessage("BETWEEN operator requires exactly 2 values");
+  }
+
+  @Test
+  void betweenShouldRejectRangeWithWrongSize() {
+    assertThatIllegalArgumentException()
+        .isThrownBy(() -> registry.get(Operators.BETWEEN).create(context(List.of(10))))
+        .withMessage("BETWEEN operator requires exactly 2 values");
+  }
+
+  @Test
+  void betweenShouldRejectNullBounds() {
+    assertThatIllegalArgumentException()
+        .isThrownBy(() -> registry.get(Operators.BETWEEN).create(context(Arrays.asList(10, null))))
+        .withMessage("BETWEEN operator values must not be null");
+  }
+
+  @SuppressWarnings({"unchecked", "rawtypes"})
+  @Test
+  void betweenShouldSupportNonListIterableRanges() {
+    when(cb.between(any(Expression.class), any(Comparable.class), any(Comparable.class)))
+        .thenReturn(predicate);
+
+    Iterable<Integer> range = () -> List.of(10, 20).iterator();
+
+    Predicate result = registry.get(Operators.BETWEEN).create(context(range));
+
+    assertThat(result).isSameAs(predicate);
+  }
+
+  @Test
+  void betweenShouldRejectNonComparableBounds() {
+    Object nonComparable = new Object();
+
+    assertThatIllegalArgumentException()
+        .isThrownBy(
+            () ->
+                registry
+                    .get(Operators.BETWEEN)
+                    .create(context(Arrays.asList(nonComparable, nonComparable))))
+        .withMessage("BETWEEN operator values must implement Comparable");
   }
 
   // IN
