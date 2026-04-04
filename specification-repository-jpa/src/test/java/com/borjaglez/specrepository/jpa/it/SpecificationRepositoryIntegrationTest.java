@@ -351,6 +351,32 @@ class SpecificationRepositoryIntegrationTest {
   }
 
   @Test
+  void shouldProjectPagedResultsUsingPageableSort() {
+    Page<?> page =
+        repository
+            .query()
+            .where("status", Operators.EQUALS, "ACTIVE")
+            .select("name")
+            .findAll(PageRequest.of(0, 10, Sort.by(Sort.Direction.DESC, "name")));
+
+    assertThat(page.getContent()).extracting(Object::toString).containsExactly("Lucia", "Borja");
+    assertThat(page.getTotalElements()).isEqualTo(2);
+  }
+
+  @Test
+  void shouldProjectPagedResultsWithoutAnySort() {
+    Page<?> page =
+        repository
+            .query()
+            .where("status", Operators.IS_NOT_NULL, null)
+            .select("name")
+            .findAll(PageRequest.of(0, 10));
+
+    assertThat(page.getContent()).hasSize(3);
+    assertThat(page.getTotalElements()).isEqualTo(3);
+  }
+
+  @Test
   void shouldProjectFindOneResult() {
     Optional<?> result =
         repository
