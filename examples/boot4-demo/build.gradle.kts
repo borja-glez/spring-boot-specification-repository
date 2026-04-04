@@ -4,10 +4,9 @@ plugins {
 
 dependencies {
     implementation(project(":specification-repository-boot4-starter"))
-    implementation(libs.spring.boot4.starter.web)
-    implementation(libs.spring.boot4.starter.data.jpa)
-    developmentOnly(libs.spring.boot4.devtools)
+    implementation(libs.spring.boot.starter.web)
+    implementation(libs.spring.boot.starter.data.jpa)
+    developmentOnly(libs.spring.boot.devtools)
     runtimeOnly(libs.h2)
-    testImplementation(libs.spring.boot4.starter.test)
     testRuntimeOnly(libs.junit.platform.launcher)
 }

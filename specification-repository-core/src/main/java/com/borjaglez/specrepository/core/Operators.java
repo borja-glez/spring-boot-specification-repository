@@ -17,6 +17,7 @@ public final class Operators {
   public static final FilterOperator GREATER_THAN_OR_EQUAL = FilterOperator.of("gte");
   public static final FilterOperator LESS_THAN = FilterOperator.of("lt");
   public static final FilterOperator LESS_THAN_OR_EQUAL = FilterOperator.of("lte");
+  public static final FilterOperator BETWEEN = FilterOperator.of("between");
   public static final FilterOperator IN = FilterOperator.of("in");
   public static final FilterOperator NOT_IN = FilterOperator.of("notin");
 
