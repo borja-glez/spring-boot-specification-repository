@@ -1,5 +1,6 @@
 plugins {
     java
+    id("specification-java-base-conventions")
     id("org.springframework.boot")
     id("io.spring.dependency-management")
 }

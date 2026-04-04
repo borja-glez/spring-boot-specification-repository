@@ -4,11 +4,10 @@ plugins {
 
 dependencies {
     implementation(project(":specification-repository-boot4-starter"))
-    implementation(libs.spring.boot4.starter.web)
-    implementation(libs.spring.boot4.starter.data.jpa)
-    implementation(libs.spring.boot4.docker.compose)
-    developmentOnly(libs.spring.boot4.devtools)
+    implementation(libs.spring.boot.starter.web)
+    implementation(libs.spring.boot.starter.data.jpa)
+    implementation(libs.spring.boot.docker.compose)
+    developmentOnly(libs.spring.boot.devtools)
     runtimeOnly(libs.postgresql)
-    testImplementation(libs.spring.boot4.starter.test)
     testRuntimeOnly(libs.junit.platform.launcher)
 }

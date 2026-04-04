@@ -1,7 +1,9 @@
 package com.borjaglez.specrepository.jpa.it;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
@@ -28,10 +30,16 @@ class SpecificationRepositoryIntegrationTest {
   @BeforeEach
   void setUp() {
     repository.deleteAll();
-    repository.save(new TestCustomer("Borja", "ACTIVE", new TestProfile("Madrid")));
-    repository.save(new TestCustomer("Lucia", "ACTIVE", new TestProfile("Barcelona")));
-    repository.save(new TestCustomer("John", "INACTIVE", new TestProfile("Madrid")));
-    repository.save(new TestCustomer("Anna", null, null));
+    repository.save(
+        new TestCustomer(
+            "Borja", "ACTIVE", 25, LocalDate.of(2024, 1, 10), new TestProfile("Madrid")));
+    repository.save(
+        new TestCustomer(
+            "Lucia", "ACTIVE", 32, LocalDate.of(2024, 2, 15), new TestProfile("Barcelona")));
+    repository.save(
+        new TestCustomer(
+            "John", "INACTIVE", 41, LocalDate.of(2024, 3, 20), new TestProfile("Madrid")));
+    repository.save(new TestCustomer("Anna", null, 19, LocalDate.of(2024, 4, 5), null));
   }
 
   // -- EQUALS / NOT_EQUALS --
@@ -104,6 +112,39 @@ class SpecificationRepositoryIntegrationTest {
         repository.query().where("name", Operators.ENDS_WITH, "hn").findAll();
 
     assertThat(results).hasSize(1).first().extracting(TestCustomer::getName).isEqualTo("John");
+  }
+
+  // -- BETWEEN --
+
+  @Test
+  void shouldFilterByBetweenForNumericRange() {
+    List<TestCustomer> results =
+        repository.query().where("age", Operators.BETWEEN, List.of("20", "35")).findAll();
+
+    assertThat(results)
+        .extracting(TestCustomer::getName)
+        .containsExactlyInAnyOrder("Borja", "Lucia");
+  }
+
+  @Test
+  void shouldFilterByBetweenForDateRange() {
+    List<TestCustomer> results =
+        repository
+            .query()
+            .where("createdAt", Operators.BETWEEN, List.of("2024-02-01", "2024-03-31"))
+            .findAll();
+
+    assertThat(results)
+        .extracting(TestCustomer::getName)
+        .containsExactlyInAnyOrder("Lucia", "John");
+  }
+
+  @Test
+  void shouldFailFastWhenBetweenRangeIsInvalid() {
+    assertThatThrownBy(
+            () -> repository.query().where("age", Operators.BETWEEN, List.of("20")).findAll())
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessage("BETWEEN operator requires exactly 2 values");
   }
 
   // -- IN / NOT_IN (single value, no conversion needed) --
@@ -286,7 +327,7 @@ class SpecificationRepositoryIntegrationTest {
 
   @Test
   void shouldChainFluentMethods() {
-    List<TestCustomer> results =
+    QueryPlan<TestCustomer> plan =
         repository
             .query()
             .where("status", Operators.EQUALS, "ACTIVE")
@@ -300,10 +341,111 @@ class SpecificationRepositoryIntegrationTest {
             .select("name")
             .distinct()
             .sort(Sort.by("name"))
-            .findAll();
+            .plan();
 
     // This tests that all fluent methods return SpecificationExecutableQuery
-    assertThat(results).isNotNull();
+    assertThat(plan).isNotNull();
+  }
+
+  @Test
+  void shouldProjectSingleSelectedField() {
+    List<?> results =
+        repository
+            .query()
+            .where("status", Operators.EQUALS, "ACTIVE")
+            .sort(Sort.by("name"))
+            .select("name")
+            .findAll();
+
+    assertThat(results).extracting(Object::toString).containsExactly("Borja", "Lucia");
+  }
+
+  @Test
+  void shouldProjectMultipleSelectedFields() {
+    List<?> results =
+        repository
+            .query()
+            .where("status", Operators.EQUALS, "ACTIVE")
+            .sort(Sort.by("name"))
+            .select("name", "profile.city")
+            .findAll();
+
+    assertThat(results)
+        .hasSize(2)
+        .allSatisfy(result -> assertThat(result).isInstanceOf(Object[].class));
+    assertThat((Object[]) results.get(0)).containsExactly("Borja", "Madrid");
+    assertThat((Object[]) results.get(1)).containsExactly("Lucia", "Barcelona");
+  }
+
+  @Test
+  void shouldProjectPagedResults() {
+    Page<?> page =
+        repository
+            .query()
+            .where("status", Operators.IS_NOT_NULL, null)
+            .sort(Sort.by("name"))
+            .select("name")
+            .findAll(PageRequest.of(0, 2));
+
+    assertThat(page.getContent()).extracting(Object::toString).containsExactly("Borja", "John");
+    assertThat(page.getTotalElements()).isEqualTo(3);
+  }
+
+  @Test
+  void shouldProjectPagedResultsUsingPageableSort() {
+    Page<?> page =
+        repository
+            .query()
+            .where("status", Operators.EQUALS, "ACTIVE")
+            .select("name")
+            .findAll(PageRequest.of(0, 10, Sort.by(Sort.Direction.DESC, "name")));
+
+    assertThat(page.getContent()).extracting(Object::toString).containsExactly("Lucia", "Borja");
+    assertThat(page.getTotalElements()).isEqualTo(2);
+  }
+
+  @Test
+  void shouldProjectPagedResultsWithoutAnySort() {
+    Page<?> page =
+        repository
+            .query()
+            .where("status", Operators.IS_NOT_NULL, null)
+            .select("name")
+            .findAll(PageRequest.of(0, 10));
+
+    assertThat(page.getContent()).hasSize(3);
+    assertThat(page.getTotalElements()).isEqualTo(3);
+  }
+
+  @Test
+  void shouldProjectFindOneResult() {
+    Optional<?> result =
+        repository
+            .query()
+            .where("status", Operators.EQUALS, "ACTIVE")
+            .sort(Sort.by("name"))
+            .select("name")
+            .findOne();
+
+    assertThat(result).hasValueSatisfying(value -> assertThat(value).isEqualTo("Borja"));
+  }
+
+  @Test
+  void shouldCountGroupsAfterFiltering() {
+    long count =
+        repository.query().where("status", Operators.IS_NOT_NULL, null).groupBy("status").count();
+
+    assertThat(count).isEqualTo(2);
+  }
+
+  @Test
+  void shouldCountGroupedQueryPlan() {
+    QueryPlan<TestCustomer> plan =
+        repository.query().where("status", Operators.IS_NOT_NULL, null).groupBy("status").plan();
+
+    long count = repository.count(plan);
+
+    assertThat(count).isEqualTo(2);
   }
 
   // -- findAll and count with QueryPlan directly --
