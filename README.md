@@ -2,7 +2,7 @@
 
 [![Maven Central](https://img.shields.io/maven-central/v/com.borjaglez/specification-repository-core)](https://central.sonatype.com/artifact/com.borjaglez/specification-repository-core)
 [![CI](https://github.com/borja-glez/spring-boot-specification-repository/actions/workflows/ci.yml/badge.svg)](https://github.com/borja-glez/spring-boot-specification-repository/actions/workflows/ci.yml)
-[![License](https://img.shields.io/github/license/borjaglez/spring-boot-specification-repository)](LICENSE)
+[![License](https://img.shields.io/github/license/borja-glez/spring-boot-specification-repository)](LICENSE)
 ![Java 21+](https://img.shields.io/badge/Java-21%2B-blue)
 
 Extensible Spring Data JPA query library with a fluent DSL and native-friendly architecture.
