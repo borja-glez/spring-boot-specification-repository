@@ -193,6 +193,8 @@ List<Product> electronics = productRepository.query()
     .findAll();
 ```
 
+That same approach works for deeper paths such as `profile.city` in the integration tests.
+
 ### Logical Groups (AND / OR)
 
 Combine conditions with nested groups:
@@ -220,16 +222,45 @@ List<Customer> customers = customerRepository.query()
     .findAll();
 ```
 
+### Advanced Filter Composition
+
+For real-world searches, combine root filters, nested groups, explicit joins/fetches, and a reusable plan:
+
+```java
+QueryPlan<Product> advancedPlan = productRepository.query()
+    .where("status", Operators.EQUALS, "ACTIVE")
+    .and(group -> group
+        .where("category.name", Operators.EQUALS, "Electronics")
+        .or(or -> or
+            .where("name", Operators.CONTAINS, keyword, true, false)
+            .where("description", Operators.CONTAINS, keyword, true, false)))
+    .where("price", Operators.GREATER_THAN_OR_EQUAL, "500")
+    .where("price", Operators.LESS_THAN_OR_EQUAL, "2500")
+    .leftJoin("category")
+    .leftFetch("category")
+    .sort(Sort.by("price"))
+    .plan();
+
+List<Product> products = productRepository.findAll(advancedPlan);
+long totalMatches = productRepository.count(advancedPlan);
+```
+
+The Boot 3 PostgreSQL demo exposes this as a runnable endpoint:
+
+```text
+GET /api/products/advanced/filter-demo?keyword=iphone&category=Electronics&min=500&max=2500
+```
+
 ### Joins vs Fetches
 
-- **`leftJoin` / `innerJoin` / `rightJoin`** -- create JPA joins for path resolution without eager-loading. Use when filtering on a related entity but you don't need the data.
-- **`leftFetch` / `innerFetch` / `rightFetch`** -- create JPA fetch joins. Eager-load associations in a single query to avoid N+1. Automatically skipped for count queries.
+- **`leftJoin` / `innerJoin` / `rightJoin`** -- create JPA joins for path resolution without eager-loading. Use them when you want an explicit join in the query shape, even though nested path resolution can also auto-create joins.
+- **`leftFetch` / `innerFetch` / `rightFetch`** -- create JPA fetch joins. Eager-load associations in a single query to avoid N+1. Fetch instructions are skipped automatically for count queries.
 
 ```java
 List<Product> products = productRepository.query()
     .where("category.name", Operators.EQUALS, "Books")
-    .leftJoin("category")     // needed for the filter
-    .leftFetch("category")    // eager-load to avoid N+1
+    .leftJoin("category")     // explicit join for query shape
+    .leftFetch("category")    // eager-load to avoid N+1 on result access
     .findAll();
 ```
 
@@ -271,7 +302,7 @@ List<Product> products = productRepository.query()
 
 ### Case-Insensitive Search (PostgreSQL)
 
-When using PostgreSQL, the extended `where()` overload supports case-insensitive and unaccent matching:
+The extended `where()` overload exposes `ignoreCase` and `includeNulls` flags:
 
 ```java
 List<Product> results = productRepository.query()
@@ -281,7 +312,12 @@ List<Product> results = productRepository.query()
     .findAll();
 ```
 
-This uses `unaccent(UPPER(path))` under the hood. Requires the PostgreSQL `unaccent` extension.
+With the default operator handlers, `ignoreCase = true` normalizes the database expression with
+`unaccent(UPPER(path))`. That behavior is demonstrated in the PostgreSQL demos and requires the
+PostgreSQL `unaccent` extension to be enabled.
+
+Important: this is NOT a portable SQL abstraction yet. If you run the same overload on another
+dialect, you must provide a compatible database function or replace the operator handling strategy.
 
 ### Pre-Built Query Plans
 
@@ -297,6 +333,55 @@ Page<Product> page = productRepository.findAll(activePlan, pageable);
 long count = productRepository.count(activePlan);
 ```
 
+This is the safest way to keep list and count endpoints aligned when they must share exactly the
+same filters.
+
+### Custom `BETWEEN` Example
+
+`BETWEEN` is not a built-in operator today, but the DSL already supports it through the custom
+operator extension point:
+
+```java
+FilterOperator BETWEEN = Operators.custom("between");
+
+OperatorHandler betweenHandler = new OperatorHandler() {
+    @Override
+    public FilterOperator operator() {
+        return BETWEEN;
+    }
+
+    @Override
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    public Predicate create(OperatorContext ctx) {
+        List<? extends Comparable> range = (List<? extends Comparable>) ctx.value();
+        return ctx.criteriaBuilder().between((Expression<? extends Comparable>) ctx.path(), range.get(0), range.get(1));
+    }
+};
+
+List<Product> createdThisYear = productRepository.query()
+    .where("createdAt", BETWEEN, List.of(LocalDate.parse("2024-01-01"), LocalDate.parse("2024-12-31")))
+    .findAll();
+```
+
+Register the handler in your custom `OperatorRegistry` when extending the default JPA pipeline.
+
+### Current `select(...)` and `groupBy(...)` Behavior
+
+The builder exposes `select(...)` and `groupBy(...)`, but the current default repository behavior is intentionally limited:
+
+```java
+QueryPlan<Product> reportingPlan = productRepository.query()
+    .select("category.name")
+    .groupBy("category.name")
+    .plan();
+```
+
+- `groupBy(...)` is applied to the generated `CriteriaQuery`.
+- `select(...)` is stored in `QueryPlan.projections()`.
+- The default `SpecificationRepositoryImpl` still executes `query.select(root)`, so out-of-the-box execution continues to return entity results rather than DTO/tuple projections.
+
+In other words: `groupBy` is available as query metadata today, but projection-based reporting still requires a custom repository/execution layer.
+
 ## Available Operators
 
 | Operator | Description | Example |
@@ -308,9 +393,9 @@ long count = productRepository.count(activePlan);
 | `STARTS_WITH` | SQL `LIKE 'value%'` | `.where("name", Operators.STARTS_WITH, "Mac")` |
 | `ENDS_WITH` | SQL `LIKE '%value'` | `.where("email", Operators.ENDS_WITH, "@example.com")` |
 | `GREATER_THAN` | `>` comparison | `.where("price", Operators.GREATER_THAN, "100")` |
-| `GREATER_THAN_OR_EQUAL` | `>=` comparison | `.where("price", Operators.GTE, "50")` |
+| `GREATER_THAN_OR_EQUAL` | `>=` comparison | `.where("price", Operators.GREATER_THAN_OR_EQUAL, "50")` |
 | `LESS_THAN` | `<` comparison | `.where("price", Operators.LESS_THAN, "500")` |
-| `LESS_THAN_OR_EQUAL` | `<=` comparison | `.where("price", Operators.LTE, "200")` |
+| `LESS_THAN_OR_EQUAL` | `<=` comparison | `.where("price", Operators.LESS_THAN_OR_EQUAL, "200")` |
 | `IS_NULL` | `IS NULL` check | `.where("description", Operators.IS_NULL, null)` |
 | `IS_NOT_NULL` | `IS NOT NULL` check | `.where("description", Operators.IS_NOT_NULL, null)` |
 | `IS_EMPTY` | `IS EMPTY` on collections | `.where("orders", Operators.IS_EMPTY, null)` |
@@ -358,16 +443,18 @@ Extend `SpecificationRepositoryImpl` and override the `QueryPlanSpecificationFac
 
 ## Demo Applications
 
-The repository includes four runnable demo applications:
+The repository includes four demo applications:
 
 | Application | Database | Port | Command |
 |---|---|---|---|
 | `boot3-demo` | H2 (in-memory) | 8080 | `./gradlew :examples:boot3-demo:bootRun` |
 | `boot3-postgres-demo` | PostgreSQL (Docker) | 8082 | `./gradlew :examples:boot3-postgres-demo:bootRun` |
-| `boot4-demo` | H2 (in-memory) | 8081 | `./gradlew :examples:boot4-demo:bootRun` |
-| `boot4-postgres-demo` | PostgreSQL (Docker) | 8083 | `./gradlew :examples:boot4-postgres-demo:bootRun` |
+| `boot4-demo` | H2 (in-memory) | 8081 | Check the module task list locally before assuming `bootRun` is available |
+| `boot4-postgres-demo` | PostgreSQL (Docker) | 8083 | Check the module task list locally before assuming `bootRun` is available |
 
-Each demo exposes a REST API with 14 endpoints covering all query patterns. Postman collections are available in `examples/`:
+The demo REST APIs show the same DSL patterns documented above, including nested filters,
+logical groups, reusable plans, and PostgreSQL-specific text search. Postman collections are
+available in `examples/`:
 
 - `Specification-Repository-Demo.postman_collection.json` (H2 demos)
 - `Specification-Repository-Postgres-Demo.postman_collection.json` (PostgreSQL demos)
