@@ -29,6 +29,8 @@ Extensible Spring Data JPA query library with a fluent DSL and native-friendly a
 | `specification-repository-test-support` | Shared test fixtures and utilities |
 | `examples` | Runnable sample applications |
 
+The `specification-repository-core` and `specification-repository-jpa` modules stay Spring/Boot integration agnostic at the build level. Version alignment is intentionally owned by the Boot 3 and Boot 4 starters and example applications.
+
 ## Quick Start
 
 ### Spring Boot 3
@@ -71,11 +73,11 @@ implementation("com.borjaglez:specification-repository-boot4-starter:0.1.0")
 
 ### 1. Enable Specification Repositories
 
-Add `@EnableSpecificationRepositories` to your application class:
+When you use the Boot starter, repository activation is automatic and follows Spring Boot's
+Data JPA auto-configuration package scanning. A regular `@SpringBootApplication` is enough:
 
 ```java
 @SpringBootApplication
-@EnableSpecificationRepositories
 public class Application {
     public static void main(String[] args) {
         SpringApplication.run(Application.class, args);
@@ -83,7 +85,8 @@ public class Application {
 }
 ```
 
-Or configure manually via `@EnableJpaRepositories`:
+If you prefer manual configuration without the starter, use `@EnableSpecificationRepositories`
+or configure `@EnableJpaRepositories` directly:
 
 ```java
 @EnableJpaRepositories(
@@ -489,7 +492,10 @@ available in `examples/`:
 
 Dependency management is aligned with the Spring Boot BOM -- no explicit version overrides are needed for Spring-managed dependencies.
 
-The starters provide empty `@AutoConfiguration` classes. The key configuration is wiring `SpecificationRepositoryImpl` as the repository base class via `@EnableSpecificationRepositories` or `@EnableJpaRepositories`.
+The starters auto-configure JPA repository scanning from the application's auto-configuration
+packages and register `SpecificationRepositoryImpl` as the repository base class. Manual
+configuration via `@EnableSpecificationRepositories` or `@EnableJpaRepositories` is still
+available when you do not want to use the starters.
 
 ## Building
 

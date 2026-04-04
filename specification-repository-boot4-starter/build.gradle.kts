@@ -4,8 +4,11 @@ plugins {
 }
 
 dependencies {
+    api(platform("org.springframework.boot:spring-boot-dependencies:${libs.versions.spring.boot4.get()}"))
+    annotationProcessor(platform("org.springframework.boot:spring-boot-dependencies:${libs.versions.spring.boot4.get()}"))
+    testImplementation(platform("org.springframework.boot:spring-boot-dependencies:${libs.versions.spring.boot4.get()}"))
     api(project(":specification-repository-jpa"))
-    api(libs.spring.boot4.autoconfigure)
-    annotationProcessor(libs.spring.boot4.configuration.processor)
-    testImplementation(libs.spring.boot4.starter.test)
+    api(libs.spring.boot.autoconfigure)
+    annotationProcessor(libs.spring.boot.configuration.processor)
+    testImplementation(libs.spring.boot.starter.test)
 }
