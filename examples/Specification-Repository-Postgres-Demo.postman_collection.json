@@ -190,7 +190,7 @@
       ]
     },
     {
-      "name": "Price range (GTE + LTE)",
+      "name": "BETWEEN operator (price range)",
       "item": [
         {
           "name": "Products between 20 and 100",
@@ -222,6 +222,53 @@
             "});"
           ]}}],
           "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/api/products/price-range?min=1000&max=99999", "host": ["{{baseUrl}}"], "path": ["api","products","price-range"], "query": [{"key":"min","value":"1000"},{"key":"max","value":"99999"}] } }
+        }
+      ]
+    },
+    {
+      "name": "BETWEEN operator (date range)",
+      "item": [
+        {
+          "name": "Products created in Q1 2024",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('All created in Q1 2024', () => {",
+            "    const data = pm.response.json();",
+            "    pm.expect(data.length).to.be.greaterThan(0);",
+            "    data.forEach(p => {",
+            "        pm.expect(p.createdAt >= '2024-01-01').to.be.true;",
+            "        pm.expect(p.createdAt <= '2024-03-31').to.be.true;",
+            "    });",
+            "});",
+            "pm.test('Sorted by createdAt ascending', () => {",
+            "    const dates = pm.response.json().map(p => p.createdAt);",
+            "    for (let i = 1; i < dates.length; i++) pm.expect(dates[i] >= dates[i-1]).to.be.true;",
+            "});"
+          ]}}],
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/api/products/created-between?from=2024-01-01&to=2024-03-31", "host": ["{{baseUrl}}"], "path": ["api","products","created-between"], "query": [{"key":"from","value":"2024-01-01"},{"key":"to","value":"2024-03-31"}] } }
+        },
+        {
+          "name": "Products created in 2023",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('All created in 2023', () => {",
+            "    const data = pm.response.json();",
+            "    pm.expect(data.length).to.be.greaterThan(0);",
+            "    data.forEach(p => {",
+            "        pm.expect(p.createdAt >= '2023-01-01').to.be.true;",
+            "        pm.expect(p.createdAt <= '2023-12-31').to.be.true;",
+            "    });",
+            "});"
+          ]}}],
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/api/products/created-between?from=2023-01-01&to=2023-12-31", "host": ["{{baseUrl}}"], "path": ["api","products","created-between"], "query": [{"key":"from","value":"2023-01-01"},{"key":"to","value":"2023-12-31"}] } }
+        },
+        {
+          "name": "No products in far future",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Empty result', () => pm.expect(pm.response.json()).to.have.lengthOf(0));"
+          ]}}],
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/api/products/created-between?from=2030-01-01&to=2030-12-31", "host": ["{{baseUrl}}"], "path": ["api","products","created-between"], "query": [{"key":"from","value":"2030-01-01"},{"key":"to","value":"2030-12-31"}] } }
         }
       ]
     },
@@ -378,6 +425,129 @@
             "pm.test('All 15 products', () => pm.expect(pm.response.json().length).to.eql(15));"
           ]}}],
           "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/api/products/in-categories?categories=Electronics&categories=Books&categories=Sports&categories=Clothing", "host": ["{{baseUrl}}"], "path": ["api","products","in-categories"], "query": [{"key":"categories","value":"Electronics"},{"key":"categories","value":"Books"},{"key":"categories","value":"Sports"},{"key":"categories","value":"Clothing"}] } }
+        }
+      ]
+    },
+    {
+      "name": "Select projection (single field)",
+      "item": [
+        {
+          "name": "Active product names only",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Returns array of strings (names)', () => {",
+            "    const data = pm.response.json();",
+            "    pm.expect(data).to.be.an('array');",
+            "    pm.expect(data.length).to.eql(11);",
+            "    data.forEach(name => pm.expect(typeof name).to.eql('string'));",
+            "});",
+            "pm.test('Sorted alphabetically', () => {",
+            "    const data = pm.response.json();",
+            "    const sorted = [...data].sort();",
+            "    pm.expect(data).to.eql(sorted);",
+            "});"
+          ]}}],
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/products/names" }
+        }
+      ]
+    },
+    {
+      "name": "Select projection (multiple fields)",
+      "item": [
+        {
+          "name": "Name and price of ACTIVE products",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Returns array of [name, price] tuples', () => {",
+            "    const data = pm.response.json();",
+            "    pm.expect(data).to.be.an('array');",
+            "    pm.expect(data.length).to.eql(11);",
+            "    data.forEach(row => {",
+            "        pm.expect(row).to.be.an('array').with.lengthOf(2);",
+            "        pm.expect(typeof row[0]).to.eql('string');",
+            "        pm.expect(typeof row[1]).to.eql('number');",
+            "    });",
+            "});",
+            "pm.test('Sorted by price ascending', () => {",
+            "    const prices = pm.response.json().map(r => r[1]);",
+            "    for (let i = 1; i < prices.length; i++) pm.expect(prices[i]).to.be.at.least(prices[i-1]);",
+            "});"
+          ]}}],
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/api/products/name-and-price?status=ACTIVE", "host": ["{{baseUrl}}"], "path": ["api","products","name-and-price"], "query": [{"key":"status","value":"ACTIVE"}] } }
+        },
+        {
+          "name": "Name and price of INACTIVE products",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Returns 2 inactive tuples', () => {",
+            "    pm.expect(pm.response.json().length).to.eql(2);",
+            "});"
+          ]}}],
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/api/products/name-and-price?status=INACTIVE", "host": ["{{baseUrl}}"], "path": ["api","products","name-and-price"], "query": [{"key":"status","value":"INACTIVE"}] } }
+        }
+      ]
+    },
+    {
+      "name": "Grouped count",
+      "item": [
+        {
+          "name": "Count distinct statuses",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('3 distinct statuses (ACTIVE, INACTIVE, DISCONTINUED)', () => {",
+            "    pm.expect(parseInt(pm.response.text())).to.eql(3);",
+            "});"
+          ]}}],
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/products/count/grouped-by-status" }
+        },
+        {
+          "name": "Count distinct categories",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('4 distinct categories', () => {",
+            "    pm.expect(parseInt(pm.response.text())).to.eql(4);",
+            "});"
+          ]}}],
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/products/count/grouped-by-category" }
+        }
+      ]
+    },
+    {
+      "name": "Advanced filter demo (QueryPlan reuse)",
+      "item": [
+        {
+          "name": "Advanced filter - Electronics laptop",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Response has totalMatches and results', () => {",
+            "    const data = pm.response.json();",
+            "    pm.expect(data).to.have.property('totalMatches');",
+            "    pm.expect(data).to.have.property('results');",
+            "    pm.expect(data.results).to.be.an('array');",
+            "});",
+            "pm.test('All results are ACTIVE in Electronics', () => {",
+            "    const data = pm.response.json();",
+            "    data.results.forEach(p => {",
+            "        pm.expect(p.status).to.eql('ACTIVE');",
+            "        pm.expect(p.category.name).to.eql('Electronics');",
+            "    });",
+            "});"
+          ]}}],
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/api/products/advanced/filter-demo?keyword=laptop&category=Electronics&min=0&max=99999", "host": ["{{baseUrl}}"], "path": ["api","products","advanced","filter-demo"], "query": [{"key":"keyword","value":"laptop"},{"key":"category","value":"Electronics"},{"key":"min","value":"0"},{"key":"max","value":"99999"}] } }
+        },
+        {
+          "name": "Advanced filter - Books software under 50",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('totalMatches equals results length', () => {",
+            "    const data = pm.response.json();",
+            "    pm.expect(data.totalMatches).to.eql(data.results.length);",
+            "});",
+            "pm.test('All results under 50', () => {",
+            "    pm.response.json().results.forEach(p => pm.expect(p.price).to.be.at.most(50));",
+            "});"
+          ]}}],
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/api/products/advanced/filter-demo?keyword=software&category=Books&min=0&max=50", "host": ["{{baseUrl}}"], "path": ["api","products","advanced","filter-demo"], "query": [{"key":"keyword","value":"software"},{"key":"category","value":"Books"},{"key":"min","value":"0"},{"key":"max","value":"50"}] } }
         }
       ]
     },

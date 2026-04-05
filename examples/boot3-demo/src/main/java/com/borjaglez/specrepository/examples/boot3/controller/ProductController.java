@@ -96,4 +96,29 @@ public class ProductController {
         .map(ResponseEntity::ok)
         .orElse(ResponseEntity.notFound().build());
   }
+
+  @GetMapping("/created-between")
+  public List<Product> findByCreatedBetween(@RequestParam String from, @RequestParam String to) {
+    return productService.findByCreatedBetween(from, to);
+  }
+
+  @GetMapping("/names")
+  public List<?> findProductNames() {
+    return productService.findProductNames();
+  }
+
+  @GetMapping("/name-and-price")
+  public List<?> findProductNameAndPrice(@RequestParam String status) {
+    return productService.findProductNameAndPrice(status);
+  }
+
+  @GetMapping("/count/grouped-by-status")
+  public long countGroupedByStatus() {
+    return productService.countGroupedByStatus();
+  }
+
+  @GetMapping("/count/grouped-by-category")
+  public long countGroupedByCategory() {
+    return productService.countGroupedByCategory();
+  }
 }

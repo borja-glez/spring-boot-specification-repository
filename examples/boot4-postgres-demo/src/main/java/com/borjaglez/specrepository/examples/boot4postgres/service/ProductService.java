@@ -10,6 +10,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.borjaglez.specrepository.core.Operators;
+import com.borjaglez.specrepository.core.QueryPlan;
 import com.borjaglez.specrepository.examples.boot4postgres.entity.Product;
 import com.borjaglez.specrepository.examples.boot4postgres.repository.ProductRepository;
 
@@ -47,12 +48,11 @@ public class ProductService {
         .findAll();
   }
 
-  /** Price range with GREATER_THAN_OR_EQUAL and LESS_THAN_OR_EQUAL. */
+  /** Price range with BETWEEN operator. */
   public List<Product> findByPriceRange(String minPrice, String maxPrice) {
     return productRepository
         .query()
-        .where("price", Operators.GREATER_THAN_OR_EQUAL, minPrice)
-        .where("price", Operators.LESS_THAN_OR_EQUAL, maxPrice)
+        .where("price", Operators.BETWEEN, List.of(minPrice, maxPrice))
         .sort(Sort.by("price"))
         .findAll();
   }
@@ -91,6 +91,35 @@ public class ProductService {
         .leftFetch("category")
         .sort(Sort.by("price"))
         .findAll();
+  }
+
+  /**
+   * Advanced filter demo: nested path + and/or groups + explicit join/fetch + reusable query plan.
+   */
+  public AdvancedProductSearchResponse findAdvancedFilterDemo(
+      String keyword, String category, String minPrice, String maxPrice) {
+    QueryPlan<Product> plan =
+        productRepository
+            .query()
+            .where("status", Operators.EQUALS, "ACTIVE")
+            .and(
+                group ->
+                    group
+                        .where("category.name", Operators.EQUALS, category)
+                        .or(
+                            or ->
+                                or.where("name", Operators.CONTAINS, keyword, true, false)
+                                    .where(
+                                        "description", Operators.CONTAINS, keyword, true, false)))
+            .where("price", Operators.GREATER_THAN_OR_EQUAL, minPrice)
+            .where("price", Operators.LESS_THAN_OR_EQUAL, maxPrice)
+            .leftJoin("category")
+            .leftFetch("category")
+            .sort(Sort.by("price"))
+            .plan();
+
+    return new AdvancedProductSearchResponse(
+        productRepository.count(plan), productRepository.findAll(plan));
   }
 
   /** Paginated results. */
@@ -138,5 +167,48 @@ public class ProductService {
         .where("status", Operators.EQUALS, "ACTIVE")
         .sort(Sort.by("price"))
         .findOne();
+  }
+
+  /** Date range with BETWEEN operator. */
+  public List<Product> findByCreatedBetween(String from, String to) {
+    return productRepository
+        .query()
+        .where("createdAt", Operators.BETWEEN, List.of(from, to))
+        .sort(Sort.by("createdAt"))
+        .findAll();
+  }
+
+  /** Select projection: product names only. */
+  public List<?> findProductNames() {
+    return productRepository
+        .query()
+        .where("status", Operators.EQUALS, "ACTIVE")
+        .sort(Sort.by("name"))
+        .select("name")
+        .findAll();
+  }
+
+  /** Multi-field projection: name and price. */
+  public List<?> findProductNameAndPrice(String status) {
+    return productRepository
+        .query()
+        .where("status", Operators.EQUALS, status)
+        .sort(Sort.by("price"))
+        .select("name", "price")
+        .findAll();
+  }
+
+  /** Grouped count: number of distinct statuses. */
+  public long countGroupedByStatus() {
+    return productRepository
+        .query()
+        .where("status", Operators.IS_NOT_NULL, null)
+        .groupBy("status")
+        .count();
+  }
+
+  /** Grouped count: number of distinct categories with products. */
+  public long countGroupedByCategory() {
+    return productRepository.query().groupBy("category.name").count();
   }
 }

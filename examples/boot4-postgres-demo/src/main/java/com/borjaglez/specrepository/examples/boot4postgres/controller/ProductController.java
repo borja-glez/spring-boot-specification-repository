@@ -7,6 +7,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import com.borjaglez.specrepository.examples.boot4postgres.entity.Product;
+import com.borjaglez.specrepository.examples.boot4postgres.service.AdvancedProductSearchResponse;
 import com.borjaglez.specrepository.examples.boot4postgres.service.ProductService;
 
 @RestController
@@ -68,6 +69,15 @@ public class ProductController {
     return productService.findActiveInCategoryWithPriceRange(categoryName, min, max);
   }
 
+  @GetMapping("/advanced/filter-demo")
+  public AdvancedProductSearchResponse findAdvancedFilterDemo(
+      @RequestParam String keyword,
+      @RequestParam String category,
+      @RequestParam String min,
+      @RequestParam String max) {
+    return productService.findAdvancedFilterDemo(keyword, category, min, max);
+  }
+
   @GetMapping("/paginated")
   public Page<Product> findPaginated(
       @RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "10") int size) {
@@ -95,5 +105,30 @@ public class ProductController {
         .findCheapestActive()
         .map(ResponseEntity::ok)
         .orElse(ResponseEntity.notFound().build());
+  }
+
+  @GetMapping("/created-between")
+  public List<Product> findByCreatedBetween(@RequestParam String from, @RequestParam String to) {
+    return productService.findByCreatedBetween(from, to);
+  }
+
+  @GetMapping("/names")
+  public List<?> findProductNames() {
+    return productService.findProductNames();
+  }
+
+  @GetMapping("/name-and-price")
+  public List<?> findProductNameAndPrice(@RequestParam String status) {
+    return productService.findProductNameAndPrice(status);
+  }
+
+  @GetMapping("/count/grouped-by-status")
+  public long countGroupedByStatus() {
+    return productService.countGroupedByStatus();
+  }
+
+  @GetMapping("/count/grouped-by-category")
+  public long countGroupedByCategory() {
+    return productService.countGroupedByCategory();
   }
 }
