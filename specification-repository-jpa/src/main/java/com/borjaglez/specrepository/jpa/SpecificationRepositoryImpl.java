@@ -147,7 +147,7 @@ public class SpecificationRepositoryImpl<T, ID extends Serializable>
             : builder.createQuery(Object[].class);
     Root<T> root = query.from(getDomainClass());
     specificationFactory.create(plan).toPredicate(root, query, builder);
-    applyProjection(plan, root, query);
+    applyProjection(plan, builder, root, query);
     applySort(plan, pageable, builder, root, query);
 
     TypedQuery<?> typedQuery = entityManager.createQuery(query);
@@ -159,10 +159,10 @@ public class SpecificationRepositoryImpl<T, ID extends Serializable>
   }
 
   @SuppressWarnings({"rawtypes", "unchecked"})
-  private void applyProjection(QueryPlan<T> plan, Root<T> root, CriteriaQuery<?> query) {
+  private void applyProjection(
+      QueryPlan<T> plan, CriteriaBuilder builder, Root<T> root, CriteriaQuery<?> query) {
     AssociationRegistry registry = new AssociationRegistry();
     List<Selection<?>> projections = new ArrayList<>();
-    CriteriaBuilder builder = entityManager.getCriteriaBuilder();
     plan.selections()
         .forEach(selection -> projections.add(toSelection(selection, builder, root, registry)));
     CriteriaQuery rawQuery = query;
