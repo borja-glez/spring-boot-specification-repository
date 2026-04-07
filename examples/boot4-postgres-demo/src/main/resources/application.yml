@@ -10,7 +10,7 @@ spring:
         dialect: org.hibernate.dialect.PostgreSQLDialect
   docker:
     compose:
-      file: examples/boot4-postgres-demo/compose.yml
+      file: compose.yml
       lifecycle-management: start-and-stop
 server:
   port: 8083

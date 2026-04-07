@@ -9,6 +9,8 @@ import jakarta.persistence.EntityManager;
 import jakarta.persistence.TypedQuery;
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.CriteriaQuery;
+import jakarta.persistence.criteria.Expression;
+import jakarta.persistence.criteria.Path;
 import jakarta.persistence.criteria.Root;
 import jakarta.persistence.criteria.Selection;
 
@@ -20,6 +22,8 @@ import org.springframework.data.jpa.repository.support.JpaEntityInformation;
 import org.springframework.data.jpa.repository.support.SimpleJpaRepository;
 import org.springframework.format.support.DefaultFormattingConversionService;
 
+import com.borjaglez.specrepository.core.AggregateSelection;
+import com.borjaglez.specrepository.core.FieldSelection;
 import com.borjaglez.specrepository.core.JoinMode;
 import com.borjaglez.specrepository.core.QueryPlan;
 import com.borjaglez.specrepository.jpa.support.AssociationRegistry;
@@ -62,7 +66,7 @@ public class SpecificationRepositoryImpl<T, ID extends Serializable>
   @Override
   @SuppressWarnings("unchecked")
   public List<T> findAll(QueryPlan<T> plan) {
-    if (!plan.projections().isEmpty()) {
+    if (plan.hasSelections()) {
       return (List<T>) executeProjectedQuery(plan, null);
     }
     CriteriaBuilder builder = entityManager.getCriteriaBuilder();
@@ -79,9 +83,9 @@ public class SpecificationRepositoryImpl<T, ID extends Serializable>
   @Override
   @SuppressWarnings("unchecked")
   public Page<T> findAll(QueryPlan<T> plan, Pageable pageable) {
-    if (!plan.projections().isEmpty()) {
+    if (plan.hasSelections()) {
       List<?> content = executeProjectedQuery(plan, pageable);
-      return new PageImpl<>((List<T>) content, pageable, count(plan));
+      return new PageImpl<>((List<T>) content, pageable, countSelectedRows(plan));
     }
     CriteriaBuilder builder = entityManager.getCriteriaBuilder();
     CriteriaQuery<T> query = builder.createQuery(getDomainClass());
@@ -119,6 +123,13 @@ public class SpecificationRepositoryImpl<T, ID extends Serializable>
     return entityManager.createQuery(query).getSingleResult();
   }
 
+  private long countSelectedRows(QueryPlan<T> plan) {
+    if (!plan.hasAggregates()) {
+      return count(plan);
+    }
+    return plan.groupBy().isEmpty() ? 1L : countGrouped(plan);
+  }
+
   private long countGrouped(QueryPlan<T> plan) {
     CriteriaBuilder builder = entityManager.getCriteriaBuilder();
     CriteriaQuery<Long> query = builder.createQuery(Long.class);
@@ -131,12 +142,12 @@ public class SpecificationRepositoryImpl<T, ID extends Serializable>
   private List<?> executeProjectedQuery(QueryPlan<T> plan, Pageable pageable) {
     CriteriaBuilder builder = entityManager.getCriteriaBuilder();
     CriteriaQuery<?> query =
-        plan.projections().size() == 1
+        plan.selections().size() == 1
             ? builder.createQuery(Object.class)
             : builder.createQuery(Object[].class);
     Root<T> root = query.from(getDomainClass());
     specificationFactory.create(plan).toPredicate(root, query, builder);
-    applyProjection(plan, root, query);
+    applyProjection(plan, builder, root, query);
     applySort(plan, pageable, builder, root, query);
 
     TypedQuery<?> typedQuery = entityManager.createQuery(query);
@@ -148,14 +159,12 @@ public class SpecificationRepositoryImpl<T, ID extends Serializable>
   }
 
   @SuppressWarnings({"rawtypes", "unchecked"})
-  private void applyProjection(QueryPlan<T> plan, Root<T> root, CriteriaQuery<?> query) {
+  private void applyProjection(
+      QueryPlan<T> plan, CriteriaBuilder builder, Root<T> root, CriteriaQuery<?> query) {
     AssociationRegistry registry = new AssociationRegistry();
     List<Selection<?>> projections = new ArrayList<>();
-    plan.projections()
-        .forEach(
-            field ->
-                projections.add(
-                    (Selection<?>) pathResolver.resolve(root, registry, field, JoinMode.LEFT)));
+    plan.selections()
+        .forEach(selection -> projections.add(toSelection(selection, builder, root, registry)));
     CriteriaQuery rawQuery = query;
 
     if (projections.size() == 1) {
@@ -163,6 +172,63 @@ public class SpecificationRepositoryImpl<T, ID extends Serializable>
       return;
     }
     rawQuery.multiselect(projections);
+  }
+
+  private Selection<?> toSelection(
+      com.borjaglez.specrepository.core.Selection selection,
+      CriteriaBuilder builder,
+      Root<T> root,
+      AssociationRegistry registry) {
+    if (selection instanceof FieldSelection fieldSelection) {
+      return pathResolver.resolve(root, registry, fieldSelection.field(), JoinMode.LEFT);
+    }
+    AggregateSelection aggregateSelection = (AggregateSelection) selection;
+    Path<?> path = pathResolver.resolve(root, registry, aggregateSelection.field(), JoinMode.LEFT);
+    return toAggregateExpression(builder, aggregateSelection, path);
+  }
+
+  @SuppressWarnings({"rawtypes", "unchecked"})
+  private Expression<?> toAggregateExpression(
+      CriteriaBuilder builder, AggregateSelection selection, Path<?> path) {
+    return switch (selection.function()) {
+      case SUM -> builder.sum(asNumberExpression(path, selection));
+      case AVG -> builder.avg(asNumberExpression(path, selection));
+      case MIN -> minExpression(builder, path);
+      case MAX -> maxExpression(builder, path);
+      case COUNT -> builder.count(path);
+    };
+  }
+
+  @SuppressWarnings("unchecked")
+  private Expression<? extends Number> asNumberExpression(
+      Path<?> path, AggregateSelection selection) {
+    if (!Number.class.isAssignableFrom(path.getJavaType())) {
+      throw new IllegalArgumentException(
+          selection.function() + " requires a numeric field: " + selection.field());
+    }
+    return (Expression<? extends Number>) path;
+  }
+
+  @SuppressWarnings({"rawtypes", "unchecked"})
+  private Expression<?> minExpression(CriteriaBuilder builder, Path<?> path) {
+    if (Number.class.isAssignableFrom(path.getJavaType())) {
+      return builder.min((Expression<? extends Number>) path);
+    }
+    if (Comparable.class.isAssignableFrom(path.getJavaType())) {
+      return builder.least((Expression<? extends Comparable>) path);
+    }
+    throw new IllegalArgumentException("MIN requires a comparable field: " + path.getJavaType());
+  }
+
+  @SuppressWarnings({"rawtypes", "unchecked"})
+  private Expression<?> maxExpression(CriteriaBuilder builder, Path<?> path) {
+    if (Number.class.isAssignableFrom(path.getJavaType())) {
+      return builder.max((Expression<? extends Number>) path);
+    }
+    if (Comparable.class.isAssignableFrom(path.getJavaType())) {
+      return builder.greatest((Expression<? extends Comparable>) path);
+    }
+    throw new IllegalArgumentException("MAX requires a comparable field: " + path.getJavaType());
   }
 
   private void applySort(

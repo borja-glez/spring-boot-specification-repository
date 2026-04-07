@@ -18,6 +18,7 @@ class QueryPlanBuilderTest {
             .leftFetch("roles")
             .groupBy("status")
             .select("name", "email")
+            .count("id")
             .sort(Sort.by("name"))
             .distinct()
             .build();
@@ -28,8 +29,37 @@ class QueryPlanBuilderTest {
     assertThat(plan.fetches()).containsExactly(new FetchInstruction("roles", JoinMode.LEFT));
     assertThat(plan.groupBy()).containsExactly("status");
     assertThat(plan.projections()).containsExactly("name", "email");
+    assertThat(plan.selections())
+        .containsExactly(
+            new FieldSelection("name"),
+            new FieldSelection("email"),
+            new AggregateSelection(AggregateFunction.COUNT, "id"));
     assertThat(plan.sort().getOrderFor("name")).isNotNull();
     assertThat(plan.distinct()).isTrue();
+    assertThat(plan.hasSelections()).isTrue();
+    assertThat(plan.hasAggregates()).isTrue();
+  }
+
+  @Test
+  void shouldAddAggregateSelectionsInDeclarationOrder() {
+    QueryPlan<String> plan =
+        new QueryPlanBuilder<>(String.class)
+            .select("status")
+            .sum("age")
+            .avg("score")
+            .min("createdAt")
+            .max("updatedAt")
+            .count("id")
+            .build();
+
+    assertThat(plan.selections())
+        .containsExactly(
+            new FieldSelection("status"),
+            new AggregateSelection(AggregateFunction.SUM, "age"),
+            new AggregateSelection(AggregateFunction.AVG, "score"),
+            new AggregateSelection(AggregateFunction.MIN, "createdAt"),
+            new AggregateSelection(AggregateFunction.MAX, "updatedAt"),
+            new AggregateSelection(AggregateFunction.COUNT, "id"));
   }
 
   @Test
@@ -109,7 +139,10 @@ class QueryPlanBuilderTest {
     assertThat(plan.joins()).isEmpty();
     assertThat(plan.fetches()).isEmpty();
     assertThat(plan.projections()).isEmpty();
+    assertThat(plan.selections()).isEmpty();
     assertThat(plan.groupBy()).isEmpty();
+    assertThat(plan.hasSelections()).isFalse();
+    assertThat(plan.hasAggregates()).isFalse();
   }
 
   @Test

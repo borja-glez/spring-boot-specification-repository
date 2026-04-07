@@ -10,6 +10,7 @@ Extensible Spring Data JPA query library with a fluent DSL and native-friendly a
 ## Features
 
 - Fluent query DSL for chained `where`, `and`, `or`, `join`, and `fetch` operations
+- Aggregate projections with `sum`, `avg`, `min`, `max`, and `count(field)`
 - Pure builder model -- the builder only creates an immutable query plan
 - `SpecificationRepository` as a repository base abstraction for execution
 - Pluggable operators, predicate factories, converters, and dialect extensions
@@ -131,9 +132,41 @@ List<?> names = productRepository.query()
 Current projection behavior is intentionally minimal:
 
 - one selected field returns scalar values at runtime (for example `List<String>`)
+- one aggregate function returns a scalar value at runtime (for example `Optional<Double>` from `avg(...)`)
 - multiple selected fields return `Object[]` rows at runtime
+- grouped aggregate queries can combine `select(...)` and aggregate functions, returning `Object[]` rows at runtime
 - the repository API remains entity-typed today, so assign projection results to `List<?>`, `Page<?>`, or `Optional<?>`
 - fetch joins are intended for entity loading and should not be combined with projections
+
+### Aggregate Queries
+
+Aggregate functions use the same projection pipeline as `select(...)`.
+
+```java
+Optional<?> totalAge = customerRepository.query()
+    .where("status", Operators.IS_NOT_NULL, null)
+    .sum("age")
+    .findOne();
+
+Optional<?> averageAge = customerRepository.query()
+    .avg("age")
+    .findOne();
+
+List<?> grouped = customerRepository.query()
+    .groupBy("status")
+    .sort(Sort.by("status"))
+    .select("status")
+    .count("id")
+    .sum("age")
+    .findAll();
+```
+
+Notes:
+
+- non-grouped aggregate queries return a single row
+- grouped aggregate queries return one row per group
+- `count(field)` counts non-null values for the selected field
+- `sum(...)` and `avg(...)` require numeric fields
 
 ## Usage Examples
 
@@ -298,7 +331,8 @@ When using `Pageable`, its sort takes priority over any sort set on the builder.
 
 ### Grouped Counts
 
-`groupBy(...)` is applied to the underlying JPA Criteria query, so grouped counts honor the same filters as `findAll()`:
+`groupBy(...)` is applied to the underlying JPA Criteria query, so grouped counts honor the same
+filters as `findAll()`:
 
 ```java
 long grouped = productRepository.query()
@@ -307,7 +341,18 @@ long grouped = productRepository.query()
     .count();
 ```
 
-Current limitation: repository execution still returns root entities, so `groupBy(...)` currently supports grouped counts, but not aggregate/projection results.
+Grouped aggregate queries are also supported through the same execution pipeline:
+
+```java
+List<?> groupedTotals = productRepository.query()
+    .where("status", Operators.IS_NOT_NULL, null)
+    .groupBy("status")
+    .sort(Sort.by("status"))
+    .select("status")
+    .count("id")
+    .sum("price")
+    .findAll();
+```
 
 ### Single Result and Count
 
@@ -386,9 +431,10 @@ Important notes:
 - invalid inputs fail fast with a clear `IllegalArgumentException`
 - bounds are used as provided; they are not reordered automatically
 
-### Current `select(...)` and `groupBy(...)` Behavior
+### Current Projection and Aggregate Behavior
 
-The default JPA repository now executes both capabilities, but with intentionally minimal runtime semantics:
+The default JPA repository executes `select(...)`, `groupBy(...)`, and aggregate functions with the
+following runtime semantics:
 
 ```java
 List<?> projected = productRepository.query()
@@ -396,19 +442,23 @@ List<?> projected = productRepository.query()
     .select("name", "category.name")
     .findAll();
 
-long grouped = productRepository.query()
+List<?> grouped = productRepository.query()
     .where("status", Operators.IS_NOT_NULL, null)
     .groupBy("status")
-    .count();
+    .select("status")
+    .count("id")
+    .findAll();
 ```
 
 - `select(...)` affects the executed JPA query
+- aggregate functions use the same projection pipeline as `select(...)`
 - one selected field returns scalar values at runtime
+- one aggregate function returns a scalar value at runtime
 - multiple selected fields return `Object[]` rows at runtime
+- grouped `select(...)` + aggregate combinations return `Object[]` rows at runtime
 - `groupBy(...)` is applied to the generated `CriteriaQuery`
-- grouped `count()` is supported and honors the same filters as `findAll()`
+- grouped `count()` and grouped aggregate queries honor the same filters as `findAll()`
 - the repository API remains entity-typed, so projection consumers should use `List<?>`, `Page<?>`, or `Optional<?>`
-- grouped aggregate/projection result sets are not yet supported by the default repository API
 
 ## Available Operators
 
@@ -482,8 +532,23 @@ The repository includes four demo applications:
 | `boot4-postgres-demo` | PostgreSQL (Docker) | 8083 | Check the module task list locally before assuming `bootRun` is available |
 
 The demo REST APIs show the same DSL patterns documented above, including nested filters,
-logical groups, reusable plans, and PostgreSQL-specific text search. Postman collections are
-available in `examples/`:
+logical groups, reusable plans, aggregate queries, and PostgreSQL-specific text search.
+
+Example aggregate endpoint available in every demo application:
+
+```text
+GET /api/products/aggregates/active-summary
+```
+
+That endpoint demonstrates:
+
+- `sum("price")`
+- `avg("price")`
+- `min("price")`
+- `max("price")`
+- `count("description")`
+
+Postman collections are available in `examples/`:
 
 - `Specification-Repository-Demo.postman_collection.json` (H2 demos)
 - `Specification-Repository-Postgres-Demo.postman_collection.json` (PostgreSQL demos)
