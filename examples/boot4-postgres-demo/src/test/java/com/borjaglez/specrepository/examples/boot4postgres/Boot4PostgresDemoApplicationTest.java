@@ -22,8 +22,7 @@ class Boot4PostgresDemoApplicationTest {
       new PostgreSQLContainer<>("postgres:17-alpine")
           .withDatabaseName("demo")
           .withUsername("demo")
-          .withPassword("demo")
-          .withInitScript("init.sql");
+          .withPassword("demo");
 
   @DynamicPropertySource
   static void registerProperties(DynamicPropertyRegistry registry) {
