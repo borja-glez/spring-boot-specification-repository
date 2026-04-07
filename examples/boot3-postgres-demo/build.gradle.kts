@@ -9,4 +9,7 @@ dependencies {
     implementation(libs.spring.boot.docker.compose)
     developmentOnly(libs.spring.boot.devtools)
     runtimeOnly(libs.postgresql)
+    testImplementation(platform(libs.testcontainers.bom))
+    testImplementation(libs.testcontainers.junit)
+    testImplementation(libs.testcontainers.postgresql)
 }
