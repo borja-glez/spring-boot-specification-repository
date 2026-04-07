@@ -1,5 +1,6 @@
 package com.borjaglez.specrepository.examples.boot3postgres.service;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 
@@ -136,6 +137,41 @@ public class ProductService {
     return productRepository.query().where("status", Operators.EQUALS, status).count();
   }
 
+  /** Aggregate demo: summary of active product prices plus field-level count. */
+  public ProductAggregateSummaryResponse findActiveAggregateSummary() {
+    return new ProductAggregateSummaryResponse(
+        toBigDecimal(
+            productRepository
+                .query()
+                .where("status", Operators.EQUALS, "ACTIVE")
+                .sum("price")
+                .findOne()),
+        toDouble(
+            productRepository
+                .query()
+                .where("status", Operators.EQUALS, "ACTIVE")
+                .avg("price")
+                .findOne()),
+        toBigDecimal(
+            productRepository
+                .query()
+                .where("status", Operators.EQUALS, "ACTIVE")
+                .min("price")
+                .findOne()),
+        toBigDecimal(
+            productRepository
+                .query()
+                .where("status", Operators.EQUALS, "ACTIVE")
+                .max("price")
+                .findOne()),
+        toLong(
+            productRepository
+                .query()
+                .where("status", Operators.EQUALS, "ACTIVE")
+                .count("description")
+                .findOne()));
+  }
+
   /** Find products with null description. */
   public List<Product> findWithoutDescription() {
     return productRepository.query().where("description", Operators.IS_NULL, null).findAll();
@@ -210,5 +246,17 @@ public class ProductService {
   /** Grouped count: number of distinct categories with products. */
   public long countGroupedByCategory() {
     return productRepository.query().groupBy("category.name").count();
+  }
+
+  private static BigDecimal toBigDecimal(Optional<?> value) {
+    return value.map(BigDecimal.class::cast).orElse(null);
+  }
+
+  private static Double toDouble(Optional<?> value) {
+    return value.map(Double.class::cast).orElse(null);
+  }
+
+  private static long toLong(Optional<?> value) {
+    return value.map(Long.class::cast).orElse(0L);
   }
 }

@@ -7,6 +7,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import com.borjaglez.specrepository.examples.boot3.entity.Product;
+import com.borjaglez.specrepository.examples.boot3.service.ProductAggregateSummaryResponse;
 import com.borjaglez.specrepository.examples.boot3.service.ProductService;
 
 @RestController
@@ -77,6 +78,11 @@ public class ProductController {
   @GetMapping("/count/{status}")
   public long countByStatus(@PathVariable String status) {
     return productService.countByStatus(status);
+  }
+
+  @GetMapping("/aggregates/active-summary")
+  public ProductAggregateSummaryResponse findActiveAggregateSummary() {
+    return productService.findActiveAggregateSummary();
   }
 
   @GetMapping("/without-description")

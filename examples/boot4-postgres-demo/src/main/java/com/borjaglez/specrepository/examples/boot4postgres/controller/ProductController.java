@@ -8,6 +8,7 @@ import org.springframework.web.bind.annotation.*;
 
 import com.borjaglez.specrepository.examples.boot4postgres.entity.Product;
 import com.borjaglez.specrepository.examples.boot4postgres.service.AdvancedProductSearchResponse;
+import com.borjaglez.specrepository.examples.boot4postgres.service.ProductAggregateSummaryResponse;
 import com.borjaglez.specrepository.examples.boot4postgres.service.ProductService;
 
 @RestController
@@ -87,6 +88,11 @@ public class ProductController {
   @GetMapping("/count/{status}")
   public long countByStatus(@PathVariable String status) {
     return productService.countByStatus(status);
+  }
+
+  @GetMapping("/aggregates/active-summary")
+  public ProductAggregateSummaryResponse findActiveAggregateSummary() {
+    return productService.findActiveAggregateSummary();
   }
 
   @GetMapping("/without-description")

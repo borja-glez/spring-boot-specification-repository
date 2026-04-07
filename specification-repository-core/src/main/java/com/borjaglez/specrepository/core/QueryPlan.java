@@ -10,6 +10,16 @@ public record QueryPlan<T>(
     List<JoinInstruction> joins,
     List<FetchInstruction> fetches,
     List<String> projections,
+    List<Selection> selections,
     List<String> groupBy,
     Sort sort,
-    boolean distinct) {}
+    boolean distinct) {
+
+  public boolean hasSelections() {
+    return !selections.isEmpty();
+  }
+
+  public boolean hasAggregates() {
+    return selections.stream().anyMatch(AggregateSelection.class::isInstance);
+  }
+}

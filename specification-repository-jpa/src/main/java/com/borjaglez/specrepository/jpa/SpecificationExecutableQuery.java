@@ -101,6 +101,36 @@ public class SpecificationExecutableQuery<T> extends QueryPlanBuilder<T> {
   }
 
   @Override
+  public SpecificationExecutableQuery<T> sum(String field) {
+    super.sum(field);
+    return this;
+  }
+
+  @Override
+  public SpecificationExecutableQuery<T> avg(String field) {
+    super.avg(field);
+    return this;
+  }
+
+  @Override
+  public SpecificationExecutableQuery<T> min(String field) {
+    super.min(field);
+    return this;
+  }
+
+  @Override
+  public SpecificationExecutableQuery<T> max(String field) {
+    super.max(field);
+    return this;
+  }
+
+  @Override
+  public SpecificationExecutableQuery<T> count(String field) {
+    super.count(field);
+    return this;
+  }
+
+  @Override
   public SpecificationExecutableQuery<T> sort(Sort sort) {
     super.sort(sort);
     return this;

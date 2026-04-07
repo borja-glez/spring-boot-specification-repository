@@ -15,6 +15,7 @@ public class QueryPlanBuilder<T> {
   private final List<JoinInstruction> joins = new ArrayList<>();
   private final List<FetchInstruction> fetches = new ArrayList<>();
   private final List<String> projections = new ArrayList<>();
+  private final List<Selection> selections = new ArrayList<>();
   private final List<String> groupBy = new ArrayList<>();
   private Sort sort = Sort.unsorted();
   private boolean distinct;
@@ -78,7 +79,32 @@ public class QueryPlanBuilder<T> {
   }
 
   public QueryPlanBuilder<T> select(String... fields) {
-    projections.addAll(Arrays.asList(fields));
+    Arrays.stream(fields).forEach(this::selectField);
+    return this;
+  }
+
+  public QueryPlanBuilder<T> sum(String field) {
+    selections.add(new AggregateSelection(AggregateFunction.SUM, field));
+    return this;
+  }
+
+  public QueryPlanBuilder<T> avg(String field) {
+    selections.add(new AggregateSelection(AggregateFunction.AVG, field));
+    return this;
+  }
+
+  public QueryPlanBuilder<T> min(String field) {
+    selections.add(new AggregateSelection(AggregateFunction.MIN, field));
+    return this;
+  }
+
+  public QueryPlanBuilder<T> max(String field) {
+    selections.add(new AggregateSelection(AggregateFunction.MAX, field));
+    return this;
+  }
+
+  public QueryPlanBuilder<T> count(String field) {
+    selections.add(new AggregateSelection(AggregateFunction.COUNT, field));
     return this;
   }
 
@@ -99,9 +125,15 @@ public class QueryPlanBuilder<T> {
         List.copyOf(joins),
         List.copyOf(fetches),
         List.copyOf(projections),
+        List.copyOf(selections),
         List.copyOf(groupBy),
         sort,
         distinct);
+  }
+
+  private void selectField(String field) {
+    projections.add(field);
+    selections.add(new FieldSelection(field));
   }
 
   private QueryPlanBuilder<T> join(JoinMode mode, String... paths) {

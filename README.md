@@ -10,6 +10,7 @@ Extensible Spring Data JPA query library with a fluent DSL and native-friendly a
 ## Features
 
 - Fluent query DSL for chained `where`, `and`, `or`, `join`, and `fetch` operations
+- Aggregate projections with `sum`, `avg`, `min`, `max`, and `count(field)`
 - Pure builder model -- the builder only creates an immutable query plan
 - `SpecificationRepository` as a repository base abstraction for execution
 - Pluggable operators, predicate factories, converters, and dialect extensions
@@ -131,9 +132,41 @@ List<?> names = productRepository.query()
 Current projection behavior is intentionally minimal:
 
 - one selected field returns scalar values at runtime (for example `List<String>`)
+- one aggregate function returns a scalar value at runtime (for example `Optional<Double>` from `avg(...)`)
 - multiple selected fields return `Object[]` rows at runtime
+- grouped aggregate queries can combine `select(...)` and aggregate functions, returning `Object[]` rows at runtime
 - the repository API remains entity-typed today, so assign projection results to `List<?>`, `Page<?>`, or `Optional<?>`
 - fetch joins are intended for entity loading and should not be combined with projections
+
+### Aggregate Queries
+
+Aggregate functions use the same projection pipeline as `select(...)`.
+
+```java
+Optional<?> totalAge = customerRepository.query()
+    .where("status", Operators.IS_NOT_NULL, null)
+    .sum("age")
+    .findOne();
+
+Optional<?> averageAge = customerRepository.query()
+    .avg("age")
+    .findOne();
+
+List<?> grouped = customerRepository.query()
+    .groupBy("status")
+    .sort(Sort.by("status"))
+    .select("status")
+    .count("id")
+    .sum("age")
+    .findAll();
+```
+
+Notes:
+
+- non-grouped aggregate queries return a single row
+- grouped aggregate queries return one row per group
+- `count(field)` counts non-null values for the selected field
+- `sum(...)` and `avg(...)` require numeric fields
 
 ## Usage Examples
 

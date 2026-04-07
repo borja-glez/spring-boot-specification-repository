@@ -418,6 +418,127 @@ class SpecificationRepositoryIntegrationTest {
   }
 
   @Test
+  void shouldReturnSumAggregate() {
+    Optional<?> result =
+        repository.query().where("status", Operators.IS_NOT_NULL, null).sum("age").findOne();
+
+    assertThat(result).hasValueSatisfying(value -> assertThat(value).isEqualTo(98));
+  }
+
+  @Test
+  void shouldReturnAverageAggregate() {
+    Optional<?> result = repository.query().avg("age").findOne();
+
+    assertThat(result)
+        .hasValueSatisfying(
+            value -> assertThat((Double) value).isEqualTo((25D + 32D + 41D + 19D) / 4D));
+  }
+
+  @Test
+  void shouldReturnMinimumComparableAggregate() {
+    Optional<?> result = repository.query().min("createdAt").findOne();
+
+    assertThat(result)
+        .hasValueSatisfying(value -> assertThat(value).isEqualTo(LocalDate.of(2024, 1, 10)));
+  }
+
+  @Test
+  void shouldReturnMinimumNumericAggregate() {
+    Optional<?> result = repository.query().min("age").findOne();
+
+    assertThat(result).hasValueSatisfying(value -> assertThat(value).isEqualTo(19));
+  }
+
+  @Test
+  void shouldReturnMaximumAggregate() {
+    Optional<?> result = repository.query().max("age").findOne();
+
+    assertThat(result).hasValueSatisfying(value -> assertThat(value).isEqualTo(41));
+  }
+
+  @Test
+  void shouldReturnMaximumComparableAggregate() {
+    Optional<?> result = repository.query().max("createdAt").findOne();
+
+    assertThat(result)
+        .hasValueSatisfying(value -> assertThat(value).isEqualTo(LocalDate.of(2024, 4, 5)));
+  }
+
+  @Test
+  void shouldReturnFieldLevelCountAggregate() {
+    Optional<?> result = repository.query().count("status").findOne();
+
+    assertThat(result).hasValueSatisfying(value -> assertThat(value).isEqualTo(3L));
+  }
+
+  @Test
+  void shouldReturnGroupedAggregates() {
+    List<?> results =
+        repository
+            .query()
+            .where("status", Operators.IS_NOT_NULL, null)
+            .groupBy("status")
+            .sort(Sort.by("status"))
+            .select("status")
+            .count("id")
+            .sum("age")
+            .findAll();
+
+    assertThat(results)
+        .hasSize(2)
+        .allSatisfy(result -> assertThat(result).isInstanceOf(Object[].class));
+    assertThat((Object[]) results.get(0)).containsExactly("ACTIVE", 2L, 57);
+    assertThat((Object[]) results.get(1)).containsExactly("INACTIVE", 1L, 41);
+  }
+
+  @Test
+  void shouldPageGroupedAggregateResults() {
+    Page<?> page =
+        repository
+            .query()
+            .where("status", Operators.IS_NOT_NULL, null)
+            .groupBy("status")
+            .sort(Sort.by("status"))
+            .select("status")
+            .count("id")
+            .findAll(PageRequest.of(0, 1));
+
+    assertThat(page.getContent()).hasSize(1);
+    assertThat(page.getTotalElements()).isEqualTo(2);
+  }
+
+  @Test
+  void shouldPageNonGroupedAggregateResultsAsSingleRow() {
+    Page<?> page = repository.query().sum("age").findAll(PageRequest.of(0, 10));
+
+    assertThat(page.getContent())
+        .singleElement()
+        .satisfies(value -> assertThat(((Number) value).intValue()).isEqualTo(117));
+    assertThat(page.getTotalElements()).isEqualTo(1);
+  }
+
+  @Test
+  void shouldRejectNonNumericSumField() {
+    assertThatThrownBy(() -> repository.query().sum("status").findAll())
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessage("SUM requires a numeric field: status");
+  }
+
+  @Test
+  void shouldRejectNonComparableMinimumField() {
+    assertThatThrownBy(() -> repository.query().min("profile").findAll())
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("MIN requires a comparable field");
+  }
+
+  @Test
+  void shouldRejectNonComparableMaximumField() {
+    assertThatThrownBy(() -> repository.query().max("profile").findAll())
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("MAX requires a comparable field");
+  }
+
+  @Test
   void shouldProjectFindOneResult() {
     Optional<?> result =
         repository
