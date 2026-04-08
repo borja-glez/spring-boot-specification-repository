@@ -713,6 +713,24 @@ class SpecificationRepositoryIntegrationTest {
   }
 
   @Test
+  @SuppressWarnings({"rawtypes", "unchecked"})
+  void shouldFindOneWithProjectedQueryPlanMetadata() {
+    QueryPlan<TestCustomer> plan =
+        repository
+            .query()
+            .where("status", Operators.EQUALS, "ACTIVE")
+            .sort(Sort.by("name"))
+            .select("name")
+            .selectInto(NameOnlyRecord.class)
+            .plan();
+
+    Optional<?> result = repository.findOne((QueryPlan) plan);
+
+    assertThat(result)
+        .hasValueSatisfying(value -> assertThat(value).isEqualTo(new NameOnlyRecord("Borja")));
+  }
+
+  @Test
   void shouldFindAllPagedWithQueryPlan() {
     QueryPlan<TestCustomer> plan =
         repository.query().where("status", Operators.IS_NOT_NULL, null).plan();
