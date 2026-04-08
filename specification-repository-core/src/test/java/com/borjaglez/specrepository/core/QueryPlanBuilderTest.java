@@ -90,7 +90,17 @@ class QueryPlanBuilderTest {
     assertThatIllegalStateException()
         .isThrownBy(
             () -> new QueryPlanBuilder<>(String.class).selectInto(NameEmailProjection.class))
-        .withMessage("select must be called before selectInto");
+        .withMessage("select and/or aggregate selection methods must be called before selectInto");
+  }
+
+  @Test
+  void shouldAllowSelectIntoAfterAggregateSelection() {
+    QueryPlan<String> plan =
+        new QueryPlanBuilder<>(String.class).count("id").selectInto(CountProjection.class).build();
+
+    assertThat(plan.projectionType()).isEqualTo(CountProjection.class);
+    assertThat(plan.selections())
+        .containsExactly(new AggregateSelection(AggregateFunction.COUNT, "id"));
   }
 
   @Test
@@ -193,4 +203,6 @@ class QueryPlanBuilderTest {
   }
 
   private record NameEmailProjection(String name, String email) {}
+
+  private record CountProjection(Long count) {}
 }

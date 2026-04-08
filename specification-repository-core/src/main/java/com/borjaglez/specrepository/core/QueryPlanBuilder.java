@@ -140,7 +140,8 @@ public class QueryPlanBuilder<T> {
   protected final <P> QueryPlanBuilder<T> selectIntoInternal(Class<P> projectionType) {
     Objects.requireNonNull(projectionType, "projectionType must not be null");
     if (!hasSelections()) {
-      throw new IllegalStateException("select must be called before selectInto");
+      throw new IllegalStateException(
+          "select and/or aggregate selection methods must be called before selectInto");
     }
     this.projectionType = projectionType;
     return this;

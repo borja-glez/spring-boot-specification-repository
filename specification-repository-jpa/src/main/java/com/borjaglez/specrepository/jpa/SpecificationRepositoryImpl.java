@@ -121,14 +121,18 @@ public class SpecificationRepositoryImpl<T, ID extends Serializable>
   }
 
   @Override
+  @SuppressWarnings("unchecked")
   public Optional<T> findOne(QueryPlan<T> plan) {
-    List<T> results = findAll(plan);
+    List<T> results =
+        plan.projectionType() != null
+            ? (List<T>) executeProjectedQuery(plan, null, requiredProjectionType(plan), 1)
+            : findAll(plan);
     return results.stream().findFirst();
   }
 
   @Override
   public <P> Optional<P> findOneProjected(QueryPlan<T> plan) {
-    List<P> results = findAllProjected(plan);
+    List<P> results = executeProjectedQuery(plan, null, requiredProjectionType(plan), 1);
     return results.stream().findFirst();
   }
 
@@ -183,6 +187,11 @@ public class SpecificationRepositoryImpl<T, ID extends Serializable>
 
   private <P> List<P> executeProjectedQuery(
       QueryPlan<T> plan, Pageable pageable, Class<P> resultType) {
+    return executeProjectedQuery(plan, pageable, resultType, null);
+  }
+
+  private <P> List<P> executeProjectedQuery(
+      QueryPlan<T> plan, Pageable pageable, Class<P> resultType, Integer maxResults) {
     CriteriaBuilder builder = entityManager.getCriteriaBuilder();
     CriteriaQuery<P> query = builder.createQuery(resultType);
     Root<T> root = query.from(getDomainClass());
@@ -194,6 +203,8 @@ public class SpecificationRepositoryImpl<T, ID extends Serializable>
     if (pageable != null) {
       typedQuery.setFirstResult((int) pageable.getOffset());
       typedQuery.setMaxResults(pageable.getPageSize());
+    } else if (maxResults != null) {
+      typedQuery.setMaxResults(maxResults);
     }
     return typedQuery.getResultList();
   }

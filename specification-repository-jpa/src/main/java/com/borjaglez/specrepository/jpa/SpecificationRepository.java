@@ -18,15 +18,24 @@ public interface SpecificationRepository<T, ID>
 
   List<T> findAll(QueryPlan<T> plan);
 
-  <P> List<P> findAllProjected(QueryPlan<T> plan);
+  default <P> List<P> findAllProjected(QueryPlan<T> plan) {
+    throw new UnsupportedOperationException(
+        "Projected queries are not supported by this repository");
+  }
 
   Page<T> findAll(QueryPlan<T> plan, Pageable pageable);
 
-  <P> Page<P> findAllProjected(QueryPlan<T> plan, Pageable pageable);
+  default <P> Page<P> findAllProjected(QueryPlan<T> plan, Pageable pageable) {
+    throw new UnsupportedOperationException(
+        "Projected queries are not supported by this repository");
+  }
 
   Optional<T> findOne(QueryPlan<T> plan);
 
-  <P> Optional<P> findOneProjected(QueryPlan<T> plan);
+  default <P> Optional<P> findOneProjected(QueryPlan<T> plan) {
+    throw new UnsupportedOperationException(
+        "Projected queries are not supported by this repository");
+  }
 
   long count(QueryPlan<T> plan);
 }
