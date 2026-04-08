@@ -57,6 +57,7 @@ public final class SpecificationRepositoryConfiguration {
     private final List<ValueConverter> valueConverters = new ArrayList<>();
     private ConversionService conversionService = new DefaultFormattingConversionService();
     private PathResolver pathResolver = new PathResolver();
+    private boolean pathResolverConfigured;
     private QueryPlanSpecificationFactory specificationFactory;
 
     public Builder addDefaultOperatorHandlers() {
@@ -111,6 +112,7 @@ public final class SpecificationRepositoryConfiguration {
 
     public Builder pathResolver(PathResolver pathResolver) {
       this.pathResolver = Objects.requireNonNull(pathResolver, "pathResolver must not be null");
+      this.pathResolverConfigured = true;
       return this;
     }
 
@@ -130,6 +132,11 @@ public final class SpecificationRepositoryConfiguration {
                 new ValueConversionService(conversionService, valueConverters),
                 configuredPathResolver);
       } else {
+        if (pathResolverConfigured
+            && configuredPathResolver != configuredSpecificationFactory.pathResolver()) {
+          throw new IllegalArgumentException(
+              "pathResolver must match specificationFactory.pathResolver");
+        }
         configuredPathResolver = configuredSpecificationFactory.pathResolver();
       }
       return new SpecificationRepositoryConfiguration(

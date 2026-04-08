@@ -83,7 +83,9 @@ class SpecificationRepositoryConfigurationIntegrationTest {
     @Bean
     SpecificationRepositoryCustomizer specificationRepositoryCustomizer() {
       return builder ->
-          builder.addOperatorHandler(customEqualsOperatorHandler()).addValueConverter(ageValueConverter());
+          builder
+              .addOperatorHandler(customEqualsOperatorHandler())
+              .addValueConverter(ageValueConverter());
     }
 
     private static OperatorHandler customEqualsOperatorHandler() {

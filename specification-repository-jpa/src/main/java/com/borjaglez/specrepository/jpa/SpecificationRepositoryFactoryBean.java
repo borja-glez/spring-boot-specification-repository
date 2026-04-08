@@ -49,7 +49,7 @@ public class SpecificationRepositoryFactoryBean<
     }
     Map<String, SpecificationRepositoryConfiguration> configurations =
         BeanFactoryUtils.beansOfTypeIncludingAncestors(
-            beanFactory, SpecificationRepositoryConfiguration.class, false, false);
+            beanFactory, SpecificationRepositoryConfiguration.class, false, true);
     if (configurations.isEmpty()) {
       return SpecificationRepositoryConfiguration.defaultConfiguration();
     }

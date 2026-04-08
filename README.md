@@ -562,10 +562,6 @@ class SpecificationRepositoryCustomization {
         };
     }
 
-    @Bean
-    SpecificationRepositoryCustomizer specificationRepositoryCustomizer() {
-        return builder -> builder.addOperatorHandler(jsonbEqualsOperator());
-    }
 }
 ```
 
