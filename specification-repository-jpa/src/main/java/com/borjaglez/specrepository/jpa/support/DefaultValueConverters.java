@@ -2,7 +2,9 @@ package com.borjaglez.specrepository.jpa.support;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.Date;
+import java.util.List;
 import java.util.function.Function;
 
 import com.borjaglez.specrepository.core.FilterOperator;
@@ -10,6 +12,10 @@ import com.borjaglez.specrepository.jpa.spi.ValueConverter;
 
 public final class DefaultValueConverters {
   private DefaultValueConverters() {}
+
+  public static Collection<ValueConverter> defaults() {
+    return List.of(localDateConverter(), localDateTimeConverter(), datePassthroughConverter());
+  }
 
   public static ValueConverter localDateConverter() {
     return new SimpleValueConverter(

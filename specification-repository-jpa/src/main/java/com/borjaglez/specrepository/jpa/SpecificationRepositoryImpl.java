@@ -3,6 +3,7 @@ package com.borjaglez.specrepository.jpa;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 
 import jakarta.persistence.EntityManager;
@@ -20,19 +21,15 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.query.QueryUtils;
 import org.springframework.data.jpa.repository.support.JpaEntityInformation;
 import org.springframework.data.jpa.repository.support.SimpleJpaRepository;
-import org.springframework.format.support.DefaultFormattingConversionService;
 
 import com.borjaglez.specrepository.core.AggregateSelection;
 import com.borjaglez.specrepository.core.FieldSelection;
 import com.borjaglez.specrepository.core.JoinMode;
 import com.borjaglez.specrepository.core.QueryPlan;
 import com.borjaglez.specrepository.jpa.support.AssociationRegistry;
-import com.borjaglez.specrepository.jpa.support.DefaultOperatorHandlers;
-import com.borjaglez.specrepository.jpa.support.DefaultValueConverters;
-import com.borjaglez.specrepository.jpa.support.OperatorRegistry;
 import com.borjaglez.specrepository.jpa.support.PathResolver;
 import com.borjaglez.specrepository.jpa.support.QueryPlanSpecificationFactory;
-import com.borjaglez.specrepository.jpa.support.ValueConversionService;
+import com.borjaglez.specrepository.jpa.support.SpecificationRepositoryConfiguration;
 
 public class SpecificationRepositoryImpl<T, ID extends Serializable>
     extends SimpleJpaRepository<T, ID> implements SpecificationRepository<T, ID> {
@@ -43,19 +40,22 @@ public class SpecificationRepositoryImpl<T, ID extends Serializable>
 
   public SpecificationRepositoryImpl(
       JpaEntityInformation<T, ?> entityInformation, EntityManager entityManager) {
+    this(
+        entityInformation,
+        entityManager,
+        SpecificationRepositoryConfiguration.defaultConfiguration());
+  }
+
+  public SpecificationRepositoryImpl(
+      JpaEntityInformation<T, ?> entityInformation,
+      EntityManager entityManager,
+      SpecificationRepositoryConfiguration configuration) {
     super(entityInformation, entityManager);
     this.entityManager = entityManager;
-    this.pathResolver = new PathResolver();
-    this.specificationFactory =
-        new QueryPlanSpecificationFactory(
-            new OperatorRegistry(DefaultOperatorHandlers.defaults()),
-            new ValueConversionService(
-                new DefaultFormattingConversionService(),
-                List.of(
-                    DefaultValueConverters.localDateConverter(),
-                    DefaultValueConverters.localDateTimeConverter(),
-                    DefaultValueConverters.datePassthroughConverter())),
-            pathResolver);
+    SpecificationRepositoryConfiguration repositoryConfiguration =
+        Objects.requireNonNull(configuration, "configuration must not be null");
+    this.pathResolver = repositoryConfiguration.pathResolver();
+    this.specificationFactory = repositoryConfiguration.specificationFactory();
   }
 
   @Override

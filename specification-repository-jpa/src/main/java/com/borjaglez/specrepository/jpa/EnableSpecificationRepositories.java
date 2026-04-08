@@ -9,7 +9,9 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 
 @Target(ElementType.TYPE)
 @Retention(RetentionPolicy.RUNTIME)
-@EnableJpaRepositories(repositoryBaseClass = SpecificationRepositoryImpl.class)
+@EnableJpaRepositories(
+    repositoryBaseClass = SpecificationRepositoryImpl.class,
+    repositoryFactoryBeanClass = SpecificationRepositoryFactoryBean.class)
 public @interface EnableSpecificationRepositories {
   String[] basePackages() default {};
 }

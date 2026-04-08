@@ -1,19 +1,25 @@
 package com.borjaglez.specrepository.jpa;
 
 import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
+import static org.assertj.core.api.Assertions.assertThatNoException;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Answers.CALLS_REAL_METHODS;
+import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
 import static org.mockito.Mockito.mock;
 
 import java.util.List;
 
+import jakarta.persistence.EntityManager;
+
 import org.junit.jupiter.api.Test;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.repository.support.JpaEntityInformation;
 
 import com.borjaglez.specrepository.core.GroupCondition;
 import com.borjaglez.specrepository.core.LogicalOperator;
 import com.borjaglez.specrepository.core.QueryPlan;
+import com.borjaglez.specrepository.jpa.support.SpecificationRepositoryConfiguration;
 
 class SpecificationRepositoryImplTest {
 
@@ -60,6 +66,33 @@ class SpecificationRepositoryImplTest {
     assertThatThrownBy(() -> repository.findOneProjected(projectedPlan()))
         .isInstanceOf(UnsupportedOperationException.class)
         .hasMessage("Projected queries are not supported by this repository");
+  }
+
+  @Test
+  void shouldRejectNullConfigurationInRepositoryConstructor() {
+    JpaEntityInformation<Object, ?> entityInformation = mock(JpaEntityInformation.class);
+    EntityManager entityManager = mock(EntityManager.class, RETURNS_DEEP_STUBS);
+
+    assertThatThrownBy(
+            () ->
+                new SpecificationRepositoryImpl<>(
+                    entityInformation, entityManager, (SpecificationRepositoryConfiguration) null))
+        .isInstanceOf(NullPointerException.class)
+        .hasMessage("configuration must not be null");
+  }
+
+  @Test
+  void shouldAllowCustomConfigurationInRepositoryConstructor() {
+    JpaEntityInformation<Object, ?> entityInformation = mock(JpaEntityInformation.class);
+    EntityManager entityManager = mock(EntityManager.class, RETURNS_DEEP_STUBS);
+
+    assertThatNoException()
+        .isThrownBy(
+            () ->
+                new SpecificationRepositoryImpl<>(
+                    entityInformation,
+                    entityManager,
+                    SpecificationRepositoryConfiguration.defaultConfiguration()));
   }
 
   private QueryPlan<Object> projectedPlan() {

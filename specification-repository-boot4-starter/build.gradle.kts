@@ -10,6 +10,8 @@ dependencies {
     api(project(":specification-repository-jpa"))
     api(libs.spring.boot.autoconfigure)
     annotationProcessor(libs.spring.boot.configuration.processor)
+    testImplementation(libs.spring.boot4.starter.data.jpa)
     testImplementation(libs.spring.data.jpa)
     testImplementation(libs.spring.boot.starter.test)
+    testImplementation(libs.h2)
 }

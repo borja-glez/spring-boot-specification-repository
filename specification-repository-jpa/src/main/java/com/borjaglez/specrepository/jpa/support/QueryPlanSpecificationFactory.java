@@ -36,6 +36,18 @@ public class QueryPlanSpecificationFactory {
     this.pathResolver = pathResolver;
   }
 
+  public OperatorRegistry operatorRegistry() {
+    return operatorRegistry;
+  }
+
+  public ValueConversionService valueConversionService() {
+    return valueConversionService;
+  }
+
+  public PathResolver pathResolver() {
+    return pathResolver;
+  }
+
   public <T> Specification<T> create(QueryPlan<T> plan) {
     return (root, query, criteriaBuilder) -> {
       AssociationRegistry registry = new AssociationRegistry();
