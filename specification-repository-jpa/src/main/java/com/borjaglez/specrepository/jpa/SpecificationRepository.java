@@ -18,9 +18,15 @@ public interface SpecificationRepository<T, ID>
 
   List<T> findAll(QueryPlan<T> plan);
 
+  <P> List<P> findAllProjected(QueryPlan<T> plan);
+
   Page<T> findAll(QueryPlan<T> plan, Pageable pageable);
 
+  <P> Page<P> findAllProjected(QueryPlan<T> plan, Pageable pageable);
+
   Optional<T> findOne(QueryPlan<T> plan);
+
+  <P> Optional<P> findOneProjected(QueryPlan<T> plan);
 
   long count(QueryPlan<T> plan);
 }

@@ -2,6 +2,7 @@ package com.borjaglez.specrepository.jpa.it;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.tuple;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -378,6 +379,58 @@ class SpecificationRepositoryIntegrationTest {
   }
 
   @Test
+  void shouldProjectSelectedFieldsIntoDto() {
+    List<NameCityDto> results =
+        repository
+            .query()
+            .where("status", Operators.EQUALS, "ACTIVE")
+            .sort(Sort.by("name"))
+            .select("name", "profile.city")
+            .selectInto(NameCityDto.class)
+            .findAll();
+
+    assertThat(results)
+        .extracting(NameCityDto::name, NameCityDto::city)
+        .containsExactly(tuple("Borja", "Madrid"), tuple("Lucia", "Barcelona"));
+  }
+
+  @Test
+  void shouldProjectGroupedAggregatesIntoRecord() {
+    List<CustomerStatusSummary> results =
+        repository
+            .query()
+            .where("status", Operators.IS_NOT_NULL, null)
+            .groupBy("status")
+            .sort(Sort.by("status"))
+            .select("status")
+            .count("id")
+            .sum("age")
+            .selectInto(CustomerStatusSummary.class)
+            .findAll();
+
+    assertThat(results)
+        .containsExactly(
+            new CustomerStatusSummary("ACTIVE", 2L, 57),
+            new CustomerStatusSummary("INACTIVE", 1L, 41));
+  }
+
+  @Test
+  void shouldProjectPagedResultsIntoDto() {
+    Page<NameOnlyRecord> page =
+        repository
+            .query()
+            .where("status", Operators.IS_NOT_NULL, null)
+            .sort(Sort.by("name"))
+            .select("name")
+            .selectInto(NameOnlyRecord.class)
+            .findAll(PageRequest.of(0, 2));
+
+    assertThat(page.getContent())
+        .containsExactly(new NameOnlyRecord("Borja"), new NameOnlyRecord("John"));
+    assertThat(page.getTotalElements()).isEqualTo(3);
+  }
+
+  @Test
   void shouldProjectPagedResults() {
     Page<?> page =
         repository
@@ -552,6 +605,28 @@ class SpecificationRepositoryIntegrationTest {
   }
 
   @Test
+  void shouldProjectFindOneIntoRecord() {
+    Optional<NameOnlyRecord> result =
+        repository
+            .query()
+            .where("status", Operators.EQUALS, "ACTIVE")
+            .sort(Sort.by("name"))
+            .select("name")
+            .selectInto(NameOnlyRecord.class)
+            .findOne();
+
+    assertThat(result).hasValue(new NameOnlyRecord("Borja"));
+  }
+
+  @Test
+  void shouldExposeProjectionTypeOnProjectedPlan() {
+    QueryPlan<TestCustomer> plan =
+        repository.query().select("name", "profile.city").selectInto(NameCityDto.class).plan();
+
+    assertThat(plan.projectionType()).isEqualTo(NameCityDto.class);
+  }
+
+  @Test
   void shouldCountGroupsAfterFiltering() {
     long count =
         repository.query().where("status", Operators.IS_NOT_NULL, null).groupBy("status").count();
@@ -592,6 +667,42 @@ class SpecificationRepositoryIntegrationTest {
   }
 
   @Test
+  @SuppressWarnings({"rawtypes", "unchecked"})
+  void shouldFindAllWithProjectedQueryPlanMetadata() {
+    QueryPlan<TestCustomer> plan =
+        repository.query().select("name").selectInto(NameOnlyRecord.class).plan();
+
+    List<?> results = repository.findAll((QueryPlan) plan);
+
+    assertThat(results)
+        .extracting(Object::toString)
+        .containsExactly(
+            "NameOnlyRecord[name=Borja]",
+            "NameOnlyRecord[name=Lucia]",
+            "NameOnlyRecord[name=John]",
+            "NameOnlyRecord[name=Anna]");
+  }
+
+  @Test
+  @SuppressWarnings({"rawtypes", "unchecked"})
+  void shouldFindAllPagedWithProjectedQueryPlanMetadata() {
+    QueryPlan<TestCustomer> plan =
+        repository
+            .query()
+            .sort(Sort.by("name"))
+            .select("name")
+            .selectInto(NameOnlyRecord.class)
+            .plan();
+
+    Page<?> page = repository.findAll((QueryPlan) plan, PageRequest.of(0, 2));
+
+    assertThat(page.getContent())
+        .extracting(Object::toString)
+        .containsExactly("NameOnlyRecord[name=Anna]", "NameOnlyRecord[name=Borja]");
+    assertThat(page.getTotalElements()).isEqualTo(4);
+  }
+
+  @Test
   void shouldFindOneWithQueryPlan() {
     QueryPlan<TestCustomer> plan =
         repository.query().where("name", Operators.EQUALS, "Borja").plan();
@@ -627,4 +738,26 @@ class SpecificationRepositoryIntegrationTest {
       repositoryBaseClass = SpecificationRepositoryImpl.class)
   @EntityScan(basePackageClasses = TestCustomer.class)
   static class TestConfiguration {}
+
+  private record NameOnlyRecord(String name) {}
+
+  private record CustomerStatusSummary(String status, Long customerCount, Integer totalAge) {}
+
+  public static final class NameCityDto {
+    private final String name;
+    private final String city;
+
+    public NameCityDto(String name, String city) {
+      this.name = name;
+      this.city = city;
+    }
+
+    public String name() {
+      return name;
+    }
+
+    public String city() {
+      return city;
+    }
+  }
 }

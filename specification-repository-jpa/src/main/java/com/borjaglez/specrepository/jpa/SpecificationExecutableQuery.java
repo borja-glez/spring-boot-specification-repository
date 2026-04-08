@@ -142,6 +142,12 @@ public class SpecificationExecutableQuery<T> extends QueryPlanBuilder<T> {
     return this;
   }
 
+  @Override
+  public <P> ProjectedSpecificationExecutableQuery<T, P> selectInto(Class<P> projectionType) {
+    super.selectIntoInternal(projectionType);
+    return new ProjectedSpecificationExecutableQuery<>(this, repository);
+  }
+
   public List<T> findAll() {
     return repository.findAll(build());
   }
