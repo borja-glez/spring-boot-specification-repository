@@ -1,7 +1,10 @@
 package com.borjaglez.specrepository.core;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
 import static org.assertj.core.api.Assertions.assertThatNullPointerException;
+
+import java.util.Arrays;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.data.domain.Sort;
@@ -29,6 +32,7 @@ class QueryPlanBuilderTest {
     assertThat(plan.fetches()).containsExactly(new FetchInstruction("roles", JoinMode.LEFT));
     assertThat(plan.groupBy()).containsExactly("status");
     assertThat(plan.projections()).containsExactly("name", "email");
+    assertThat(plan.projectionType()).isNull();
     assertThat(plan.selections())
         .containsExactly(
             new FieldSelection("name"),
@@ -67,6 +71,52 @@ class QueryPlanBuilderTest {
     assertThatNullPointerException()
         .isThrownBy(() -> new QueryPlanBuilder<>(null))
         .withMessage("entityType must not be null");
+  }
+
+  @Test
+  void shouldStoreProjectionTypeWhenSelectingIntoRecord() {
+    QueryPlan<String> plan =
+        new QueryPlanBuilder<>(String.class)
+            .select("name", "email")
+            .selectInto(NameEmailProjection.class)
+            .build();
+
+    assertThat(plan.projectionType()).isEqualTo(NameEmailProjection.class);
+    assertThat(plan.projections()).containsExactly("name", "email");
+  }
+
+  @Test
+  void shouldRequireSelectBeforeSelectInto() {
+    assertThatIllegalStateException()
+        .isThrownBy(
+            () -> new QueryPlanBuilder<>(String.class).selectInto(NameEmailProjection.class))
+        .withMessage("select and/or aggregate selection methods must be called before selectInto");
+  }
+
+  @Test
+  void shouldAllowSelectIntoAfterAggregateSelection() {
+    QueryPlan<String> plan =
+        new QueryPlanBuilder<>(String.class).count("id").selectInto(CountProjection.class).build();
+
+    assertThat(plan.projectionType()).isEqualTo(CountProjection.class);
+    assertThat(plan.selections())
+        .containsExactly(new AggregateSelection(AggregateFunction.COUNT, "id"));
+  }
+
+  @Test
+  void shouldRejectNullProjectionType() {
+    assertThatNullPointerException()
+        .isThrownBy(() -> new QueryPlanBuilder<>(String.class).select("name").selectInto(null))
+        .withMessage("projectionType must not be null");
+  }
+
+  @Test
+  void shouldReturnProjectedWrapperWithoutMutationMethods() {
+    assertThat(
+            Arrays.stream(ProjectedQueryPlanBuilder.class.getMethods())
+                .map(method -> method.getName()))
+        .contains("build")
+        .doesNotContain("where", "and", "or", "select", "sum", "groupBy", "sort", "distinct");
   }
 
   @Test
@@ -151,4 +201,8 @@ class QueryPlanBuilderTest {
     QueryPlan<Integer> plan = builder.build();
     assertThat(plan.entityType()).isEqualTo(Integer.class);
   }
+
+  private record NameEmailProjection(String name, String email) {}
+
+  private record CountProjection(Long count) {}
 }

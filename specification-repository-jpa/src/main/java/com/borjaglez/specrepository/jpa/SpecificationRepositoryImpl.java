@@ -66,6 +66,9 @@ public class SpecificationRepositoryImpl<T, ID extends Serializable>
   @Override
   @SuppressWarnings("unchecked")
   public List<T> findAll(QueryPlan<T> plan) {
+    if (plan.projectionType() != null) {
+      return (List<T>) findAllProjected(plan);
+    }
     if (plan.hasSelections()) {
       return (List<T>) executeProjectedQuery(plan, null);
     }
@@ -81,8 +84,16 @@ public class SpecificationRepositoryImpl<T, ID extends Serializable>
   }
 
   @Override
+  public <P> List<P> findAllProjected(QueryPlan<T> plan) {
+    return executeProjectedQuery(plan, null, requiredProjectionType(plan));
+  }
+
+  @Override
   @SuppressWarnings("unchecked")
   public Page<T> findAll(QueryPlan<T> plan, Pageable pageable) {
+    if (plan.projectionType() != null) {
+      return (Page<T>) findAllProjected(plan, pageable);
+    }
     if (plan.hasSelections()) {
       List<?> content = executeProjectedQuery(plan, pageable);
       return new PageImpl<>((List<T>) content, pageable, countSelectedRows(plan));
@@ -104,8 +115,24 @@ public class SpecificationRepositoryImpl<T, ID extends Serializable>
   }
 
   @Override
+  public <P> Page<P> findAllProjected(QueryPlan<T> plan, Pageable pageable) {
+    List<P> content = executeProjectedQuery(plan, pageable, requiredProjectionType(plan));
+    return new PageImpl<>(content, pageable, countSelectedRows(plan));
+  }
+
+  @Override
+  @SuppressWarnings("unchecked")
   public Optional<T> findOne(QueryPlan<T> plan) {
-    List<T> results = findAll(plan);
+    List<T> results =
+        plan.projectionType() != null
+            ? (List<T>) executeProjectedQuery(plan, null, requiredProjectionType(plan), 1)
+            : findAll(plan);
+    return results.stream().findFirst();
+  }
+
+  @Override
+  public <P> Optional<P> findOneProjected(QueryPlan<T> plan) {
+    List<P> results = executeProjectedQuery(plan, null, requiredProjectionType(plan), 1);
     return results.stream().findFirst();
   }
 
@@ -158,6 +185,30 @@ public class SpecificationRepositoryImpl<T, ID extends Serializable>
     return typedQuery.getResultList();
   }
 
+  private <P> List<P> executeProjectedQuery(
+      QueryPlan<T> plan, Pageable pageable, Class<P> resultType) {
+    return executeProjectedQuery(plan, pageable, resultType, null);
+  }
+
+  private <P> List<P> executeProjectedQuery(
+      QueryPlan<T> plan, Pageable pageable, Class<P> resultType, Integer maxResults) {
+    CriteriaBuilder builder = entityManager.getCriteriaBuilder();
+    CriteriaQuery<P> query = builder.createQuery(resultType);
+    Root<T> root = query.from(getDomainClass());
+    specificationFactory.create(plan).toPredicate(root, query, builder);
+    applyProjection(plan, builder, root, query, resultType);
+    applySort(plan, pageable, builder, root, query);
+
+    TypedQuery<P> typedQuery = entityManager.createQuery(query);
+    if (pageable != null) {
+      typedQuery.setFirstResult((int) pageable.getOffset());
+      typedQuery.setMaxResults(pageable.getPageSize());
+    } else if (maxResults != null) {
+      typedQuery.setMaxResults(maxResults);
+    }
+    return typedQuery.getResultList();
+  }
+
   @SuppressWarnings({"rawtypes", "unchecked"})
   private void applyProjection(
       QueryPlan<T> plan, CriteriaBuilder builder, Root<T> root, CriteriaQuery<?> query) {
@@ -172,6 +223,27 @@ public class SpecificationRepositoryImpl<T, ID extends Serializable>
       return;
     }
     rawQuery.multiselect(projections);
+  }
+
+  private <P> void applyProjection(
+      QueryPlan<T> plan,
+      CriteriaBuilder builder,
+      Root<T> root,
+      CriteriaQuery<P> query,
+      Class<P> projectionType) {
+    AssociationRegistry registry = new AssociationRegistry();
+    List<Selection<?>> projections = new ArrayList<>();
+    plan.selections()
+        .forEach(selection -> projections.add(toSelection(selection, builder, root, registry)));
+    query.select(builder.construct(projectionType, projections.toArray(Selection[]::new)));
+  }
+
+  @SuppressWarnings("unchecked")
+  static <P> Class<P> requiredProjectionType(QueryPlan<?> plan) {
+    if (plan.projectionType() == null) {
+      throw new IllegalStateException("projectionType must not be null");
+    }
+    return (Class<P>) plan.projectionType();
   }
 
   private Selection<?> toSelection(
@@ -193,8 +265,26 @@ public class SpecificationRepositoryImpl<T, ID extends Serializable>
     return switch (selection.function()) {
       case SUM -> builder.sum(asNumberExpression(path, selection));
       case AVG -> builder.avg(asNumberExpression(path, selection));
-      case MIN -> minExpression(builder, path);
-      case MAX -> maxExpression(builder, path);
+      case MIN -> {
+        if (Number.class.isAssignableFrom(path.getJavaType())) {
+          yield builder.min((Expression<? extends Number>) path);
+        }
+        if (Comparable.class.isAssignableFrom(path.getJavaType())) {
+          yield builder.least((Expression<? extends Comparable>) path);
+        }
+        throw new IllegalArgumentException(
+            "MIN requires a comparable field: " + path.getJavaType());
+      }
+      case MAX -> {
+        if (Number.class.isAssignableFrom(path.getJavaType())) {
+          yield builder.max((Expression<? extends Number>) path);
+        }
+        if (Comparable.class.isAssignableFrom(path.getJavaType())) {
+          yield builder.greatest((Expression<? extends Comparable>) path);
+        }
+        throw new IllegalArgumentException(
+            "MAX requires a comparable field: " + path.getJavaType());
+      }
       case COUNT -> builder.count(path);
     };
   }
@@ -207,28 +297,6 @@ public class SpecificationRepositoryImpl<T, ID extends Serializable>
           selection.function() + " requires a numeric field: " + selection.field());
     }
     return (Expression<? extends Number>) path;
-  }
-
-  @SuppressWarnings({"rawtypes", "unchecked"})
-  private Expression<?> minExpression(CriteriaBuilder builder, Path<?> path) {
-    if (Number.class.isAssignableFrom(path.getJavaType())) {
-      return builder.min((Expression<? extends Number>) path);
-    }
-    if (Comparable.class.isAssignableFrom(path.getJavaType())) {
-      return builder.least((Expression<? extends Comparable>) path);
-    }
-    throw new IllegalArgumentException("MIN requires a comparable field: " + path.getJavaType());
-  }
-
-  @SuppressWarnings({"rawtypes", "unchecked"})
-  private Expression<?> maxExpression(CriteriaBuilder builder, Path<?> path) {
-    if (Number.class.isAssignableFrom(path.getJavaType())) {
-      return builder.max((Expression<? extends Number>) path);
-    }
-    if (Comparable.class.isAssignableFrom(path.getJavaType())) {
-      return builder.greatest((Expression<? extends Comparable>) path);
-    }
-    throw new IllegalArgumentException("MAX requires a comparable field: " + path.getJavaType());
   }
 
   private void applySort(

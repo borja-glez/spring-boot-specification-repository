@@ -119,23 +119,29 @@ The builder creates an immutable query plan. The repository executes it.
 
 ### Projection Queries
 
-`select(...)` now affects the executed JPA query.
+`select(...)` now affects the executed JPA query. Use `selectInto(...)` when you want typed DTO or
+record projections.
 
 ```java
-List<?> names = productRepository.query()
+List<NameOnly> names = productRepository.query()
     .where("status", Operators.EQUALS, "ACTIVE")
     .sort(Sort.by("name"))
     .select("name")
+    .selectInto(NameOnly.class)
     .findAll();
+
+record NameOnly(String name) {}
 ```
 
-Current projection behavior is intentionally minimal:
+Projection behavior:
 
 - one selected field returns scalar values at runtime (for example `List<String>`)
 - one aggregate function returns a scalar value at runtime (for example `Optional<Double>` from `avg(...)`)
 - multiple selected fields return `Object[]` rows at runtime
 - grouped aggregate queries can combine `select(...)` and aggregate functions, returning `Object[]` rows at runtime
-- the repository API remains entity-typed today, so assign projection results to `List<?>`, `Page<?>`, or `Optional<?>`
+- constructor-based DTO and record projections are supported through `selectInto(...)`
+- `select(...)` and/or aggregate selection methods must be called before `selectInto(...)`
+- projected wrappers only expose terminal operations plus plan inspection; no further mutation is available after `selectInto(...)`
 - fetch joins are intended for entity loading and should not be combined with projections
 
 ### Aggregate Queries
@@ -448,6 +454,14 @@ List<?> grouped = productRepository.query()
     .select("status")
     .count("id")
     .findAll();
+
+List<ProductSummary> typed = productRepository.query()
+    .where("status", Operators.EQUALS, "ACTIVE")
+    .select("name", "category.name")
+    .selectInto(ProductSummary.class)
+    .findAll();
+
+record ProductSummary(String name, String categoryName) {}
 ```
 
 - `select(...)` affects the executed JPA query
@@ -456,9 +470,11 @@ List<?> grouped = productRepository.query()
 - one aggregate function returns a scalar value at runtime
 - multiple selected fields return `Object[]` rows at runtime
 - grouped `select(...)` + aggregate combinations return `Object[]` rows at runtime
+- `selectInto(...)` maps the current selection list into a constructor-based DTO or record
 - `groupBy(...)` is applied to the generated `CriteriaQuery`
 - grouped `count()` and grouped aggregate queries honor the same filters as `findAll()`
-- the repository API remains entity-typed, so projection consumers should use `List<?>`, `Page<?>`, or `Optional<?>`
+- nested paths and aggregate selections can be combined before `selectInto(...)`
+- constructor argument order must match the declared selection order
 
 ## Available Operators
 

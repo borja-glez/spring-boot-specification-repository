@@ -11,6 +11,7 @@ public record QueryPlan<T>(
     List<FetchInstruction> fetches,
     List<String> projections,
     List<Selection> selections,
+    Class<?> projectionType,
     List<String> groupBy,
     Sort sort,
     boolean distinct) {

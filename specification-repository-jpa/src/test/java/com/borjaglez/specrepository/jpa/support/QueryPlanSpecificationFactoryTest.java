@@ -80,6 +80,7 @@ class QueryPlanSpecificationFactoryTest {
             List.of(),
             List.of(),
             List.of(),
+            null,
             List.of(),
             Sort.unsorted(),
             true);
@@ -112,6 +113,7 @@ class QueryPlanSpecificationFactoryTest {
             List.of(),
             List.of(),
             List.of(),
+            null,
             List.of(),
             Sort.unsorted(),
             false);
@@ -135,6 +137,7 @@ class QueryPlanSpecificationFactoryTest {
             fetches,
             List.of(),
             List.of(),
+            null,
             List.of(),
             Sort.unsorted(),
             false);
@@ -160,6 +163,7 @@ class QueryPlanSpecificationFactoryTest {
             fetches,
             List.of(),
             List.of(),
+            null,
             List.of(),
             Sort.unsorted(),
             false);
@@ -184,6 +188,7 @@ class QueryPlanSpecificationFactoryTest {
             fetches,
             List.of(),
             List.of(),
+            null,
             List.of(),
             Sort.unsorted(),
             false);
@@ -208,6 +213,7 @@ class QueryPlanSpecificationFactoryTest {
             List.of(),
             List.of(),
             List.of(),
+            null,
             groupBy,
             Sort.unsorted(),
             false);
@@ -413,6 +419,7 @@ class QueryPlanSpecificationFactoryTest {
         List.of(),
         List.of(),
         List.of(),
+        null,
         List.of(),
         Sort.unsorted(),
         false);

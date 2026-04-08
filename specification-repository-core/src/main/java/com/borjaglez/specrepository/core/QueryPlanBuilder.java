@@ -18,6 +18,7 @@ public class QueryPlanBuilder<T> {
   private final List<Selection> selections = new ArrayList<>();
   private final List<String> groupBy = new ArrayList<>();
   private Sort sort = Sort.unsorted();
+  private Class<?> projectionType;
   private boolean distinct;
 
   public QueryPlanBuilder(Class<T> entityType) {
@@ -118,6 +119,10 @@ public class QueryPlanBuilder<T> {
     return this;
   }
 
+  public <P> ProjectedQueryPlanBuilder<T, P> selectInto(Class<P> projectionType) {
+    return new ProjectedQueryPlanBuilder<>(selectIntoInternal(projectionType));
+  }
+
   public QueryPlan<T> build() {
     return new QueryPlan<>(
         entityType,
@@ -126,9 +131,24 @@ public class QueryPlanBuilder<T> {
         List.copyOf(fetches),
         List.copyOf(projections),
         List.copyOf(selections),
+        projectionType,
         List.copyOf(groupBy),
         sort,
         distinct);
+  }
+
+  protected final <P> QueryPlanBuilder<T> selectIntoInternal(Class<P> projectionType) {
+    Objects.requireNonNull(projectionType, "projectionType must not be null");
+    if (!hasSelections()) {
+      throw new IllegalStateException(
+          "select and/or aggregate selection methods must be called before selectInto");
+    }
+    this.projectionType = projectionType;
+    return this;
+  }
+
+  protected final boolean hasSelections() {
+    return !selections.isEmpty();
   }
 
   private void selectField(String field) {
