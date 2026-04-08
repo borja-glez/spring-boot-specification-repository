@@ -536,6 +536,45 @@ ValueConverter uuidConverter = new ValueConverter() {
 
 Extend `SpecificationRepositoryImpl` and override the `QueryPlanSpecificationFactory` with your own `OperatorRegistry`, `ValueConversionService`, and `PathResolver`.
 
+### Spring Boot Customization
+
+When you use the Boot 3 or Boot 4 starter, the extension points are exposed as beans:
+
+- register `OperatorHandler` beans to add or replace operators
+- register `ValueConverter` beans to customize value conversion
+- register `SpecificationRepositoryCustomizer` beans to adjust the repository pipeline
+- optionally provide `PathResolver`, `ConversionService`, `QueryPlanSpecificationFactory`, or a full `SpecificationRepositoryConfiguration` bean
+
+```java
+@Configuration(proxyBeanMethods = false)
+class SpecificationRepositoryCustomization {
+
+    @Bean
+    OperatorHandler jsonbEqualsOperator() {
+        return new OperatorHandler() {
+            @Override public FilterOperator operator() {
+                return Operators.custom("jsonb_eq");
+            }
+
+            @Override public Predicate create(OperatorContext context) {
+                return context.criteriaBuilder().isNotNull(context.path());
+            }
+        };
+    }
+
+    @Bean
+    SpecificationRepositoryCustomizer specificationRepositoryCustomizer() {
+        return builder -> builder.addOperatorHandler(jsonbEqualsOperator());
+    }
+}
+```
+
+Important notes:
+
+- custom `OperatorHandler` beans are registered after the defaults, so they can replace a built-in operator cleanly
+- custom `ValueConverter` beans are registered before the defaults, so domain-specific conversion can win first
+- providing a `SpecificationRepositoryConfiguration` bean replaces the starter-assembled configuration entirely
+
 ## Demo Applications
 
 The repository includes four demo applications:
@@ -576,7 +615,11 @@ Dependency management is aligned with the Spring Boot BOM -- no explicit version
 The starters auto-configure JPA repository scanning from the application's auto-configuration
 packages and register `SpecificationRepositoryImpl` as the repository base class. Manual
 configuration via `@EnableSpecificationRepositories` or `@EnableJpaRepositories` is still
-available when you do not want to use the starters.
+available when you do not want to use the starters. The starters also contribute a
+`SpecificationRepositoryConfiguration` bean so operator handlers, value converters, and
+repository customizers can be wired through standard Spring beans. `@EnableSpecificationRepositories`
+uses the same repository factory bean, so the same configuration bean can also be supplied in
+manual Spring setups.
 
 ## Building
 
