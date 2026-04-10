@@ -193,6 +193,61 @@ class QueryPlanBuilderTest {
     assertThat(plan.groupBy()).isEmpty();
     assertThat(plan.hasSelections()).isFalse();
     assertThat(plan.hasAggregates()).isFalse();
+    assertThat(plan.allowedFieldsPolicy()).isSameAs(AllowedFieldsPolicy.allowAll());
+  }
+
+  @Test
+  void shouldStoreAllowedFieldsPolicy() {
+    AllowedFieldsPolicy policy =
+        AllowedFieldsPolicy.of(java.util.Set.of("name"), java.util.Set.of("name"));
+    QueryPlan<String> plan = new QueryPlanBuilder<>(String.class).allowedFields(policy).build();
+
+    assertThat(plan.allowedFieldsPolicy()).isSameAs(policy);
+  }
+
+  @Test
+  void allowedFieldsShouldRejectNull() {
+    assertThatNullPointerException()
+        .isThrownBy(() -> new QueryPlanBuilder<>(String.class).allowedFields(null))
+        .withMessage("allowedFieldsPolicy must not be null");
+  }
+
+  @Test
+  void queryPlanCompatibilityConstructorShouldDefaultToAllowAll() {
+    QueryPlan<String> plan =
+        new QueryPlan<>(
+            String.class,
+            new GroupCondition(LogicalOperator.AND, java.util.List.of()),
+            java.util.List.of(),
+            java.util.List.of(),
+            java.util.List.of(),
+            java.util.List.of(),
+            null,
+            java.util.List.of(),
+            Sort.unsorted(),
+            false);
+
+    assertThat(plan.allowedFieldsPolicy()).isSameAs(AllowedFieldsPolicy.allowAll());
+  }
+
+  @Test
+  void queryPlanShouldRejectNullAllowedFieldsPolicy() {
+    assertThatNullPointerException()
+        .isThrownBy(
+            () ->
+                new QueryPlan<>(
+                    String.class,
+                    new GroupCondition(LogicalOperator.AND, java.util.List.of()),
+                    java.util.List.of(),
+                    java.util.List.of(),
+                    java.util.List.of(),
+                    java.util.List.of(),
+                    null,
+                    java.util.List.of(),
+                    Sort.unsorted(),
+                    false,
+                    null))
+        .withMessage("allowedFieldsPolicy must not be null");
   }
 
   @Test

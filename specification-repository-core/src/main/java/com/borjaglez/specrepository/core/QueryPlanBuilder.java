@@ -20,6 +20,7 @@ public class QueryPlanBuilder<T> {
   private Sort sort = Sort.unsorted();
   private Class<?> projectionType;
   private boolean distinct;
+  private AllowedFieldsPolicy allowedFieldsPolicy = AllowedFieldsPolicy.allowAll();
 
   public QueryPlanBuilder(Class<T> entityType) {
     this.entityType = Objects.requireNonNull(entityType, "entityType must not be null");
@@ -114,6 +115,12 @@ public class QueryPlanBuilder<T> {
     return this;
   }
 
+  public QueryPlanBuilder<T> allowedFields(AllowedFieldsPolicy allowedFieldsPolicy) {
+    this.allowedFieldsPolicy =
+        Objects.requireNonNull(allowedFieldsPolicy, "allowedFieldsPolicy must not be null");
+    return this;
+  }
+
   public QueryPlanBuilder<T> distinct() {
     this.distinct = true;
     return this;
@@ -134,7 +141,8 @@ public class QueryPlanBuilder<T> {
         projectionType,
         List.copyOf(groupBy),
         sort,
-        distinct);
+        distinct,
+        allowedFieldsPolicy);
   }
 
   protected final <P> QueryPlanBuilder<T> selectIntoInternal(Class<P> projectionType) {

@@ -1,6 +1,7 @@
 package com.borjaglez.specrepository.jpa.support;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doReturn;
@@ -10,6 +11,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.util.List;
+import java.util.Set;
 
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.CriteriaQuery;
@@ -22,6 +24,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 
+import com.borjaglez.specrepository.core.AllowedFieldsPolicy;
+import com.borjaglez.specrepository.core.DisallowedFieldException;
 import com.borjaglez.specrepository.core.FetchInstruction;
 import com.borjaglez.specrepository.core.GroupCondition;
 import com.borjaglez.specrepository.core.JoinInstruction;
@@ -83,7 +87,8 @@ class QueryPlanSpecificationFactoryTest {
             null,
             List.of(),
             Sort.unsorted(),
-            true);
+            true,
+            AllowedFieldsPolicy.allowAll());
 
     Specification<Object> spec = factory.create(plan);
     spec.toPredicate(root, query, cb);
@@ -116,7 +121,8 @@ class QueryPlanSpecificationFactoryTest {
             null,
             List.of(),
             Sort.unsorted(),
-            false);
+            false,
+            AllowedFieldsPolicy.allowAll());
 
     Specification<Object> spec = factory.create(plan);
     spec.toPredicate(root, query, cb);
@@ -140,7 +146,8 @@ class QueryPlanSpecificationFactoryTest {
             null,
             List.of(),
             Sort.unsorted(),
-            false);
+            false,
+            AllowedFieldsPolicy.allowAll());
 
     doReturn(Object.class).when(query).getResultType();
 
@@ -166,7 +173,8 @@ class QueryPlanSpecificationFactoryTest {
             null,
             List.of(),
             Sort.unsorted(),
-            false);
+            false,
+            AllowedFieldsPolicy.allowAll());
 
     doReturn(Long.class).when(query).getResultType();
 
@@ -191,7 +199,8 @@ class QueryPlanSpecificationFactoryTest {
             null,
             List.of(),
             Sort.unsorted(),
-            false);
+            false,
+            AllowedFieldsPolicy.allowAll());
 
     doReturn(long.class).when(query).getResultType();
 
@@ -216,7 +225,8 @@ class QueryPlanSpecificationFactoryTest {
             null,
             groupBy,
             Sort.unsorted(),
-            false);
+            false,
+            AllowedFieldsPolicy.allowAll());
 
     Path<?> statusPath = mock(Path.class);
     Path<?> namePath = mock(Path.class);
@@ -411,7 +421,121 @@ class QueryPlanSpecificationFactoryTest {
     verify(query).where(combined);
   }
 
+  @Test
+  void shouldRejectDisallowedFilterField() {
+    AllowedFieldsPolicy policy = AllowedFieldsPolicy.of(Set.of("name"), Set.of("name"));
+    PredicateCondition c1 =
+        new PredicateCondition("secretKey", Operators.EQUALS, "value", false, false);
+    GroupCondition rootCondition = new GroupCondition(LogicalOperator.AND, List.of(c1));
+    QueryPlan<Object> plan = plan(rootCondition, Sort.unsorted(), policy);
+
+    assertThatExceptionOfType(DisallowedFieldException.class)
+        .isThrownBy(() -> factory.create(plan))
+        .withMessage("Field 'secretKey' is not allowed for filtering");
+  }
+
+  @Test
+  void shouldRejectDisallowedSortField() {
+    AllowedFieldsPolicy policy = AllowedFieldsPolicy.of(Set.of("name"), Set.of("name"));
+    GroupCondition rootCondition = new GroupCondition(LogicalOperator.AND, List.of());
+    QueryPlan<Object> plan = plan(rootCondition, Sort.by("internalScore"), policy);
+
+    assertThatExceptionOfType(DisallowedFieldException.class)
+        .isThrownBy(() -> factory.create(plan))
+        .withMessage("Field 'internalScore' is not allowed for sorting");
+  }
+
+  @Test
+  void shouldAllowWhitelistedFields() {
+    AllowedFieldsPolicy policy = AllowedFieldsPolicy.of(Set.of("name"), Set.of("name"));
+
+    Path<?> namePath = mock(Path.class);
+    doReturn(String.class).when(namePath).getJavaType();
+    doReturn(namePath).when(pathResolver).resolve(eq(root), any(), eq("name"), eq(JoinMode.LEFT));
+    when(valueConversionService.convert("Borja", String.class, Operators.EQUALS))
+        .thenReturn("Borja");
+
+    Predicate p1 = mock(Predicate.class);
+    Predicate combined = mock(Predicate.class);
+    OperatorHandler eqHandler = mock(OperatorHandler.class);
+    when(operatorRegistry.get(Operators.EQUALS)).thenReturn(eqHandler);
+    when(eqHandler.create(any(OperatorContext.class))).thenReturn(p1);
+    when(cb.and(any(Predicate[].class))).thenReturn(combined);
+
+    PredicateCondition c1 = new PredicateCondition("name", Operators.EQUALS, "Borja", false, false);
+    GroupCondition rootCondition = new GroupCondition(LogicalOperator.AND, List.of(c1));
+    QueryPlan<Object> plan = plan(rootCondition, Sort.by("name"), policy);
+
+    Specification<Object> spec = factory.create(plan);
+    Predicate result = spec.toPredicate(root, query, cb);
+
+    assertThat(result).isSameAs(combined);
+  }
+
+  @Test
+  void shouldAllowWhitelistedFieldsInNestedGroup() {
+    AllowedFieldsPolicy policy = AllowedFieldsPolicy.of(Set.of("name"), Set.of("name"));
+
+    Path<?> namePath = mock(Path.class);
+    doReturn(String.class).when(namePath).getJavaType();
+    doReturn(namePath).when(pathResolver).resolve(eq(root), any(), eq("name"), eq(JoinMode.LEFT));
+    when(valueConversionService.convert("Borja", String.class, Operators.EQUALS))
+        .thenReturn("Borja");
+
+    Predicate p1 = mock(Predicate.class);
+    Predicate innerCombined = mock(Predicate.class);
+    Predicate outerCombined = mock(Predicate.class);
+    OperatorHandler eqHandler = mock(OperatorHandler.class);
+    when(operatorRegistry.get(Operators.EQUALS)).thenReturn(eqHandler);
+    when(eqHandler.create(any(OperatorContext.class))).thenReturn(p1);
+    when(cb.or(any(Predicate[].class))).thenReturn(innerCombined);
+    when(cb.and(any(Predicate[].class))).thenReturn(outerCombined);
+
+    PredicateCondition c1 = new PredicateCondition("name", Operators.EQUALS, "Borja", false, false);
+    GroupCondition nested = new GroupCondition(LogicalOperator.OR, List.of(c1));
+    GroupCondition rootCondition =
+        new GroupCondition(LogicalOperator.AND, List.of((QueryCondition) nested));
+    QueryPlan<Object> plan = plan(rootCondition, Sort.unsorted(), policy);
+
+    Specification<Object> spec = factory.create(plan);
+    Predicate result = spec.toPredicate(root, query, cb);
+
+    assertThat(result).isSameAs(outerCombined);
+  }
+
+  @Test
+  void shouldRejectDisallowedFieldInNestedGroup() {
+    AllowedFieldsPolicy policy = AllowedFieldsPolicy.of(Set.of("name"), Set.of("name"));
+    PredicateCondition c1 =
+        new PredicateCondition("secret", Operators.EQUALS, "value", false, false);
+    GroupCondition nested = new GroupCondition(LogicalOperator.OR, List.of(c1));
+    GroupCondition rootCondition =
+        new GroupCondition(LogicalOperator.AND, List.of((QueryCondition) nested));
+    QueryPlan<Object> plan = plan(rootCondition, Sort.unsorted(), policy);
+
+    assertThatExceptionOfType(DisallowedFieldException.class)
+        .isThrownBy(() -> factory.create(plan))
+        .withMessage("Field 'secret' is not allowed for filtering");
+  }
+
+  @Test
+  void shouldPassValidationWithRestrictedPolicyAndNoSortOrConditions() {
+    AllowedFieldsPolicy policy = AllowedFieldsPolicy.of(Set.of("name"), Set.of("name"));
+    GroupCondition rootCondition = new GroupCondition(LogicalOperator.AND, List.of());
+    QueryPlan<Object> plan = plan(rootCondition, Sort.unsorted(), policy);
+
+    Specification<Object> spec = factory.create(plan);
+    Predicate result = spec.toPredicate(root, query, cb);
+
+    assertThat(result).isNull();
+  }
+
   private QueryPlan<Object> plan(GroupCondition rootCondition) {
+    return plan(rootCondition, Sort.unsorted(), AllowedFieldsPolicy.allowAll());
+  }
+
+  private QueryPlan<Object> plan(
+      GroupCondition rootCondition, Sort sort, AllowedFieldsPolicy policy) {
     return new QueryPlan<>(
         Object.class,
         rootCondition,
@@ -421,7 +545,8 @@ class QueryPlanSpecificationFactoryTest {
         List.of(),
         null,
         List.of(),
-        Sort.unsorted(),
-        false);
+        sort,
+        false,
+        policy);
   }
 }

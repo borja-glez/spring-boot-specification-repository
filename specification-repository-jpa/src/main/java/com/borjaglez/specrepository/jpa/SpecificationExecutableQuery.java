@@ -8,6 +8,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 
+import com.borjaglez.specrepository.core.AllowedFieldsPolicy;
 import com.borjaglez.specrepository.core.ConditionGroupBuilder;
 import com.borjaglez.specrepository.core.FilterOperator;
 import com.borjaglez.specrepository.core.QueryPlan;
@@ -133,6 +134,12 @@ public class SpecificationExecutableQuery<T> extends QueryPlanBuilder<T> {
   @Override
   public SpecificationExecutableQuery<T> sort(Sort sort) {
     super.sort(sort);
+    return this;
+  }
+
+  @Override
+  public SpecificationExecutableQuery<T> allowedFields(AllowedFieldsPolicy allowedFieldsPolicy) {
+    super.allowedFields(allowedFieldsPolicy);
     return this;
   }
 
