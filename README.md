@@ -13,6 +13,7 @@ Extensible Spring Data JPA query library with a fluent DSL and native-friendly a
 - Aggregate projections with `sum`, `avg`, `min`, `max`, and `count(field)`
 - Pure builder model -- the builder only creates an immutable query plan
 - `SpecificationRepository` as a repository base abstraction for execution
+- Per-query field whitelisting for secure API exposure (`AllowedFieldsPolicy`)
 - Pluggable operators, predicate factories, converters, and dialect extensions
 - GraalVM-aware path resolution based on JPA metamodel metadata instead of reflection-heavy lookup
 - Spring Boot 3 and Spring Boot 4 starter modules
@@ -403,6 +404,35 @@ PostgreSQL `unaccent` extension to be enabled.
 
 Important: this is NOT a portable SQL abstraction yet. If you run the same overload on another
 dialect, you must provide a compatible database function or replace the operator handling strategy.
+
+### Field Whitelisting
+
+When the DSL is exposed through a public API, restrict which fields clients can filter and sort by:
+
+```java
+AllowedFieldsPolicy policy = AllowedFieldsPolicy.of(
+    Set.of("name", "email", "status"),   // allowed for filtering
+    Set.of("name", "createdAt"));        // allowed for sorting
+
+List<User> users = userRepository.query()
+    .allowedFields(policy)
+    .where("name", Operators.CONTAINS, searchTerm)
+    .sort(Sort.by("createdAt"))
+    .findAll();
+```
+
+Attempting to filter or sort by a non-whitelisted field throws `DisallowedFieldException`:
+
+```java
+// Throws: "Field 'passwordHash' is not allowed for filtering"
+userRepository.query()
+    .allowedFields(policy)
+    .where("passwordHash", Operators.EQUALS, value)
+    .findAll();
+```
+
+The policy is per-query, so each endpoint can define its own restrictions. Without
+`allowedFields()`, all fields are permitted (backward-compatible default).
 
 ### Pre-Built Query Plans
 

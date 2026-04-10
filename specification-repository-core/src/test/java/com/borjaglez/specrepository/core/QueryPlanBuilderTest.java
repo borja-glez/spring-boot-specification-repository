@@ -213,6 +213,44 @@ class QueryPlanBuilderTest {
   }
 
   @Test
+  void queryPlanCompatibilityConstructorShouldDefaultToAllowAll() {
+    QueryPlan<String> plan =
+        new QueryPlan<>(
+            String.class,
+            new GroupCondition(LogicalOperator.AND, java.util.List.of()),
+            java.util.List.of(),
+            java.util.List.of(),
+            java.util.List.of(),
+            java.util.List.of(),
+            null,
+            java.util.List.of(),
+            Sort.unsorted(),
+            false);
+
+    assertThat(plan.allowedFieldsPolicy()).isSameAs(AllowedFieldsPolicy.allowAll());
+  }
+
+  @Test
+  void queryPlanShouldRejectNullAllowedFieldsPolicy() {
+    assertThatNullPointerException()
+        .isThrownBy(
+            () ->
+                new QueryPlan<>(
+                    String.class,
+                    new GroupCondition(LogicalOperator.AND, java.util.List.of()),
+                    java.util.List.of(),
+                    java.util.List.of(),
+                    java.util.List.of(),
+                    java.util.List.of(),
+                    null,
+                    java.util.List.of(),
+                    Sort.unsorted(),
+                    false,
+                    null))
+        .withMessage("allowedFieldsPolicy must not be null");
+  }
+
+  @Test
   void specificationQueryBuilderForEntityShouldReturnBuilder() {
     QueryPlanBuilder<Integer> builder = SpecificationQueryBuilder.forEntity(Integer.class);
     QueryPlan<Integer> plan = builder.build();
