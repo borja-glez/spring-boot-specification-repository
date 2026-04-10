@@ -16,6 +16,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.repository.support.JpaEntityInformation;
 
+import com.borjaglez.specrepository.core.AllowedFieldsPolicy;
 import com.borjaglez.specrepository.core.GroupCondition;
 import com.borjaglez.specrepository.core.LogicalOperator;
 import com.borjaglez.specrepository.core.QueryPlan;
@@ -40,7 +41,8 @@ class SpecificationRepositoryImplTest {
             null,
             List.of(),
             Sort.unsorted(),
-            false);
+            false,
+            AllowedFieldsPolicy.allowAll());
 
     assertThatIllegalStateException()
         .isThrownBy(() -> SpecificationRepositoryImpl.requiredProjectionType(plan))
@@ -106,7 +108,8 @@ class SpecificationRepositoryImplTest {
         Projection.class,
         List.of(),
         Sort.unsorted(),
-        false);
+        false,
+        AllowedFieldsPolicy.allowAll());
   }
 
   private record Projection(String name) {}

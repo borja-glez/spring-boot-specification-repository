@@ -7,6 +7,7 @@ import static org.assertj.core.api.Assertions.tuple;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -19,6 +20,8 @@ import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import org.springframework.test.context.ContextConfiguration;
 
+import com.borjaglez.specrepository.core.AllowedFieldsPolicy;
+import com.borjaglez.specrepository.core.DisallowedFieldException;
 import com.borjaglez.specrepository.core.Operators;
 import com.borjaglez.specrepository.core.QueryPlan;
 import com.borjaglez.specrepository.jpa.SpecificationRepositoryImpl;
@@ -748,6 +751,54 @@ class SpecificationRepositoryIntegrationTest {
     List<TestCustomer> results = repository.query().findAll();
 
     assertThat(results).hasSize(4);
+  }
+
+  // -- Allowed fields policy --
+
+  @Test
+  void shouldFilterWithAllowedFieldsPolicy() {
+    AllowedFieldsPolicy policy = AllowedFieldsPolicy.of(Set.of("name", "status"), Set.of("name"));
+
+    List<TestCustomer> results =
+        repository
+            .query()
+            .allowedFields(policy)
+            .where("status", Operators.EQUALS, "ACTIVE")
+            .sort(Sort.by("name"))
+            .findAll();
+
+    assertThat(results).hasSize(2);
+  }
+
+  @Test
+  void shouldRejectDisallowedFilterFieldWithPolicy() {
+    AllowedFieldsPolicy policy = AllowedFieldsPolicy.of(Set.of("name"), Set.of("name"));
+
+    assertThatThrownBy(
+            () ->
+                repository
+                    .query()
+                    .allowedFields(policy)
+                    .where("status", Operators.EQUALS, "ACTIVE")
+                    .findAll())
+        .isInstanceOf(DisallowedFieldException.class)
+        .hasMessage("Field 'status' is not allowed for filtering");
+  }
+
+  @Test
+  void shouldRejectDisallowedSortFieldWithPolicy() {
+    AllowedFieldsPolicy policy = AllowedFieldsPolicy.of(Set.of("name"), Set.of("name"));
+
+    assertThatThrownBy(
+            () ->
+                repository
+                    .query()
+                    .allowedFields(policy)
+                    .where("name", Operators.EQUALS, "Borja")
+                    .sort(Sort.by("status"))
+                    .findAll())
+        .isInstanceOf(DisallowedFieldException.class)
+        .hasMessage("Field 'status' is not allowed for sorting");
   }
 
   @Configuration(proxyBeanMethods = false)

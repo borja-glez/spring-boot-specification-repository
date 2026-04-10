@@ -12,6 +12,7 @@ import jakarta.persistence.criteria.Root;
 
 import org.springframework.data.jpa.domain.Specification;
 
+import com.borjaglez.specrepository.core.AllowedFieldsPolicy;
 import com.borjaglez.specrepository.core.FetchInstruction;
 import com.borjaglez.specrepository.core.GroupCondition;
 import com.borjaglez.specrepository.core.JoinInstruction;
@@ -49,6 +50,7 @@ public class QueryPlanSpecificationFactory {
   }
 
   public <T> Specification<T> create(QueryPlan<T> plan) {
+    validateFields(plan);
     return (root, query, criteriaBuilder) -> {
       AssociationRegistry registry = new AssociationRegistry();
       applyJoins(root, registry, plan.joins());
@@ -136,5 +138,27 @@ public class QueryPlanSpecificationFactory {
     return condition.logicalOperator() == LogicalOperator.OR
         ? criteriaBuilder.or(predicateArray)
         : criteriaBuilder.and(predicateArray);
+  }
+
+  private <T> void validateFields(QueryPlan<T> plan) {
+    AllowedFieldsPolicy policy = plan.allowedFieldsPolicy();
+    if (policy.isAllowAll()) {
+      return;
+    }
+    validateFilterFields(policy, plan.rootCondition());
+    if (plan.sort().isSorted()) {
+      plan.sort().forEach(order -> policy.validateSort(order.getProperty()));
+    }
+  }
+
+  private void validateFilterFields(AllowedFieldsPolicy policy, GroupCondition group) {
+    for (QueryCondition condition : group.conditions()) {
+      if (condition instanceof PredicateCondition predicate) {
+        policy.validateFilter(predicate.field());
+      }
+      if (condition instanceof GroupCondition nested) {
+        validateFilterFields(policy, nested);
+      }
+    }
   }
 }

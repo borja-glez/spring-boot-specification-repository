@@ -14,7 +14,8 @@ public record QueryPlan<T>(
     Class<?> projectionType,
     List<String> groupBy,
     Sort sort,
-    boolean distinct) {
+    boolean distinct,
+    AllowedFieldsPolicy allowedFieldsPolicy) {
 
   public boolean hasSelections() {
     return !selections.isEmpty();
