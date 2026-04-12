@@ -114,10 +114,11 @@ inner repository.
 - `inSubquery` only supports entity-based correlation and a single projection
   column; multi-column tuples are not supported.
 - `inSubquery` / `notInSubquery` do not have an association-based overload.
-- Nesting subqueries inside subqueries is supported by the translator, but
-  the DSL currently only exposes `where` / `and` / `or` / `correlate` inside
-  a subquery body — not further `exists` / `inSubquery`. Use entity-based
-  correlation via a flat structure instead.
+- Nested subqueries are supported by the translator and are expressible in
+  the DSL via grouped conditions passed to subquery-body `and(...)` /
+  `or(...)`, whose inner builder exposes `exists` / `inSubquery`. Prefer a
+  flatter structure when it reads more clearly, but nested forms are
+  available.
 - Aggregate / scalar subqueries (e.g. `(SELECT MAX(...) FROM ...)`) are not
   exposed through the DSL.
 

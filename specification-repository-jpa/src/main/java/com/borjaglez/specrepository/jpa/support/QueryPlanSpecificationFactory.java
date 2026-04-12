@@ -3,6 +3,7 @@ package com.borjaglez.specrepository.jpa.support;
 import java.util.ArrayList;
 import java.util.List;
 
+import jakarta.persistence.criteria.CommonAbstractCriteria;
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.CriteriaQuery;
 import jakarta.persistence.criteria.Expression;
@@ -112,14 +113,14 @@ public class QueryPlanSpecificationFactory {
       GroupCondition condition,
       From<?, ?> from,
       ManagedType<?> fromType,
-      CriteriaQuery<?> query,
+      CommonAbstractCriteria parent,
       CriteriaBuilder criteriaBuilder,
       AssociationRegistry registry) {
     List<Predicate> predicates = new ArrayList<>();
     for (QueryCondition queryCondition : condition.conditions()) {
       if (queryCondition instanceof GroupCondition groupCondition) {
         Predicate nested =
-            toPredicate(groupCondition, from, fromType, query, criteriaBuilder, registry);
+            toPredicate(groupCondition, from, fromType, parent, criteriaBuilder, registry);
         if (nested != null) {
           predicates.add(nested);
         }
@@ -127,7 +128,8 @@ public class QueryPlanSpecificationFactory {
       }
       if (queryCondition instanceof SubqueryCondition subqueryCondition) {
         predicates.add(
-            translateSubquery(subqueryCondition, from, fromType, query, criteriaBuilder, registry));
+            translateSubquery(
+                subqueryCondition, from, fromType, parent, criteriaBuilder, registry));
         continue;
       }
       PredicateCondition predicateCondition = (PredicateCondition) queryCondition;
@@ -161,15 +163,68 @@ public class QueryPlanSpecificationFactory {
       SubqueryCondition sc,
       From<?, ?> outer,
       ManagedType<?> outerType,
-      CriteriaQuery<?> query,
+      CommonAbstractCriteria parent,
       CriteriaBuilder cb,
       AssociationRegistry outerRegistry) {
-    Subquery<Integer> sub = query.subquery(Integer.class);
-    AssociationRegistry subRegistry = new AssociationRegistry();
-    From<?, ?> subRoot;
-    ManagedType<?> subRootType;
-    Predicate correlationPredicate = null;
+    return switch (sc.kind()) {
+      case EXISTS -> buildExists(sc, outer, outerType, parent, cb, outerRegistry, false);
+      case NOT_EXISTS -> buildExists(sc, outer, outerType, parent, cb, outerRegistry, true);
+      case IN -> buildIn(sc, outer, outerType, parent, cb, outerRegistry, false);
+      case NOT_IN -> buildIn(sc, outer, outerType, parent, cb, outerRegistry, true);
+    };
+  }
 
+  private Predicate buildExists(
+      SubqueryCondition sc,
+      From<?, ?> outer,
+      ManagedType<?> outerType,
+      CommonAbstractCriteria parent,
+      CriteriaBuilder cb,
+      AssociationRegistry outerRegistry,
+      boolean negated) {
+    Subquery<Integer> sub = parent.subquery(Integer.class);
+    AssociationRegistry subRegistry = new AssociationRegistry();
+    SubRootContext context =
+        buildSubRoot(sc, outer, outerType, sub, cb, outerRegistry, subRegistry);
+    applyBody(sc, cb, sub, context, subRegistry);
+    sub.select(cb.literal(1));
+    Predicate existsPredicate = cb.exists(sub);
+    return negated ? cb.not(existsPredicate) : existsPredicate;
+  }
+
+  private <U> Predicate buildIn(
+      SubqueryCondition sc,
+      From<?, ?> outer,
+      ManagedType<?> outerType,
+      CommonAbstractCriteria parent,
+      CriteriaBuilder cb,
+      AssociationRegistry outerRegistry,
+      boolean negated) {
+    Path<?> outerPath = resolvePath(outer, outerType, outerRegistry, sc.outerField());
+    @SuppressWarnings("unchecked")
+    Class<U> projectedType = (Class<U>) outerPath.getJavaType();
+    Subquery<U> sub = parent.subquery(projectedType);
+    AssociationRegistry subRegistry = new AssociationRegistry();
+    SubRootContext context =
+        buildSubRoot(sc, outer, outerType, sub, cb, outerRegistry, subRegistry);
+    applyBody(sc, cb, sub, context, subRegistry);
+    Path<?> innerSelect =
+        resolvePath(context.subRoot(), context.subRootType(), subRegistry, sc.subSelectField());
+    @SuppressWarnings("unchecked")
+    Expression<U> innerExpression = (Expression<U>) innerSelect;
+    sub.select(innerExpression);
+    Predicate inPredicate = outerPath.in(sub);
+    return negated ? cb.not(inPredicate) : inPredicate;
+  }
+
+  private SubRootContext buildSubRoot(
+      SubqueryCondition sc,
+      From<?, ?> outer,
+      ManagedType<?> outerType,
+      Subquery<?> sub,
+      CriteriaBuilder cb,
+      AssociationRegistry outerRegistry,
+      AssociationRegistry subRegistry) {
     if (sc.correlationMode() == CorrelationMode.ASSOCIATION) {
       From<?, ?> correlatedOuter = correlateOuter(sub, outer);
       String[] segments = sc.associationPath().split("\\.");
@@ -180,30 +235,37 @@ public class QueryPlanSpecificationFactory {
         navigated = join;
         currentType = pathResolver.resolveAssociationTarget(currentType, segment);
       }
-      subRoot = navigated;
-      subRootType = currentType;
-    } else {
-      @SuppressWarnings("unchecked")
-      Class<Object> entityClass = (Class<Object>) sc.subEntity();
-      Root<Object> from = sub.from(entityClass);
-      subRoot = from;
-      subRootType = from.getModel();
-      List<Predicate> correlationPredicates = new ArrayList<>();
-      for (CorrelationPair pair : sc.correlations()) {
-        Path<?> outerPath = resolvePath(outer, outerType, outerRegistry, pair.outerField());
-        Path<?> innerPath = resolvePath(subRoot, subRootType, subRegistry, pair.innerField());
-        correlationPredicates.add(cb.equal(innerPath, outerPath));
-      }
-      if (!correlationPredicates.isEmpty()) {
-        correlationPredicate = cb.and(correlationPredicates.toArray(Predicate[]::new));
-      }
+      return new SubRootContext(navigated, currentType, null);
     }
+    @SuppressWarnings("unchecked")
+    Class<Object> entityClass = (Class<Object>) sc.subEntity();
+    Root<Object> from = sub.from(entityClass);
+    ManagedType<?> subRootType = from.getModel();
+    List<Predicate> correlationPredicates = new ArrayList<>();
+    for (CorrelationPair pair : sc.correlations()) {
+      Path<?> outerPath = resolvePath(outer, outerType, outerRegistry, pair.outerField());
+      Path<?> innerPath = resolvePath(from, subRootType, subRegistry, pair.innerField());
+      correlationPredicates.add(cb.equal(innerPath, outerPath));
+    }
+    Predicate correlationPredicate =
+        correlationPredicates.isEmpty()
+            ? null
+            : cb.and(correlationPredicates.toArray(Predicate[]::new));
+    return new SubRootContext(from, subRootType, correlationPredicate);
+  }
 
-    Predicate body = toPredicate(sc.subCondition(), subRoot, subRootType, query, cb, subRegistry);
-
+  private void applyBody(
+      SubqueryCondition sc,
+      CriteriaBuilder cb,
+      Subquery<?> sub,
+      SubRootContext context,
+      AssociationRegistry subRegistry) {
+    Predicate body =
+        toPredicate(
+            sc.subCondition(), context.subRoot(), context.subRootType(), sub, cb, subRegistry);
     List<Predicate> whereParts = new ArrayList<>();
-    if (correlationPredicate != null) {
-      whereParts.add(correlationPredicate);
+    if (context.correlationPredicate() != null) {
+      whereParts.add(context.correlationPredicate());
     }
     if (body != null) {
       whereParts.add(body);
@@ -211,38 +273,10 @@ public class QueryPlanSpecificationFactory {
     if (!whereParts.isEmpty()) {
       sub.where(whereParts.toArray(Predicate[]::new));
     }
-
-    return switch (sc.kind()) {
-      case EXISTS -> {
-        sub.select(cb.literal(1));
-        yield cb.exists(sub);
-      }
-      case NOT_EXISTS -> {
-        sub.select(cb.literal(1));
-        yield cb.not(cb.exists(sub));
-      }
-      case IN -> {
-        @SuppressWarnings({"rawtypes", "unchecked"})
-        Subquery<Object> projected = (Subquery) sub;
-        Path<?> innerSelect = resolvePath(subRoot, subRootType, subRegistry, sc.subSelectField());
-        @SuppressWarnings({"rawtypes", "unchecked"})
-        Expression<Object> innerExpression = (Expression) innerSelect;
-        projected.select(innerExpression);
-        Path<?> outerPath = resolvePath(outer, outerType, outerRegistry, sc.outerField());
-        yield outerPath.in(projected);
-      }
-      case NOT_IN -> {
-        @SuppressWarnings({"rawtypes", "unchecked"})
-        Subquery<Object> projected = (Subquery) sub;
-        Path<?> innerSelect = resolvePath(subRoot, subRootType, subRegistry, sc.subSelectField());
-        @SuppressWarnings({"rawtypes", "unchecked"})
-        Expression<Object> innerExpression = (Expression) innerSelect;
-        projected.select(innerExpression);
-        Path<?> outerPath = resolvePath(outer, outerType, outerRegistry, sc.outerField());
-        yield cb.not(outerPath.in(projected));
-      }
-    };
   }
+
+  private record SubRootContext(
+      From<?, ?> subRoot, ManagedType<?> subRootType, Predicate correlationPredicate) {}
 
   private <T> void validateFields(QueryPlan<T> plan) {
     AllowedFieldsPolicy policy = plan.allowedFieldsPolicy();

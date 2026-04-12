@@ -53,6 +53,13 @@ public final class SubqueryBuilder<S> {
     Objects.requireNonNull(body, "body must not be null");
     SubqueryBuilder<S> builder = new SubqueryBuilder<>();
     body.accept(builder);
+    if (!builder.correlations.isEmpty()) {
+      throw new IllegalArgumentException(
+          "correlate(...) is not supported for association-based subqueries; correlation is"
+              + " implicit through the association path '"
+              + associationPath
+              + "'");
+    }
     return new SubqueryCondition(
         kind,
         CorrelationMode.ASSOCIATION,

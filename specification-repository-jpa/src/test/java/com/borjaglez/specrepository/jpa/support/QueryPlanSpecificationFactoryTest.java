@@ -773,8 +773,8 @@ class QueryPlanSpecificationFactoryTest {
   @Test
   @SuppressWarnings("rawtypes")
   void shouldTranslateInSubqueryWithoutCorrelations() {
-    Subquery<Integer> subqueryMock = mock(Subquery.class);
-    when(query.subquery(Integer.class)).thenReturn(subqueryMock);
+    Subquery<Object> subqueryMock = mock(Subquery.class);
+    when(query.subquery(Object.class)).thenReturn(subqueryMock);
     Root<Object> subRoot = mock(Root.class);
     doReturn(subRoot).when(subqueryMock).from(Object.class);
     EntityType<Object> subEntityType = mock(EntityType.class);
@@ -785,6 +785,7 @@ class QueryPlanSpecificationFactoryTest {
         .when(pathResolver)
         .resolve(eq(subRoot), any(), eq("ref"), eq(JoinMode.LEFT));
     Path<Object> outerField = mock(Path.class);
+    doReturn(Object.class).when(outerField).getJavaType();
     doReturn(outerField).when(pathResolver).resolve(eq(root), any(), eq("id"), eq(JoinMode.LEFT));
     Predicate inPredicate = mock(Predicate.class);
     doReturn(inPredicate).when(outerField).in((Expression<?>) any());
@@ -815,8 +816,8 @@ class QueryPlanSpecificationFactoryTest {
   @Test
   @SuppressWarnings("rawtypes")
   void shouldTranslateNotInSubquery() {
-    Subquery<Integer> subqueryMock = mock(Subquery.class);
-    when(query.subquery(Integer.class)).thenReturn(subqueryMock);
+    Subquery<Object> subqueryMock = mock(Subquery.class);
+    when(query.subquery(Object.class)).thenReturn(subqueryMock);
     Root<Object> subRoot = mock(Root.class);
     doReturn(subRoot).when(subqueryMock).from(Object.class);
     EntityType<Object> subEntityType = mock(EntityType.class);
@@ -827,6 +828,7 @@ class QueryPlanSpecificationFactoryTest {
         .when(pathResolver)
         .resolve(eq(subRoot), any(), eq("ref"), eq(JoinMode.LEFT));
     Path<Object> outerField = mock(Path.class);
+    doReturn(Object.class).when(outerField).getJavaType();
     doReturn(outerField).when(pathResolver).resolve(eq(root), any(), eq("id"), eq(JoinMode.LEFT));
     Predicate inPredicate = mock(Predicate.class);
     doReturn(inPredicate).when(outerField).in((Expression<?>) any());
@@ -861,7 +863,8 @@ class QueryPlanSpecificationFactoryTest {
   void shouldCorrelateJoinWhenNestedSubqueryOuterIsJoin() {
     Subquery<Integer> outerSub = mock(Subquery.class);
     Subquery<Integer> innerSub = mock(Subquery.class);
-    when(query.subquery(Integer.class)).thenReturn(outerSub, innerSub);
+    when(query.subquery(Integer.class)).thenReturn(outerSub);
+    when(outerSub.subquery(Integer.class)).thenReturn(innerSub);
     EntityType<Object> entityType = mock(EntityType.class);
     doReturn(entityType).when(root).getModel();
     Root<Object> outerCorrelated = mock(Root.class);

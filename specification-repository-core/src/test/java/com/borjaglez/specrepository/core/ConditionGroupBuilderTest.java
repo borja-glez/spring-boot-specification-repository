@@ -1,6 +1,7 @@
 package com.borjaglez.specrepository.core;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 import static org.assertj.core.api.Assertions.assertThatNullPointerException;
 
 import org.junit.jupiter.api.Test;
@@ -91,6 +92,17 @@ class ConditionGroupBuilderTest {
     assertThat(sc.associationPath()).isEqualTo("orders");
     assertThat(sc.subEntity()).isNull();
     assertThat(sc.subCondition().conditions()).hasSize(1);
+  }
+
+  @Test
+  void existsAssociationShouldRejectCorrelateCalls() {
+    assertThatIllegalArgumentException()
+        .isThrownBy(
+            () ->
+                new ConditionGroupBuilder<Object>(LogicalOperator.AND)
+                    .<Object>exists("orders", sub -> sub.correlate("id", "customer.id")))
+        .withMessageContaining("correlate")
+        .withMessageContaining("orders");
   }
 
   @Test
