@@ -16,6 +16,7 @@ import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Slice;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import org.springframework.test.context.ContextConfiguration;
@@ -314,6 +315,110 @@ class SpecificationRepositoryIntegrationTest {
     assertThat(page.getContent()).hasSize(2);
     assertThat(page.getTotalElements()).isEqualTo(3);
     assertThat(page.getTotalPages()).isEqualTo(2);
+  }
+
+  // -- Slice pagination (no count query) --
+
+  @Test
+  void shouldSliceResultsWithNextPage() {
+    Slice<TestCustomer> slice =
+        repository
+            .query()
+            .where("status", Operators.IS_NOT_NULL, null)
+            .sort(Sort.by("name"))
+            .findSlice(PageRequest.of(0, 2));
+
+    assertThat(slice.getContent())
+        .extracting(TestCustomer::getName)
+        .containsExactly("Borja", "John");
+    assertThat(slice.hasNext()).isTrue();
+    assertThat(slice.getNumberOfElements()).isEqualTo(2);
+  }
+
+  @Test
+  void shouldSliceLastPage() {
+    Slice<TestCustomer> slice =
+        repository
+            .query()
+            .where("status", Operators.IS_NOT_NULL, null)
+            .sort(Sort.by("name"))
+            .findSlice(PageRequest.of(1, 2));
+
+    assertThat(slice.getContent()).extracting(TestCustomer::getName).containsExactly("Lucia");
+    assertThat(slice.hasNext()).isFalse();
+  }
+
+  @Test
+  void shouldSliceEmptyResults() {
+    Slice<TestCustomer> slice =
+        repository
+            .query()
+            .where("status", Operators.EQUALS, "NOPE")
+            .findSlice(PageRequest.of(0, 5));
+
+    assertThat(slice.getContent()).isEmpty();
+    assertThat(slice.hasNext()).isFalse();
+  }
+
+  @Test
+  void shouldSliceUsingPageableSortOverridingPlanSort() {
+    Slice<TestCustomer> slice =
+        repository
+            .query()
+            .where("status", Operators.EQUALS, "ACTIVE")
+            .sort(Sort.by(Sort.Direction.ASC, "name"))
+            .findSlice(PageRequest.of(0, 10, Sort.by(Sort.Direction.DESC, "name")));
+
+    assertThat(slice.getContent())
+        .extracting(TestCustomer::getName)
+        .containsExactly("Lucia", "Borja");
+    assertThat(slice.hasNext()).isFalse();
+  }
+
+  @Test
+  void shouldProjectSlicedResultsIntoDto() {
+    Slice<NameOnlyRecord> slice =
+        repository
+            .query()
+            .where("status", Operators.IS_NOT_NULL, null)
+            .sort(Sort.by("name"))
+            .select("name")
+            .selectInto(NameOnlyRecord.class)
+            .findSlice(PageRequest.of(0, 2));
+
+    assertThat(slice.getContent())
+        .containsExactly(new NameOnlyRecord("Borja"), new NameOnlyRecord("John"));
+    assertThat(slice.hasNext()).isTrue();
+  }
+
+  @Test
+  void shouldSliceProjectedResults() {
+    Slice<?> slice =
+        repository
+            .query()
+            .where("status", Operators.IS_NOT_NULL, null)
+            .sort(Sort.by("name"))
+            .select("name")
+            .findSlice(PageRequest.of(0, 2));
+
+    assertThat(slice.getContent()).extracting(Object::toString).containsExactly("Borja", "John");
+    assertThat(slice.hasNext()).isTrue();
+  }
+
+  @Test
+  void shouldSliceGroupedAggregateResults() {
+    Slice<?> slice =
+        repository
+            .query()
+            .where("status", Operators.IS_NOT_NULL, null)
+            .groupBy("status")
+            .sort(Sort.by("status"))
+            .select("status")
+            .count("id")
+            .findSlice(PageRequest.of(0, 1));
+
+    assertThat(slice.getContent()).hasSize(1);
+    assertThat(slice.hasNext()).isTrue();
   }
 
   // -- includeNulls --
@@ -703,6 +808,41 @@ class SpecificationRepositoryIntegrationTest {
         .extracting(Object::toString)
         .containsExactly("NameOnlyRecord[name=Anna]", "NameOnlyRecord[name=Borja]");
     assertThat(page.getTotalElements()).isEqualTo(4);
+  }
+
+  @Test
+  void shouldFindSliceWithQueryPlan() {
+    QueryPlan<TestCustomer> plan =
+        repository
+            .query()
+            .where("status", Operators.IS_NOT_NULL, null)
+            .sort(Sort.by("name"))
+            .plan();
+
+    Slice<TestCustomer> slice = repository.findSlice(plan, PageRequest.of(0, 2));
+
+    assertThat(slice.getContent()).hasSize(2);
+    assertThat(slice.hasNext()).isTrue();
+  }
+
+  @Test
+  @SuppressWarnings({"rawtypes", "unchecked"})
+  void shouldFindSliceWithProjectedQueryPlanMetadata() {
+    QueryPlan<TestCustomer> plan =
+        repository
+            .query()
+            .where("status", Operators.IS_NOT_NULL, null)
+            .sort(Sort.by("name"))
+            .select("name")
+            .selectInto(NameOnlyRecord.class)
+            .plan();
+
+    Slice<?> slice = repository.findSlice((QueryPlan) plan, PageRequest.of(0, 2));
+
+    assertThat(slice.getContent())
+        .extracting(Object::toString)
+        .containsExactly("NameOnlyRecord[name=Borja]", "NameOnlyRecord[name=John]");
+    assertThat(slice.hasNext()).isTrue();
   }
 
   @Test

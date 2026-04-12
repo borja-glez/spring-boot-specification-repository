@@ -64,6 +64,13 @@ class SpecificationRepositoryImplTest {
   }
 
   @Test
+  void shouldRejectProjectedFindSliceWhenRepositoryDoesNotSupportIt() {
+    assertThatThrownBy(() -> repository.findSliceProjected(projectedPlan(), PageRequest.of(0, 1)))
+        .isInstanceOf(UnsupportedOperationException.class)
+        .hasMessage("Projected queries are not supported by this repository");
+  }
+
+  @Test
   void shouldRejectProjectedFindOneWhenRepositoryDoesNotSupportIt() {
     assertThatThrownBy(() -> repository.findOneProjected(projectedPlan()))
         .isInstanceOf(UnsupportedOperationException.class)

@@ -338,6 +338,21 @@ Page<Product> page = productRepository.query()
 
 When using `Pageable`, its sort takes priority over any sort set on the builder.
 
+For large datasets where the total row count is expensive and unnecessary, the
+DSL also exposes `findSlice(Pageable)` returning Spring Data's `Slice<T>`. It
+fetches `pageSize + 1` rows in a single query, sets `hasNext` accordingly, and
+skips the `COUNT(*)` query that `findAll(Pageable)` runs:
+
+```java
+Slice<Product> slice = productRepository.query()
+    .where("status", Operators.NOT_EQUALS, "DISCONTINUED")
+    .sort(Sort.by(Sort.Direction.DESC, "createdAt"))
+    .findSlice(PageRequest.of(0, 10));
+```
+
+See [docs/pagination.md](docs/pagination.md) for the full `Page` vs `Slice`
+comparison and a design note on keyset pagination.
+
 ### Grouped Counts
 
 `groupBy(...)` is applied to the underlying JPA Criteria query, so grouped counts honor the same

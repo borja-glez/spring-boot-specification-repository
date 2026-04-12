@@ -18,6 +18,8 @@ import jakarta.persistence.criteria.Selection;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Slice;
+import org.springframework.data.domain.SliceImpl;
 import org.springframework.data.jpa.repository.query.QueryUtils;
 import org.springframework.data.jpa.repository.support.JpaEntityInformation;
 import org.springframework.data.jpa.repository.support.SimpleJpaRepository;
@@ -95,9 +97,40 @@ public class SpecificationRepositoryImpl<T, ID extends Serializable>
       return (Page<T>) findAllProjected(plan, pageable);
     }
     if (plan.hasSelections()) {
-      List<?> content = executeProjectedQuery(plan, pageable);
+      List<?> content = executeProjectedQuery(plan, pageable, 0);
       return new PageImpl<>((List<T>) content, pageable, countSelectedRows(plan));
     }
+    List<T> content = fetchEntityPage(plan, pageable, 0);
+    return new PageImpl<>(content, pageable, count(plan));
+  }
+
+  @Override
+  public <P> Page<P> findAllProjected(QueryPlan<T> plan, Pageable pageable) {
+    List<P> content = executeProjectedQuery(plan, pageable, requiredProjectionType(plan));
+    return new PageImpl<>(content, pageable, countSelectedRows(plan));
+  }
+
+  @Override
+  @SuppressWarnings("unchecked")
+  public Slice<T> findSlice(QueryPlan<T> plan, Pageable pageable) {
+    if (plan.projectionType() != null) {
+      return (Slice<T>) findSliceProjected(plan, pageable);
+    }
+    if (plan.hasSelections()) {
+      List<?> fetched = executeProjectedQuery(plan, pageable, 1);
+      return toSlice((List<T>) fetched, pageable);
+    }
+    List<T> fetched = fetchEntityPage(plan, pageable, 1);
+    return toSlice(fetched, pageable);
+  }
+
+  @Override
+  public <P> Slice<P> findSliceProjected(QueryPlan<T> plan, Pageable pageable) {
+    List<P> fetched = executeProjectedQuery(plan, pageable, requiredProjectionType(plan), 1);
+    return toSlice(fetched, pageable);
+  }
+
+  private List<T> fetchEntityPage(QueryPlan<T> plan, Pageable pageable, int extraLimit) {
     CriteriaBuilder builder = entityManager.getCriteriaBuilder();
     CriteriaQuery<T> query = builder.createQuery(getDomainClass());
     Root<T> root = query.from(getDomainClass());
@@ -110,14 +143,15 @@ public class SpecificationRepositoryImpl<T, ID extends Serializable>
     }
     TypedQuery<T> typedQuery = entityManager.createQuery(query);
     typedQuery.setFirstResult((int) pageable.getOffset());
-    typedQuery.setMaxResults(pageable.getPageSize());
-    return new PageImpl<>(typedQuery.getResultList(), pageable, count(plan));
+    typedQuery.setMaxResults(pageable.getPageSize() + extraLimit);
+    return typedQuery.getResultList();
   }
 
-  @Override
-  public <P> Page<P> findAllProjected(QueryPlan<T> plan, Pageable pageable) {
-    List<P> content = executeProjectedQuery(plan, pageable, requiredProjectionType(plan));
-    return new PageImpl<>(content, pageable, countSelectedRows(plan));
+  private <R> Slice<R> toSlice(List<R> fetched, Pageable pageable) {
+    int pageSize = pageable.getPageSize();
+    boolean hasNext = fetched.size() > pageSize;
+    List<R> content = hasNext ? new ArrayList<>(fetched.subList(0, pageSize)) : fetched;
+    return new SliceImpl<>(content, pageable, hasNext);
   }
 
   @Override
@@ -167,6 +201,10 @@ public class SpecificationRepositoryImpl<T, ID extends Serializable>
   }
 
   private List<?> executeProjectedQuery(QueryPlan<T> plan, Pageable pageable) {
+    return executeProjectedQuery(plan, pageable, 0);
+  }
+
+  private List<?> executeProjectedQuery(QueryPlan<T> plan, Pageable pageable, int extraLimit) {
     CriteriaBuilder builder = entityManager.getCriteriaBuilder();
     CriteriaQuery<?> query =
         plan.selections().size() == 1
@@ -180,18 +218,18 @@ public class SpecificationRepositoryImpl<T, ID extends Serializable>
     TypedQuery<?> typedQuery = entityManager.createQuery(query);
     if (pageable != null) {
       typedQuery.setFirstResult((int) pageable.getOffset());
-      typedQuery.setMaxResults(pageable.getPageSize());
+      typedQuery.setMaxResults(pageable.getPageSize() + extraLimit);
     }
     return typedQuery.getResultList();
   }
 
   private <P> List<P> executeProjectedQuery(
       QueryPlan<T> plan, Pageable pageable, Class<P> resultType) {
-    return executeProjectedQuery(plan, pageable, resultType, null);
+    return executeProjectedQuery(plan, pageable, resultType, 0);
   }
 
   private <P> List<P> executeProjectedQuery(
-      QueryPlan<T> plan, Pageable pageable, Class<P> resultType, Integer maxResults) {
+      QueryPlan<T> plan, Pageable pageable, Class<P> resultType, int extraLimit) {
     CriteriaBuilder builder = entityManager.getCriteriaBuilder();
     CriteriaQuery<P> query = builder.createQuery(resultType);
     Root<T> root = query.from(getDomainClass());
@@ -202,9 +240,9 @@ public class SpecificationRepositoryImpl<T, ID extends Serializable>
     TypedQuery<P> typedQuery = entityManager.createQuery(query);
     if (pageable != null) {
       typedQuery.setFirstResult((int) pageable.getOffset());
-      typedQuery.setMaxResults(pageable.getPageSize());
-    } else if (maxResults != null) {
-      typedQuery.setMaxResults(maxResults);
+      typedQuery.setMaxResults(pageable.getPageSize() + extraLimit);
+    } else if (extraLimit > 0) {
+      typedQuery.setMaxResults(extraLimit);
     }
     return typedQuery.getResultList();
   }
