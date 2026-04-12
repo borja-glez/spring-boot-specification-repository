@@ -36,6 +36,51 @@ public final class ConditionGroupBuilder<T> {
     return group(LogicalOperator.OR, nested);
   }
 
+  public <S> ConditionGroupBuilder<T> exists(
+      String associationPath, Consumer<SubqueryBuilder<S>> body) {
+    conditions.add(SubqueryBuilder.buildAssociation(SubqueryKind.EXISTS, associationPath, body));
+    return this;
+  }
+
+  public <S> ConditionGroupBuilder<T> notExists(
+      String associationPath, Consumer<SubqueryBuilder<S>> body) {
+    conditions.add(
+        SubqueryBuilder.buildAssociation(SubqueryKind.NOT_EXISTS, associationPath, body));
+    return this;
+  }
+
+  public <S> ConditionGroupBuilder<T> exists(
+      Class<S> subEntity, Consumer<SubqueryBuilder<S>> body) {
+    conditions.add(SubqueryBuilder.buildEntity(SubqueryKind.EXISTS, subEntity, body));
+    return this;
+  }
+
+  public <S> ConditionGroupBuilder<T> notExists(
+      Class<S> subEntity, Consumer<SubqueryBuilder<S>> body) {
+    conditions.add(SubqueryBuilder.buildEntity(SubqueryKind.NOT_EXISTS, subEntity, body));
+    return this;
+  }
+
+  public <S> ConditionGroupBuilder<T> inSubquery(
+      String outerField,
+      Class<S> subEntity,
+      String subSelectField,
+      Consumer<SubqueryBuilder<S>> body) {
+    conditions.add(
+        SubqueryBuilder.buildIn(SubqueryKind.IN, outerField, subEntity, subSelectField, body));
+    return this;
+  }
+
+  public <S> ConditionGroupBuilder<T> notInSubquery(
+      String outerField,
+      Class<S> subEntity,
+      String subSelectField,
+      Consumer<SubqueryBuilder<S>> body) {
+    conditions.add(
+        SubqueryBuilder.buildIn(SubqueryKind.NOT_IN, outerField, subEntity, subSelectField, body));
+    return this;
+  }
+
   public GroupCondition build() {
     return new GroupCondition(logicalOperator, List.copyOf(conditions));
   }

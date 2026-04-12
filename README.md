@@ -10,6 +10,7 @@ Extensible Spring Data JPA query library with a fluent DSL and native-friendly a
 ## Features
 
 - Fluent query DSL for chained `where`, `and`, `or`, `join`, and `fetch` operations
+- Correlated subqueries: `exists` / `notExists` (association or entity-based) and `inSubquery` / `notInSubquery`
 - Aggregate projections with `sum`, `avg`, `min`, `max`, and `count(field)`
 - Pure builder model -- the builder only creates an immutable query plan
 - `SpecificationRepository` as a repository base abstraction for execution
@@ -376,6 +377,58 @@ long total = productRepository.query()
     .where("status", Operators.EQUALS, "ACTIVE")
     .count();
 ```
+
+### EXISTS and Subqueries
+
+For collection associations and cross-entity filters, the DSL supports correlated
+subqueries that translate to real SQL `EXISTS` / `IN (SELECT ...)` without
+polluting the outer query with joins or row duplication.
+
+**Association-based `EXISTS`** walks an existing outer association:
+
+```java
+List<Customer> results = customerRepository.query()
+    .where("status", Operators.EQUALS, "ACTIVE")
+    .<Order>exists("orders", sub -> sub.where("total", Operators.GREATER_THAN, 100))
+    .findAll();
+```
+
+**`NOT EXISTS`** is the canonical way to express "none of the related rows
+match" -- something a plain `where("orders.status", NOT_EQUALS, ...)` cannot do
+correctly:
+
+```java
+List<Customer> noCancellations = customerRepository.query()
+    .<Order>notExists("orders", sub -> sub.where("status", Operators.EQUALS, "CANCELLED"))
+    .findAll();
+```
+
+**Entity-based correlation** lets you query any entity class, not just a
+navigable association, and correlate explicitly via one or more field pairs:
+
+```java
+List<Customer> vipBuyers = customerRepository.query()
+    .exists(Order.class, sub -> sub
+        .correlate("id", "customer.id")
+        .where("status", Operators.EQUALS, "PAID")
+        .where("vip", Operators.EQUALS, true))
+    .findAll();
+```
+
+**`IN (subquery)` and `NOT IN (subquery)`** take the outer field to match, the
+sub-entity class, the projected field from the subquery, and the body:
+
+```java
+List<Customer> inSubquery = customerRepository.query()
+    .inSubquery("id", Order.class, "customer.id",
+        sub -> sub.where("vip", Operators.EQUALS, true))
+    .findAll();
+```
+
+Subquery calls compose with `and` / `or` groups like any other predicate and
+respect `AllowedFieldsPolicy` on their outer fields. See
+[docs/subqueries.md](docs/subqueries.md) for the full API, correlation
+semantics, and current limitations.
 
 ### IN Operator with Distinct
 

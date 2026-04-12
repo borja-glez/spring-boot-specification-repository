@@ -257,6 +257,34 @@ class QueryPlanBuilderTest {
     assertThat(plan.entityType()).isEqualTo(Integer.class);
   }
 
+  @Test
+  void shouldExposeSubqueryDslOnQueryPlanBuilder() {
+    QueryPlan<String> plan =
+        SpecificationQueryBuilder.forEntity(String.class)
+            .<Integer>exists("orders", sub -> sub.where("total", Operators.GREATER_THAN, 10))
+            .<Integer>notExists("drafts", sub -> sub.where("x", Operators.EQUALS, 1))
+            .exists(Integer.class, sub -> sub.correlate("id", "ref"))
+            .notExists(Integer.class, sub -> sub.where("y", Operators.EQUALS, 2))
+            .inSubquery("id", Integer.class, "ref", sub -> sub.where("z", Operators.EQUALS, 3))
+            .notInSubquery("id", Integer.class, "ref", sub -> sub.where("w", Operators.EQUALS, 4))
+            .build();
+
+    assertThat(plan.rootCondition().conditions()).hasSize(6);
+    assertThat(plan.rootCondition().conditions())
+        .allMatch(condition -> condition instanceof SubqueryCondition);
+    assertThat(
+            plan.rootCondition().conditions().stream()
+                .map(c -> ((SubqueryCondition) c).kind())
+                .toList())
+        .containsExactly(
+            SubqueryKind.EXISTS,
+            SubqueryKind.NOT_EXISTS,
+            SubqueryKind.EXISTS,
+            SubqueryKind.NOT_EXISTS,
+            SubqueryKind.IN,
+            SubqueryKind.NOT_IN);
+  }
+
   private record NameEmailProjection(String name, String email) {}
 
   private record CountProjection(Long count) {}

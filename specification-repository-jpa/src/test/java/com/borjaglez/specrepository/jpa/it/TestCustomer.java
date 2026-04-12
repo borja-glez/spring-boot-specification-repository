@@ -1,6 +1,8 @@
 package com.borjaglez.specrepository.jpa.it;
 
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.List;
 
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Entity;
@@ -8,6 +10,7 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToMany;
 
 @Entity
 public class TestCustomer {
@@ -25,6 +28,9 @@ public class TestCustomer {
 
   @ManyToOne(cascade = CascadeType.ALL)
   private TestProfile profile;
+
+  @OneToMany(mappedBy = "customer", cascade = CascadeType.ALL)
+  private List<TestOrder> orders = new ArrayList<>();
 
   public TestCustomer() {}
 
@@ -55,5 +61,17 @@ public class TestCustomer {
 
   public LocalDate getCreatedAt() {
     return createdAt;
+  }
+
+  public Long getId() {
+    return id;
+  }
+
+  public List<TestOrder> getOrders() {
+    return orders;
+  }
+
+  public void addOrder(TestOrder order) {
+    orders.add(order);
   }
 }

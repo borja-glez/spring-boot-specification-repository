@@ -51,6 +51,45 @@ public class QueryPlanBuilder<T> {
     return this;
   }
 
+  public <S> QueryPlanBuilder<T> exists(String associationPath, Consumer<SubqueryBuilder<S>> body) {
+    rootGroup.exists(associationPath, body);
+    return this;
+  }
+
+  public <S> QueryPlanBuilder<T> notExists(
+      String associationPath, Consumer<SubqueryBuilder<S>> body) {
+    rootGroup.notExists(associationPath, body);
+    return this;
+  }
+
+  public <S> QueryPlanBuilder<T> exists(Class<S> subEntity, Consumer<SubqueryBuilder<S>> body) {
+    rootGroup.exists(subEntity, body);
+    return this;
+  }
+
+  public <S> QueryPlanBuilder<T> notExists(Class<S> subEntity, Consumer<SubqueryBuilder<S>> body) {
+    rootGroup.notExists(subEntity, body);
+    return this;
+  }
+
+  public <S> QueryPlanBuilder<T> inSubquery(
+      String outerField,
+      Class<S> subEntity,
+      String subSelectField,
+      Consumer<SubqueryBuilder<S>> body) {
+    rootGroup.inSubquery(outerField, subEntity, subSelectField, body);
+    return this;
+  }
+
+  public <S> QueryPlanBuilder<T> notInSubquery(
+      String outerField,
+      Class<S> subEntity,
+      String subSelectField,
+      Consumer<SubqueryBuilder<S>> body) {
+    rootGroup.notInSubquery(outerField, subEntity, subSelectField, body);
+    return this;
+  }
+
   public QueryPlanBuilder<T> leftJoin(String... paths) {
     return join(JoinMode.LEFT, paths);
   }
