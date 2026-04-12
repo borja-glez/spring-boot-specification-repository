@@ -28,6 +28,7 @@ Extensible Spring Data JPA query library with a fluent DSL and native-friendly a
 | `specification-repository-jpa` | JPA compiler, repository implementation, and metamodel path resolution |
 | `specification-repository-boot3-starter` | Spring Boot 3 auto-configuration |
 | `specification-repository-boot4-starter` | Spring Boot 4 auto-configuration |
+| `specification-repository-http` | Optional HTTP query parameter parser and Spring MVC argument resolver |
 | `specification-repository-test-support` | Shared test fixtures and utilities |
 | `examples` | Runnable sample applications |
 
@@ -601,6 +602,115 @@ Important notes:
 - custom `ValueConverter` beans are registered before the defaults, so domain-specific conversion can win first
 - providing a `SpecificationRepositoryConfiguration` bean replaces the starter-assembled configuration entirely
 
+## HTTP Filter Parser
+
+The optional `specification-repository-http` module translates HTTP query parameters into a
+`QueryPlan` so controllers do not need hand-written parsing code. It depends only on
+`specification-repository-core` and exposes a Spring MVC argument resolver that is auto-configured
+when Spring Web is on the classpath. Works with both Spring Boot 3 and Spring Boot 4.
+
+**Gradle**
+
+```kotlin
+implementation("com.borjaglez:specification-repository-http:0.1.0")
+```
+
+### Query Parameter Contract
+
+```
+GET /api/products?filter=name:contains:Laptop&filter=status:eq:ACTIVE
+                 &orFilter=price:lt:100;price:gt:1000
+                 &sort=price,desc&sort=name,asc
+                 &page=0&size=20
+```
+
+- **Filters**: `filter=field:operator:value` (repeatable, AND-combined at the root level). Operator
+  names reuse the existing `Operators` string values (`eq`, `neq`, `contains`, `startswith`,
+  `endswith`, `gt`, `gte`, `lt`, `lte`, `between`, `in`, `notin`, `isnull`, `isnotnull`, `isempty`,
+  `isnotempty`, `notcontains`).
+- **Multi-value operators** (`in`, `notin`, `between`): pipe-separated values — `status:in:ACTIVE|PENDING`,
+  `price:between:10|100`.
+- **Valueless operators** (`isnull`, `isnotnull`, `isempty`, `isnotempty`): value omitted —
+  `description:isnull`.
+- **OR groups**: `orFilter=field:op:val;field:op:val` — semicolon-separated filters inside a single
+  OR group. Repeatable for multiple independent groups.
+- **Sorting**: `sort=field,direction` (repeatable; direction is `asc` or `desc`, default `asc`).
+- **Pagination**: handled by Spring's standard `Pageable` resolver — this module does not parse
+  `page`/`size`.
+
+Field names are validated against a strict pattern (`[a-zA-Z][a-zA-Z0-9_]*` with optional dotted
+segments), so paths like `../../secret` are rejected as syntax errors.
+
+### Spring MVC Controller Usage
+
+Annotate a `QueryPlan<T>` controller parameter with `@FilterableQuery` and let the argument
+resolver build and whitelist the plan from the request:
+
+```java
+@RestController
+@RequestMapping("/api/products")
+public class ProductController {
+
+    @GetMapping("/filter")
+    public Page<Product> filter(
+            @FilterableQuery(
+                    value = Product.class,
+                    filterableFields = {"name", "status", "price", "category.name", "createdAt"},
+                    sortableFields = {"name", "price", "createdAt"})
+                    QueryPlan<Product> query,
+            Pageable pageable) {
+        return productRepository.findAll(query, pageable);
+    }
+}
+```
+
+`filterableFields` and `sortableFields` are translated into an `AllowedFieldsPolicy`, so any
+client attempting to filter or sort by a non-whitelisted field receives a `DisallowedFieldException`.
+
+### Programmatic Usage (no Spring)
+
+The parser is a pure Java class and can be used outside of Spring MVC:
+
+```java
+HttpFilterParser parser = new HttpFilterParser();
+
+Map<String, List<String>> params = Map.of(
+        "filter", List.of("name:contains:Laptop", "status:eq:ACTIVE"),
+        "sort",   List.of("price,desc"));
+
+QueryPlan<Product> plan = parser.toQueryPlan(Product.class, params);
+List<Product> products = productRepository.findAll(plan);
+```
+
+`HttpFilterParserConfiguration` lets you customize parameter names, separators, limits, and an
+optional allowed-operators set:
+
+```java
+HttpFilterParserConfiguration config = HttpFilterParserConfiguration.builder()
+        .filterParam("q")
+        .orFilterParam("any")
+        .sortParam("order")
+        .multiValueSeparator(",")
+        .orGroupSeparator("|")
+        .maxFilters(10)
+        .maxSortFields(3)
+        .allowedOperators(Set.of("eq", "contains", "in"))
+        .build();
+
+HttpFilterParser parser = new HttpFilterParser(config);
+```
+
+### Error Handling
+
+- `HttpFilterSyntaxException` — thrown for malformed filter/sort expressions, invalid field
+  names, and filter/sort count limits exceeded.
+- `HttpUnknownOperatorException` — thrown when the operator is not in the configured
+  `allowedOperators` set.
+
+Both extend `IllegalArgumentException` and propagate to the caller so applications can map them
+to HTTP 400 responses via their preferred error handling strategy (`@ControllerAdvice`,
+`ProblemDetail`, etc.). The module does not register its own exception handler.
+
 ## Demo Applications
 
 The repository includes four demo applications:
@@ -619,6 +729,12 @@ Example aggregate endpoint available in every demo application:
 
 ```text
 GET /api/products/aggregates/active-summary
+```
+
+The Boot 3 H2 demo also exposes the HTTP filter parser via `@FilterableQuery`:
+
+```text
+GET /api/products/filter?filter=name:contains:Laptop&filter=status:eq:ACTIVE&sort=price,desc&page=0&size=20
 ```
 
 That endpoint demonstrates:

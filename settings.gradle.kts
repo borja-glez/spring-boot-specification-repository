@@ -20,6 +20,7 @@ rootProject.name = "spring-boot-specification-repository"
 include(
     ":specification-repository-core",
     ":specification-repository-jpa",
+    ":specification-repository-http",
     ":specification-repository-boot3-starter",
     ":specification-repository-boot4-starter",
     ":specification-repository-test-support",

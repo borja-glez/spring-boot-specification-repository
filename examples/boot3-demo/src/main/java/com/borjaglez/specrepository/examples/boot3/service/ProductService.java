@@ -6,11 +6,13 @@ import java.util.Optional;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.borjaglez.specrepository.core.Operators;
+import com.borjaglez.specrepository.core.QueryPlan;
 import com.borjaglez.specrepository.examples.boot3.entity.Product;
 import com.borjaglez.specrepository.examples.boot3.repository.ProductRepository;
 
@@ -216,6 +218,11 @@ public class ProductService {
   /** Grouped count: number of distinct categories with products. */
   public long countGroupedByCategory() {
     return productRepository.query().groupBy("category.name").count();
+  }
+
+  /** Execute a pre-built QueryPlan from HTTP filter parsing. */
+  public Page<Product> findByQueryPlan(QueryPlan<Product> queryPlan, Pageable pageable) {
+    return productRepository.findAll(queryPlan, pageable);
   }
 
   private static BigDecimal toBigDecimal(Optional<?> value) {
