@@ -4,6 +4,7 @@ plugins {
 
 dependencies {
     implementation(project(":specification-repository-boot3-starter"))
+    implementation(project(":specification-repository-http"))
     implementation(libs.spring.boot.starter.web)
     implementation(libs.spring.boot.starter.data.jpa)
     developmentOnly(libs.spring.boot.devtools)

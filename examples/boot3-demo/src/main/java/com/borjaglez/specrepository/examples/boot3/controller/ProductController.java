@@ -3,12 +3,15 @@ package com.borjaglez.specrepository.examples.boot3.controller;
 import java.util.List;
 
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import com.borjaglez.specrepository.core.QueryPlan;
 import com.borjaglez.specrepository.examples.boot3.entity.Product;
 import com.borjaglez.specrepository.examples.boot3.service.ProductAggregateSummaryResponse;
 import com.borjaglez.specrepository.examples.boot3.service.ProductService;
+import com.borjaglez.specrepository.http.spring.FilterableQuery;
 
 @RestController
 @RequestMapping("/api/products")
@@ -126,5 +129,23 @@ public class ProductController {
   @GetMapping("/count/grouped-by-category")
   public long countGroupedByCategory() {
     return productService.countGroupedByCategory();
+  }
+
+  @GetMapping("/filter")
+  public Page<Product> filter(
+      @FilterableQuery(
+              value = Product.class,
+              filterableFields = {
+                "name",
+                "status",
+                "price",
+                "description",
+                "category.name",
+                "createdAt"
+              },
+              sortableFields = {"name", "price", "createdAt"})
+          QueryPlan<Product> query,
+      Pageable pageable) {
+    return productService.findByQueryPlan(query, pageable);
   }
 }

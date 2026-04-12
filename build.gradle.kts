@@ -14,6 +14,7 @@ tasks.register("coverage") {
     dependsOn(
         ":specification-repository-core:jacocoTestCoverageVerification",
         ":specification-repository-jpa:jacocoTestCoverageVerification",
+        ":specification-repository-http:jacocoTestCoverageVerification",
         ":specification-repository-boot3-starter:jacocoTestCoverageVerification",
         ":specification-repository-boot4-starter:jacocoTestCoverageVerification",
         ":specification-repository-test-support:test"
@@ -26,6 +27,7 @@ tasks.register("quality") {
     dependsOn(
         ":specification-repository-core:test",
         ":specification-repository-jpa:test",
+        ":specification-repository-http:test",
         ":specification-repository-boot3-starter:test",
         ":specification-repository-boot4-starter:test",
         ":specification-repository-test-support:test",
@@ -60,6 +62,7 @@ tasks.register("spotlessCheckAll") {
     dependsOn(
         ":specification-repository-core:spotlessCheck",
         ":specification-repository-jpa:spotlessCheck",
+        ":specification-repository-http:spotlessCheck",
         ":specification-repository-boot3-starter:spotlessCheck",
         ":specification-repository-boot4-starter:spotlessCheck",
         ":specification-repository-test-support:spotlessCheck",
@@ -76,6 +79,7 @@ tasks.register("spotlessApplyAll") {
     dependsOn(
         ":specification-repository-core:spotlessApply",
         ":specification-repository-jpa:spotlessApply",
+        ":specification-repository-http:spotlessApply",
         ":specification-repository-boot3-starter:spotlessApply",
         ":specification-repository-boot4-starter:spotlessApply",
         ":specification-repository-test-support:spotlessApply",

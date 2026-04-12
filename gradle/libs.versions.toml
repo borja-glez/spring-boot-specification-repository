@@ -30,6 +30,8 @@ spring-data-commons = { module = "org.springframework.data:spring-data-commons",
 spring-data-jpa = { module = "org.springframework.data:spring-data-jpa", version.ref = "spring-data" }
 spring-context = { module = "org.springframework:spring-context", version.ref = "spring-framework" }
 spring-core = { module = "org.springframework:spring-core", version.ref = "spring-framework" }
+spring-web = { module = "org.springframework:spring-web", version.ref = "spring-framework" }
+spring-webmvc = { module = "org.springframework:spring-webmvc", version.ref = "spring-framework" }
 jakarta-persistence-api = { module = "jakarta.persistence:jakarta.persistence-api", version.ref = "jakarta-persistence" }
 
 spring-boot4-autoconfigure = { module = "org.springframework.boot:spring-boot-autoconfigure", version.ref = "spring-boot4" }
