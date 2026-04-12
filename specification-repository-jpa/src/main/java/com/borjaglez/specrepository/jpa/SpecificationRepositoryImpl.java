@@ -126,7 +126,7 @@ public class SpecificationRepositoryImpl<T, ID extends Serializable>
 
   @Override
   public <P> Slice<P> findSliceProjected(QueryPlan<T> plan, Pageable pageable) {
-    List<P> fetched = executeProjectedSliceQuery(plan, pageable, requiredProjectionType(plan));
+    List<P> fetched = executeProjectedQuery(plan, pageable, requiredProjectionType(plan), 1);
     return toSlice(fetched, pageable);
   }
 
@@ -225,11 +225,11 @@ public class SpecificationRepositoryImpl<T, ID extends Serializable>
 
   private <P> List<P> executeProjectedQuery(
       QueryPlan<T> plan, Pageable pageable, Class<P> resultType) {
-    return executeProjectedQuery(plan, pageable, resultType, null);
+    return executeProjectedQuery(plan, pageable, resultType, 0);
   }
 
   private <P> List<P> executeProjectedQuery(
-      QueryPlan<T> plan, Pageable pageable, Class<P> resultType, Integer maxResults) {
+      QueryPlan<T> plan, Pageable pageable, Class<P> resultType, int extraLimit) {
     CriteriaBuilder builder = entityManager.getCriteriaBuilder();
     CriteriaQuery<P> query = builder.createQuery(resultType);
     Root<T> root = query.from(getDomainClass());
@@ -240,25 +240,10 @@ public class SpecificationRepositoryImpl<T, ID extends Serializable>
     TypedQuery<P> typedQuery = entityManager.createQuery(query);
     if (pageable != null) {
       typedQuery.setFirstResult((int) pageable.getOffset());
-      typedQuery.setMaxResults(pageable.getPageSize());
-    } else if (maxResults != null) {
-      typedQuery.setMaxResults(maxResults);
+      typedQuery.setMaxResults(pageable.getPageSize() + extraLimit);
+    } else if (extraLimit > 0) {
+      typedQuery.setMaxResults(extraLimit);
     }
-    return typedQuery.getResultList();
-  }
-
-  private <P> List<P> executeProjectedSliceQuery(
-      QueryPlan<T> plan, Pageable pageable, Class<P> resultType) {
-    CriteriaBuilder builder = entityManager.getCriteriaBuilder();
-    CriteriaQuery<P> query = builder.createQuery(resultType);
-    Root<T> root = query.from(getDomainClass());
-    specificationFactory.create(plan).toPredicate(root, query, builder);
-    applyProjection(plan, builder, root, query, resultType);
-    applySort(plan, pageable, builder, root, query);
-
-    TypedQuery<P> typedQuery = entityManager.createQuery(query);
-    typedQuery.setFirstResult((int) pageable.getOffset());
-    typedQuery.setMaxResults(pageable.getPageSize() + 1);
     return typedQuery.getResultList();
   }
 

@@ -811,6 +811,21 @@ class SpecificationRepositoryIntegrationTest {
   }
 
   @Test
+  void shouldFindSliceWithQueryPlan() {
+    QueryPlan<TestCustomer> plan =
+        repository
+            .query()
+            .where("status", Operators.IS_NOT_NULL, null)
+            .sort(Sort.by("name"))
+            .plan();
+
+    Slice<TestCustomer> slice = repository.findSlice(plan, PageRequest.of(0, 2));
+
+    assertThat(slice.getContent()).hasSize(2);
+    assertThat(slice.hasNext()).isTrue();
+  }
+
+  @Test
   @SuppressWarnings({"rawtypes", "unchecked"})
   void shouldFindSliceWithProjectedQueryPlanMetadata() {
     QueryPlan<TestCustomer> plan =
