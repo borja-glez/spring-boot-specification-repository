@@ -1009,7 +1009,47 @@ class SpecificationRepositoryIntegrationTest {
   }
 
   @Test
-  void shouldFilterWithIsNullHavingForNullableSum() {
+  void shouldFilterWithHavingAgainstAvgAggregate() {
+    // AVG returns Double; the test passes an Integer threshold to verify that the HAVING
+    // value is converted against the aggregate result type, not the underlying field type.
+    List<?> results =
+        repository
+            .query()
+            .where("status", Operators.IS_NOT_NULL, null)
+            .groupBy("status")
+            .sort(Sort.by("status"))
+            .select("status")
+            .avg("age")
+            .having(AggregateFunction.AVG, "age", Operators.GREATER_THAN, 30)
+            .findAll();
+
+    assertThat(results).hasSize(1);
+    assertThat(((Object[]) results.get(0))[0]).isEqualTo("INACTIVE");
+  }
+
+  @Test
+  void shouldFilterWithHavingAgainstCountAggregateUsingIntegerValue() {
+    // COUNT returns Long; passing an int verifies the value is converted to Long via the
+    // aggregate result type rather than the underlying id column type.
+    List<?> results =
+        repository
+            .query()
+            .where("status", Operators.IS_NOT_NULL, null)
+            .groupBy("status")
+            .sort(Sort.by("status"))
+            .select("status")
+            .count("id")
+            .having(AggregateFunction.COUNT, "id", Operators.GREATER_THAN_OR_EQUAL, 2)
+            .findAll();
+
+    assertThat(results).hasSize(1);
+    assertThat(((Object[]) results.get(0))[0]).isEqualTo("ACTIVE");
+  }
+
+  @Test
+  void shouldExecuteIsNullHavingClause() {
+    // COUNT can never be NULL, so this query is expected to return zero rows; the test
+    // exercises the IS_NULL branch of the HAVING translation, not a real filtering use case.
     List<?> results =
         repository
             .query()

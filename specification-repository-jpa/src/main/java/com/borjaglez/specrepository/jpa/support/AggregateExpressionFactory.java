@@ -9,6 +9,28 @@ import com.borjaglez.specrepository.core.AggregateFunction;
 public final class AggregateExpressionFactory {
   private AggregateExpressionFactory() {}
 
+  public static Class<?> resultType(AggregateFunction function, Class<?> fieldType) {
+    return switch (function) {
+      case COUNT -> Long.class;
+      case AVG -> Double.class;
+      case SUM -> {
+        if (Integer.class == fieldType
+            || int.class == fieldType
+            || Short.class == fieldType
+            || short.class == fieldType
+            || Byte.class == fieldType
+            || byte.class == fieldType) {
+          yield Long.class;
+        }
+        if (Float.class == fieldType || float.class == fieldType) {
+          yield Double.class;
+        }
+        yield fieldType;
+      }
+      case MIN, MAX -> fieldType;
+    };
+  }
+
   @SuppressWarnings({"unchecked", "rawtypes"})
   public static Expression<?> create(
       CriteriaBuilder builder, AggregateFunction function, String field, Path<?> path) {

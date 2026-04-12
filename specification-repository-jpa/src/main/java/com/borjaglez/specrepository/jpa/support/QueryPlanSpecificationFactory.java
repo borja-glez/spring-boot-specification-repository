@@ -134,7 +134,9 @@ public class QueryPlanSpecificationFactory {
     Path<?> path = pathResolver.resolve(root, registry, condition.field(), JoinMode.LEFT);
     Expression<?> aggregate =
         AggregateExpressionFactory.create(cb, condition.function(), condition.field(), path);
-    return havingPredicate(cb, aggregate, path.getJavaType(), condition);
+    Class<?> targetType =
+        AggregateExpressionFactory.resultType(condition.function(), path.getJavaType());
+    return havingPredicate(cb, aggregate, targetType, condition);
   }
 
   @SuppressWarnings({"unchecked", "rawtypes"})
