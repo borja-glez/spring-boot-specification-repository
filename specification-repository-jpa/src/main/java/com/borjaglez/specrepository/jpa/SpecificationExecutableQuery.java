@@ -9,9 +9,11 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Slice;
 import org.springframework.data.domain.Sort;
 
+import com.borjaglez.specrepository.core.AggregateFunction;
 import com.borjaglez.specrepository.core.AllowedFieldsPolicy;
 import com.borjaglez.specrepository.core.ConditionGroupBuilder;
 import com.borjaglez.specrepository.core.FilterOperator;
+import com.borjaglez.specrepository.core.GroupedRow;
 import com.borjaglez.specrepository.core.QueryPlan;
 import com.borjaglez.specrepository.core.QueryPlanBuilder;
 import com.borjaglez.specrepository.core.SubqueryBuilder;
@@ -182,6 +184,50 @@ public class SpecificationExecutableQuery<T> extends QueryPlanBuilder<T> {
   }
 
   @Override
+  public SpecificationExecutableQuery<T> sumAs(String alias, String field) {
+    super.sumAs(alias, field);
+    return this;
+  }
+
+  @Override
+  public SpecificationExecutableQuery<T> avgAs(String alias, String field) {
+    super.avgAs(alias, field);
+    return this;
+  }
+
+  @Override
+  public SpecificationExecutableQuery<T> minAs(String alias, String field) {
+    super.minAs(alias, field);
+    return this;
+  }
+
+  @Override
+  public SpecificationExecutableQuery<T> maxAs(String alias, String field) {
+    super.maxAs(alias, field);
+    return this;
+  }
+
+  @Override
+  public SpecificationExecutableQuery<T> countAs(String alias, String field) {
+    super.countAs(alias, field);
+    return this;
+  }
+
+  @Override
+  public SpecificationExecutableQuery<T> aggregate(
+      AggregateFunction function, String field, String alias) {
+    super.aggregate(function, field, alias);
+    return this;
+  }
+
+  @Override
+  public SpecificationExecutableQuery<T> having(
+      AggregateFunction function, String field, FilterOperator operator, Object value) {
+    super.having(function, field, operator, value);
+    return this;
+  }
+
+  @Override
   public SpecificationExecutableQuery<T> sort(Sort sort) {
     super.sort(sort);
     return this;
@@ -207,6 +253,10 @@ public class SpecificationExecutableQuery<T> extends QueryPlanBuilder<T> {
 
   public List<T> findAll() {
     return repository.findAll(build());
+  }
+
+  public List<GroupedRow> findAllGrouped() {
+    return repository.findAllGrouped(build());
   }
 
   public Page<T> findAll(Pageable pageable) {

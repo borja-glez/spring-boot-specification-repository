@@ -10,7 +10,6 @@ import jakarta.persistence.EntityManager;
 import jakarta.persistence.TypedQuery;
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.CriteriaQuery;
-import jakarta.persistence.criteria.Expression;
 import jakarta.persistence.criteria.Path;
 import jakarta.persistence.criteria.Root;
 import jakarta.persistence.criteria.Selection;
@@ -26,8 +25,10 @@ import org.springframework.data.jpa.repository.support.SimpleJpaRepository;
 
 import com.borjaglez.specrepository.core.AggregateSelection;
 import com.borjaglez.specrepository.core.FieldSelection;
+import com.borjaglez.specrepository.core.GroupedRow;
 import com.borjaglez.specrepository.core.JoinMode;
 import com.borjaglez.specrepository.core.QueryPlan;
+import com.borjaglez.specrepository.jpa.support.AggregateExpressionFactory;
 import com.borjaglez.specrepository.jpa.support.AssociationRegistry;
 import com.borjaglez.specrepository.jpa.support.PathResolver;
 import com.borjaglez.specrepository.jpa.support.QueryPlanSpecificationFactory;
@@ -171,6 +172,30 @@ public class SpecificationRepositoryImpl<T, ID extends Serializable>
   }
 
   @Override
+  public List<GroupedRow> findAllGrouped(QueryPlan<T> plan) {
+    if (!plan.hasSelections()) {
+      throw new IllegalStateException(
+          "findAllGrouped requires at least one select() or aggregate selection");
+    }
+    List<String> columns = new ArrayList<>();
+    for (com.borjaglez.specrepository.core.Selection selection : plan.selections()) {
+      if (selection instanceof FieldSelection field) {
+        columns.add(field.field());
+      } else {
+        columns.add(((AggregateSelection) selection).columnName());
+      }
+    }
+    List<?> rawRows = executeProjectedQuery(plan, null);
+    List<GroupedRow> rows = new ArrayList<>(rawRows.size());
+    boolean singleColumn = plan.selections().size() == 1;
+    for (Object raw : rawRows) {
+      Object[] values = singleColumn ? new Object[] {raw} : (Object[]) raw;
+      rows.add(new GroupedRow(columns, values));
+    }
+    return rows;
+  }
+
+  @Override
   public long count(QueryPlan<T> plan) {
     if (!plan.groupBy().isEmpty()) {
       return countGrouped(plan);
@@ -294,47 +319,8 @@ public class SpecificationRepositoryImpl<T, ID extends Serializable>
     }
     AggregateSelection aggregateSelection = (AggregateSelection) selection;
     Path<?> path = pathResolver.resolve(root, registry, aggregateSelection.field(), JoinMode.LEFT);
-    return toAggregateExpression(builder, aggregateSelection, path);
-  }
-
-  @SuppressWarnings({"rawtypes", "unchecked"})
-  private Expression<?> toAggregateExpression(
-      CriteriaBuilder builder, AggregateSelection selection, Path<?> path) {
-    return switch (selection.function()) {
-      case SUM -> builder.sum(asNumberExpression(path, selection));
-      case AVG -> builder.avg(asNumberExpression(path, selection));
-      case MIN -> {
-        if (Number.class.isAssignableFrom(path.getJavaType())) {
-          yield builder.min((Expression<? extends Number>) path);
-        }
-        if (Comparable.class.isAssignableFrom(path.getJavaType())) {
-          yield builder.least((Expression<? extends Comparable>) path);
-        }
-        throw new IllegalArgumentException(
-            "MIN requires a comparable field: " + path.getJavaType());
-      }
-      case MAX -> {
-        if (Number.class.isAssignableFrom(path.getJavaType())) {
-          yield builder.max((Expression<? extends Number>) path);
-        }
-        if (Comparable.class.isAssignableFrom(path.getJavaType())) {
-          yield builder.greatest((Expression<? extends Comparable>) path);
-        }
-        throw new IllegalArgumentException(
-            "MAX requires a comparable field: " + path.getJavaType());
-      }
-      case COUNT -> builder.count(path);
-    };
-  }
-
-  @SuppressWarnings("unchecked")
-  private Expression<? extends Number> asNumberExpression(
-      Path<?> path, AggregateSelection selection) {
-    if (!Number.class.isAssignableFrom(path.getJavaType())) {
-      throw new IllegalArgumentException(
-          selection.function() + " requires a numeric field: " + selection.field());
-    }
-    return (Expression<? extends Number>) path;
+    return AggregateExpressionFactory.create(
+        builder, aggregateSelection.function(), aggregateSelection.field(), path);
   }
 
   private void applySort(

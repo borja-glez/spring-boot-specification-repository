@@ -71,6 +71,13 @@ class SpecificationRepositoryImplTest {
   }
 
   @Test
+  void shouldRejectFindAllGroupedWhenRepositoryDoesNotSupportIt() {
+    assertThatThrownBy(() -> repository.findAllGrouped(projectedPlan()))
+        .isInstanceOf(UnsupportedOperationException.class)
+        .hasMessage("Grouped queries are not supported by this repository");
+  }
+
+  @Test
   void shouldRejectProjectedFindOneWhenRepositoryDoesNotSupportIt() {
     assertThatThrownBy(() -> repository.findOneProjected(projectedPlan()))
         .isInstanceOf(UnsupportedOperationException.class)

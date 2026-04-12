@@ -21,10 +21,13 @@ import com.borjaglez.specrepository.core.AllowedFieldsPolicy;
 import com.borjaglez.specrepository.core.CorrelationMode;
 import com.borjaglez.specrepository.core.CorrelationPair;
 import com.borjaglez.specrepository.core.FetchInstruction;
+import com.borjaglez.specrepository.core.FilterOperator;
 import com.borjaglez.specrepository.core.GroupCondition;
+import com.borjaglez.specrepository.core.HavingCondition;
 import com.borjaglez.specrepository.core.JoinInstruction;
 import com.borjaglez.specrepository.core.JoinMode;
 import com.borjaglez.specrepository.core.LogicalOperator;
+import com.borjaglez.specrepository.core.Operators;
 import com.borjaglez.specrepository.core.PredicateCondition;
 import com.borjaglez.specrepository.core.QueryCondition;
 import com.borjaglez.specrepository.core.QueryPlan;
@@ -65,6 +68,7 @@ public class QueryPlanSpecificationFactory {
       applyJoins(root, registry, plan.joins());
       applyFetches(root, query, registry, plan.fetches());
       applyGrouping(root, query, registry, plan.groupBy());
+      applyHaving(root, query, registry, plan.having(), criteriaBuilder);
 
       if (plan.distinct()) {
         query.distinct(true);
@@ -107,6 +111,94 @@ public class QueryPlanSpecificationFactory {
     fields.forEach(
         field -> expressions.add(pathResolver.resolve(root, registry, field, JoinMode.LEFT)));
     query.groupBy(expressions);
+  }
+
+  private void applyHaving(
+      Root<?> root,
+      CriteriaQuery<?> query,
+      AssociationRegistry registry,
+      List<HavingCondition> havingConditions,
+      CriteriaBuilder criteriaBuilder) {
+    if (havingConditions.isEmpty()) {
+      return;
+    }
+    List<Predicate> predicates = new ArrayList<>();
+    for (HavingCondition condition : havingConditions) {
+      predicates.add(buildHavingPredicate(root, registry, condition, criteriaBuilder));
+    }
+    query.having(criteriaBuilder.and(predicates.toArray(Predicate[]::new)));
+  }
+
+  private Predicate buildHavingPredicate(
+      Root<?> root, AssociationRegistry registry, HavingCondition condition, CriteriaBuilder cb) {
+    Path<?> path = pathResolver.resolve(root, registry, condition.field(), JoinMode.LEFT);
+    Expression<?> aggregate =
+        AggregateExpressionFactory.create(cb, condition.function(), condition.field(), path);
+    Class<?> targetType =
+        AggregateExpressionFactory.resultType(condition.function(), path.getJavaType());
+    return havingPredicate(cb, aggregate, targetType, condition);
+  }
+
+  @SuppressWarnings({"unchecked", "rawtypes"})
+  private Predicate havingPredicate(
+      CriteriaBuilder cb, Expression<?> aggregate, Class<?> targetType, HavingCondition condition) {
+    FilterOperator operator = condition.operator();
+    if (Operators.IS_NULL.equals(operator)) {
+      return cb.isNull(aggregate);
+    }
+    if (Operators.IS_NOT_NULL.equals(operator)) {
+      return cb.isNotNull(aggregate);
+    }
+    if (Operators.BETWEEN.equals(operator)) {
+      List<?> bounds = havingRangeValues(condition.value());
+      Object lower = valueConversionService.convert(bounds.get(0), targetType, operator);
+      Object upper = valueConversionService.convert(bounds.get(1), targetType, operator);
+      return cb.between((Expression<Comparable>) aggregate, (Comparable) lower, (Comparable) upper);
+    }
+    if (!isSupportedComparator(operator)) {
+      throw new IllegalArgumentException(
+          "Unsupported operator for having clause: " + operator.value());
+    }
+    Object converted = valueConversionService.convert(condition.value(), targetType, operator);
+    if (Operators.EQUALS.equals(operator)) {
+      return cb.equal(aggregate, converted);
+    }
+    if (Operators.NOT_EQUALS.equals(operator)) {
+      return cb.notEqual(aggregate, converted);
+    }
+    if (Operators.GREATER_THAN.equals(operator)) {
+      return cb.greaterThan((Expression<Comparable>) aggregate, (Comparable) converted);
+    }
+    if (Operators.GREATER_THAN_OR_EQUAL.equals(operator)) {
+      return cb.greaterThanOrEqualTo((Expression<Comparable>) aggregate, (Comparable) converted);
+    }
+    if (Operators.LESS_THAN.equals(operator)) {
+      return cb.lessThan((Expression<Comparable>) aggregate, (Comparable) converted);
+    }
+    return cb.lessThanOrEqualTo((Expression<Comparable>) aggregate, (Comparable) converted);
+  }
+
+  private boolean isSupportedComparator(FilterOperator operator) {
+    return Operators.EQUALS.equals(operator)
+        || Operators.NOT_EQUALS.equals(operator)
+        || Operators.GREATER_THAN.equals(operator)
+        || Operators.GREATER_THAN_OR_EQUAL.equals(operator)
+        || Operators.LESS_THAN.equals(operator)
+        || Operators.LESS_THAN_OR_EQUAL.equals(operator);
+  }
+
+  private List<?> havingRangeValues(Object value) {
+    if (!(value instanceof Iterable<?> iterable)) {
+      throw new IllegalArgumentException("BETWEEN having requires exactly 2 values");
+    }
+    List<?> values =
+        iterable instanceof List<?> list
+            ? list
+            : java.util.stream.StreamSupport.stream(iterable.spliterator(), false).toList();
+    if (values.size() != 2) {
+      throw new IllegalArgumentException("BETWEEN having requires exactly 2 values");
+    }
+    return values;
   }
 
   private Predicate toPredicate(
@@ -284,6 +376,9 @@ public class QueryPlanSpecificationFactory {
       return;
     }
     validateFilterFields(policy, plan.rootCondition());
+    for (HavingCondition having : plan.having()) {
+      policy.validateFilter(having.field());
+    }
     if (plan.sort().isSorted()) {
       plan.sort().forEach(order -> policy.validateSort(order.getProperty()));
     }

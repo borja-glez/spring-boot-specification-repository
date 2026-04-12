@@ -1,5 +1,6 @@
 package com.borjaglez.specrepository.examples.boot3.controller;
 
+import java.math.BigDecimal;
 import java.util.List;
 
 import org.springframework.data.domain.Page;
@@ -7,6 +8,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import com.borjaglez.specrepository.core.GroupedRow;
 import com.borjaglez.specrepository.core.QueryPlan;
 import com.borjaglez.specrepository.examples.boot3.entity.Product;
 import com.borjaglez.specrepository.examples.boot3.service.ProductAggregateSummaryResponse;
@@ -129,6 +131,11 @@ public class ProductController {
   @GetMapping("/count/grouped-by-category")
   public long countGroupedByCategory() {
     return productService.countGroupedByCategory();
+  }
+
+  @GetMapping("/reporting/status-revenue-above")
+  public List<GroupedRow> findStatusRevenueAbove(@RequestParam("threshold") BigDecimal threshold) {
+    return productService.findStatusRevenueAbove(threshold);
   }
 
   @GetMapping("/filter")
