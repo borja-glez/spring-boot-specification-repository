@@ -605,9 +605,11 @@ Important notes:
 ## HTTP Filter Parser
 
 The optional `specification-repository-http` module translates HTTP query parameters into a
-`QueryPlan` so controllers do not need hand-written parsing code. It depends only on
-`specification-repository-core` and exposes a Spring MVC argument resolver that is auto-configured
-when Spring Web is on the classpath. Works with both Spring Boot 3 and Spring Boot 4.
+`QueryPlan` so controllers do not need hand-written parsing code. The parser logic is plain Java,
+but the module's public API uses Spring Data Commons types such as `Sort`, so the minimal
+required dependencies include `specification-repository-core` and Spring Data Commons. It also
+exposes a Spring MVC argument resolver that is auto-configured when Spring Web is on the
+classpath. Works with both Spring Boot 3 and Spring Boot 4.
 
 **Gradle**
 

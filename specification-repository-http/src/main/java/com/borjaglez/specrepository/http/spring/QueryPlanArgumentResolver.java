@@ -55,6 +55,8 @@ public class QueryPlanArgumentResolver implements HandlerMethodArgumentResolver 
     if (filterable.length == 0 && sortable.length == 0) {
       return AllowedFieldsPolicy.allowAll();
     }
-    return AllowedFieldsPolicy.of(Set.of(filterable), Set.of(sortable));
+    Set<String> filterableFields = Arrays.stream(filterable).collect(Collectors.toSet());
+    Set<String> sortableFields = Arrays.stream(sortable).collect(Collectors.toSet());
+    return AllowedFieldsPolicy.of(filterableFields, sortableFields);
   }
 }

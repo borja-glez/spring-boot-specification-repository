@@ -1,7 +1,9 @@
 package com.borjaglez.specrepository.http;
 
+import java.util.Locale;
 import java.util.Objects;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 public final class HttpFilterParserConfiguration {
   private final String filterParam;
@@ -22,7 +24,11 @@ public final class HttpFilterParserConfiguration {
     this.maxFilters = builder.maxFilters;
     this.maxSortFields = builder.maxSortFields;
     this.allowedOperators =
-        builder.allowedOperators == null ? null : Set.copyOf(builder.allowedOperators);
+        builder.allowedOperators == null
+            ? null
+            : builder.allowedOperators.stream()
+                .map(op -> op.toLowerCase(Locale.ROOT))
+                .collect(Collectors.toUnmodifiableSet());
   }
 
   public static HttpFilterParserConfiguration defaults() {

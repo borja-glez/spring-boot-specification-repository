@@ -92,6 +92,13 @@ class HttpFilterParserConfigurationTest {
   }
 
   @Test
+  void allowedOperatorsShouldBeNormalizedToLowerCase() {
+    var config =
+        HttpFilterParserConfiguration.builder().allowedOperators(Set.of("EQ", "Neq")).build();
+    assertThat(config.allowedOperators()).containsExactlyInAnyOrder("eq", "neq");
+  }
+
+  @Test
   void allowedOperatorsShouldBeImmutableCopy() {
     var operators = new java.util.HashSet<>(Set.of("eq", "neq"));
     var config = HttpFilterParserConfiguration.builder().allowedOperators(operators).build();

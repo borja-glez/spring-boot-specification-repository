@@ -237,6 +237,28 @@ class HttpFilterParserTest {
       var result = parser.parse(Map.of("filter", List.of("status:in:ACTIVE")));
       assertThat(result.filters().get(0).value()).isEqualTo(List.of("ACTIVE"));
     }
+
+    @Test
+    void shouldRejectBetweenWithWrongNumberOfValues() {
+      assertThatThrownBy(() -> parser.parse(Map.of("filter", List.of("price:between:10"))))
+          .isInstanceOf(HttpFilterSyntaxException.class)
+          .hasMessageContaining("requires exactly 2 non-empty values");
+
+      assertThatThrownBy(() -> parser.parse(Map.of("filter", List.of("price:between:10|20|30"))))
+          .isInstanceOf(HttpFilterSyntaxException.class)
+          .hasMessageContaining("requires exactly 2 non-empty values");
+    }
+
+    @Test
+    void shouldRejectBetweenWithEmptyBound() {
+      assertThatThrownBy(() -> parser.parse(Map.of("filter", List.of("price:between:|100"))))
+          .isInstanceOf(HttpFilterSyntaxException.class)
+          .hasMessageContaining("requires exactly 2 non-empty values");
+
+      assertThatThrownBy(() -> parser.parse(Map.of("filter", List.of("price:between:10|"))))
+          .isInstanceOf(HttpFilterSyntaxException.class)
+          .hasMessageContaining("requires exactly 2 non-empty values");
+    }
   }
 
   @Nested
@@ -400,6 +422,15 @@ class HttpFilterParserTest {
     void shouldAcceptAnyOperatorWhenAllowedOperatorsIsNull() {
       var result = parser.parse(Map.of("filter", List.of("name:customop:value")));
       assertThat(result.filters().get(0).operator()).isEqualTo(FilterOperator.of("customop"));
+    }
+
+    @Test
+    void shouldAcceptOperatorsConfiguredInUpperCase() {
+      var config = HttpFilterParserConfiguration.builder().allowedOperators(Set.of("EQ")).build();
+      var p = new HttpFilterParser(config);
+
+      var result = p.parse(Map.of("filter", List.of("name:eq:John")));
+      assertThat(result.filters()).hasSize(1);
     }
   }
 

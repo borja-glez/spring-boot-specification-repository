@@ -157,7 +157,14 @@ public final class HttpFilterParser {
       throw new HttpFilterSyntaxException(raw, "value is required for operator '" + operator + "'");
     }
     if (MULTI_VALUE_OPERATORS.contains(lowerOp)) {
-      return Arrays.asList(rawValue.split(Pattern.quote(config.multiValueSeparator()), -1));
+      List<String> values =
+          Arrays.asList(rawValue.split(Pattern.quote(config.multiValueSeparator()), -1));
+      if ("between".equals(lowerOp)
+          && (values.size() != 2 || values.get(0).isEmpty() || values.get(1).isEmpty())) {
+        throw new HttpFilterSyntaxException(
+            raw, "operator '" + operator + "' requires exactly 2 non-empty values");
+      }
+      return values;
     }
     return rawValue;
   }
