@@ -15,10 +15,19 @@ public class PathResolver {
 
   public Path<?> resolve(
       Root<?> root, AssociationRegistry registry, String path, JoinMode joinMode) {
+    return resolve(root, root.getModel(), registry, path, joinMode);
+  }
+
+  public Path<?> resolve(
+      From<?, ?> from,
+      ManagedType<?> fromType,
+      AssociationRegistry registry,
+      String path,
+      JoinMode joinMode) {
     String[] segments = path.split("\\.");
-    Path<?> currentPath = root;
-    From<?, ?> currentFrom = root;
-    ManagedType<?> currentType = root.getModel();
+    Path<?> currentPath = from;
+    From<?, ?> currentFrom = from;
+    ManagedType<?> currentType = fromType;
     StringBuilder associationPath = new StringBuilder();
 
     for (int index = 0; index < segments.length; index++) {
@@ -48,9 +57,18 @@ public class PathResolver {
   }
 
   public void join(Root<?> root, AssociationRegistry registry, String path, JoinMode joinMode) {
+    join(root, root.getModel(), registry, path, joinMode);
+  }
+
+  public void join(
+      From<?, ?> from,
+      ManagedType<?> fromType,
+      AssociationRegistry registry,
+      String path,
+      JoinMode joinMode) {
     String[] segments = path.split("\\.");
-    From<?, ?> currentFrom = root;
-    ManagedType<?> currentType = root.getModel();
+    From<?, ?> currentFrom = from;
+    ManagedType<?> currentType = fromType;
     StringBuilder associationPath = new StringBuilder();
 
     for (String segment : segments) {
@@ -82,6 +100,16 @@ public class PathResolver {
       currentFrom = (From<?, ?>) fetch;
       currentType = managedType(attribute);
     }
+  }
+
+  ManagedType<?> resolveAssociationTarget(ManagedType<?> fromType, String associationPath) {
+    String[] segments = associationPath.split("\\.");
+    ManagedType<?> currentType = fromType;
+    for (String segment : segments) {
+      Attribute<?, ?> attribute = currentType.getAttribute(segment);
+      currentType = managedType(attribute);
+    }
+    return currentType;
   }
 
   private boolean isAssociation(Attribute<?, ?> attribute) {

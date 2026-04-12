@@ -77,4 +77,109 @@ class ConditionGroupBuilderTest {
 
     assertThat(group.conditions()).isUnmodifiable();
   }
+
+  @Test
+  void existsAssociationShouldAddSubqueryCondition() {
+    GroupCondition group =
+        new ConditionGroupBuilder<Object>(LogicalOperator.AND)
+            .exists("orders", sub -> sub.where("total", Operators.GREATER_THAN, 10))
+            .build();
+
+    SubqueryCondition sc = (SubqueryCondition) group.conditions().get(0);
+    assertThat(sc.kind()).isEqualTo(SubqueryKind.EXISTS);
+    assertThat(sc.correlationMode()).isEqualTo(CorrelationMode.ASSOCIATION);
+    assertThat(sc.associationPath()).isEqualTo("orders");
+    assertThat(sc.subEntity()).isNull();
+    assertThat(sc.subCondition().conditions()).hasSize(1);
+  }
+
+  @Test
+  void notExistsAssociationShouldAddSubqueryCondition() {
+    GroupCondition group =
+        new ConditionGroupBuilder<Object>(LogicalOperator.AND)
+            .notExists("orders", sub -> sub.where("status", Operators.EQUALS, "CANCELLED"))
+            .build();
+
+    SubqueryCondition sc = (SubqueryCondition) group.conditions().get(0);
+    assertThat(sc.kind()).isEqualTo(SubqueryKind.NOT_EXISTS);
+    assertThat(sc.correlationMode()).isEqualTo(CorrelationMode.ASSOCIATION);
+  }
+
+  @Test
+  void existsEntityShouldAddSubqueryConditionWithCorrelations() {
+    GroupCondition group =
+        new ConditionGroupBuilder<Object>(LogicalOperator.AND)
+            .exists(
+                String.class,
+                sub -> sub.correlate("id", "customer.id").where("status", Operators.EQUALS, "PAID"))
+            .build();
+
+    SubqueryCondition sc = (SubqueryCondition) group.conditions().get(0);
+    assertThat(sc.kind()).isEqualTo(SubqueryKind.EXISTS);
+    assertThat(sc.correlationMode()).isEqualTo(CorrelationMode.ENTITY);
+    assertThat(sc.subEntity()).isEqualTo(String.class);
+    assertThat(sc.correlations())
+        .singleElement()
+        .satisfies(
+            pair -> {
+              assertThat(pair.outerField()).isEqualTo("id");
+              assertThat(pair.innerField()).isEqualTo("customer.id");
+            });
+  }
+
+  @Test
+  void notExistsEntityShouldAddSubqueryCondition() {
+    GroupCondition group =
+        new ConditionGroupBuilder<Object>(LogicalOperator.AND)
+            .notExists(String.class, sub -> sub.where("status", Operators.EQUALS, "X"))
+            .build();
+
+    SubqueryCondition sc = (SubqueryCondition) group.conditions().get(0);
+    assertThat(sc.kind()).isEqualTo(SubqueryKind.NOT_EXISTS);
+    assertThat(sc.correlationMode()).isEqualTo(CorrelationMode.ENTITY);
+    assertThat(sc.correlations()).isEmpty();
+  }
+
+  @Test
+  void inSubqueryShouldAddSubqueryCondition() {
+    GroupCondition group =
+        new ConditionGroupBuilder<Object>(LogicalOperator.AND)
+            .inSubquery(
+                "id", String.class, "customer.id", sub -> sub.where("vip", Operators.EQUALS, true))
+            .build();
+
+    SubqueryCondition sc = (SubqueryCondition) group.conditions().get(0);
+    assertThat(sc.kind()).isEqualTo(SubqueryKind.IN);
+    assertThat(sc.outerField()).isEqualTo("id");
+    assertThat(sc.subSelectField()).isEqualTo("customer.id");
+  }
+
+  @Test
+  void notInSubqueryShouldAddSubqueryCondition() {
+    GroupCondition group =
+        new ConditionGroupBuilder<Object>(LogicalOperator.AND)
+            .notInSubquery(
+                "id", String.class, "customer.id", sub -> sub.where("vip", Operators.EQUALS, true))
+            .build();
+
+    SubqueryCondition sc = (SubqueryCondition) group.conditions().get(0);
+    assertThat(sc.kind()).isEqualTo(SubqueryKind.NOT_IN);
+  }
+
+  @Test
+  void subqueryBuilderShouldSupportAllCompositionMethods() {
+    GroupCondition group =
+        new ConditionGroupBuilder<Object>(LogicalOperator.AND)
+            .exists(
+                "orders",
+                sub ->
+                    sub.where("total", Operators.GREATER_THAN, 10)
+                        .where("status", Operators.EQUALS, "PAID", true, true)
+                        .and(inner -> inner.where("vip", Operators.EQUALS, true))
+                        .or(inner -> inner.where("vip", Operators.EQUALS, false)))
+            .build();
+
+    SubqueryCondition sc = (SubqueryCondition) group.conditions().get(0);
+    assertThat(sc.subCondition().conditions()).hasSize(4);
+  }
 }

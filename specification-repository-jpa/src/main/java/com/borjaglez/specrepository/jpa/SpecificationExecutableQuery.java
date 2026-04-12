@@ -13,6 +13,7 @@ import com.borjaglez.specrepository.core.ConditionGroupBuilder;
 import com.borjaglez.specrepository.core.FilterOperator;
 import com.borjaglez.specrepository.core.QueryPlan;
 import com.borjaglez.specrepository.core.QueryPlanBuilder;
+import com.borjaglez.specrepository.core.SubqueryBuilder;
 
 public class SpecificationExecutableQuery<T> extends QueryPlanBuilder<T> {
   private final SpecificationRepository<T, ?> repository;
@@ -50,6 +51,54 @@ public class SpecificationExecutableQuery<T> extends QueryPlanBuilder<T> {
   @Override
   public SpecificationExecutableQuery<T> or(Consumer<ConditionGroupBuilder<T>> nested) {
     super.or(nested);
+    return this;
+  }
+
+  @Override
+  public <S> SpecificationExecutableQuery<T> exists(
+      String associationPath, Consumer<SubqueryBuilder<S>> body) {
+    super.exists(associationPath, body);
+    return this;
+  }
+
+  @Override
+  public <S> SpecificationExecutableQuery<T> notExists(
+      String associationPath, Consumer<SubqueryBuilder<S>> body) {
+    super.notExists(associationPath, body);
+    return this;
+  }
+
+  @Override
+  public <S> SpecificationExecutableQuery<T> exists(
+      Class<S> subEntity, Consumer<SubqueryBuilder<S>> body) {
+    super.exists(subEntity, body);
+    return this;
+  }
+
+  @Override
+  public <S> SpecificationExecutableQuery<T> notExists(
+      Class<S> subEntity, Consumer<SubqueryBuilder<S>> body) {
+    super.notExists(subEntity, body);
+    return this;
+  }
+
+  @Override
+  public <S> SpecificationExecutableQuery<T> inSubquery(
+      String outerField,
+      Class<S> subEntity,
+      String subSelectField,
+      Consumer<SubqueryBuilder<S>> body) {
+    super.inSubquery(outerField, subEntity, subSelectField, body);
+    return this;
+  }
+
+  @Override
+  public <S> SpecificationExecutableQuery<T> notInSubquery(
+      String outerField,
+      Class<S> subEntity,
+      String subSelectField,
+      Consumer<SubqueryBuilder<S>> body) {
+    super.notInSubquery(outerField, subEntity, subSelectField, body);
     return this;
   }
 

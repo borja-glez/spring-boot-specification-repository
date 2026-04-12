@@ -15,9 +15,13 @@ import java.util.Set;
 
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.CriteriaQuery;
+import jakarta.persistence.criteria.Expression;
+import jakarta.persistence.criteria.Join;
 import jakarta.persistence.criteria.Path;
 import jakarta.persistence.criteria.Predicate;
 import jakarta.persistence.criteria.Root;
+import jakarta.persistence.criteria.Subquery;
+import jakarta.persistence.metamodel.EntityType;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -25,6 +29,8 @@ import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 
 import com.borjaglez.specrepository.core.AllowedFieldsPolicy;
+import com.borjaglez.specrepository.core.CorrelationMode;
+import com.borjaglez.specrepository.core.CorrelationPair;
 import com.borjaglez.specrepository.core.DisallowedFieldException;
 import com.borjaglez.specrepository.core.FetchInstruction;
 import com.borjaglez.specrepository.core.GroupCondition;
@@ -35,6 +41,8 @@ import com.borjaglez.specrepository.core.Operators;
 import com.borjaglez.specrepository.core.PredicateCondition;
 import com.borjaglez.specrepository.core.QueryCondition;
 import com.borjaglez.specrepository.core.QueryPlan;
+import com.borjaglez.specrepository.core.SubqueryCondition;
+import com.borjaglez.specrepository.core.SubqueryKind;
 import com.borjaglez.specrepository.jpa.spi.OperatorContext;
 import com.borjaglez.specrepository.jpa.spi.OperatorHandler;
 
@@ -516,6 +524,391 @@ class QueryPlanSpecificationFactoryTest {
     assertThatExceptionOfType(DisallowedFieldException.class)
         .isThrownBy(() -> factory.create(plan))
         .withMessage("Field 'secret' is not allowed for filtering");
+  }
+
+  @Test
+  void shouldPassValidationWhenSubqueryOuterFieldIsAllowed() {
+    AllowedFieldsPolicy policy = AllowedFieldsPolicy.of(Set.of("id", "name"), Set.of("name"));
+    SubqueryCondition existsCond =
+        new SubqueryCondition(
+            SubqueryKind.EXISTS,
+            CorrelationMode.ENTITY,
+            null,
+            Object.class,
+            List.of(new CorrelationPair("id", "ref")),
+            null,
+            null,
+            new GroupCondition(LogicalOperator.AND, List.of()));
+    SubqueryCondition inCond =
+        new SubqueryCondition(
+            SubqueryKind.IN,
+            CorrelationMode.ENTITY,
+            null,
+            Object.class,
+            List.of(),
+            "id",
+            "ref",
+            new GroupCondition(LogicalOperator.AND, List.of()));
+    SubqueryCondition notInCond =
+        new SubqueryCondition(
+            SubqueryKind.NOT_IN,
+            CorrelationMode.ENTITY,
+            null,
+            Object.class,
+            List.of(),
+            "id",
+            "ref",
+            new GroupCondition(LogicalOperator.AND, List.of()));
+    SubqueryCondition notExistsCond =
+        new SubqueryCondition(
+            SubqueryKind.NOT_EXISTS,
+            CorrelationMode.ENTITY,
+            null,
+            Object.class,
+            List.of(new CorrelationPair("id", "ref")),
+            null,
+            null,
+            new GroupCondition(LogicalOperator.AND, List.of()));
+    GroupCondition rootCondition =
+        new GroupCondition(
+            LogicalOperator.AND,
+            List.of(
+                (QueryCondition) existsCond,
+                (QueryCondition) notExistsCond,
+                (QueryCondition) inCond,
+                (QueryCondition) notInCond));
+    QueryPlan<Object> plan = plan(rootCondition, Sort.unsorted(), policy);
+
+    factory.create(plan);
+  }
+
+  @Test
+  void shouldRejectDisallowedOuterFieldInSubqueryCorrelation() {
+    AllowedFieldsPolicy policy = AllowedFieldsPolicy.of(Set.of("name"), Set.of("name"));
+    SubqueryCondition subquery =
+        new SubqueryCondition(
+            SubqueryKind.EXISTS,
+            CorrelationMode.ENTITY,
+            null,
+            Object.class,
+            List.of(new CorrelationPair("secretId", "ref")),
+            null,
+            null,
+            new GroupCondition(LogicalOperator.AND, List.of()));
+    GroupCondition rootCondition =
+        new GroupCondition(LogicalOperator.AND, List.of((QueryCondition) subquery));
+    QueryPlan<Object> plan = plan(rootCondition, Sort.unsorted(), policy);
+
+    assertThatExceptionOfType(DisallowedFieldException.class)
+        .isThrownBy(() -> factory.create(plan))
+        .withMessage("Field 'secretId' is not allowed for filtering");
+  }
+
+  @Test
+  void shouldRejectDisallowedOuterFieldInInSubquery() {
+    AllowedFieldsPolicy policy = AllowedFieldsPolicy.of(Set.of("name"), Set.of("name"));
+    SubqueryCondition subquery =
+        new SubqueryCondition(
+            SubqueryKind.IN,
+            CorrelationMode.ENTITY,
+            null,
+            Object.class,
+            List.of(),
+            "secretId",
+            "ref",
+            new GroupCondition(LogicalOperator.AND, List.of()));
+    GroupCondition rootCondition =
+        new GroupCondition(LogicalOperator.AND, List.of((QueryCondition) subquery));
+    QueryPlan<Object> plan = plan(rootCondition, Sort.unsorted(), policy);
+
+    assertThatExceptionOfType(DisallowedFieldException.class)
+        .isThrownBy(() -> factory.create(plan))
+        .withMessage("Field 'secretId' is not allowed for filtering");
+  }
+
+  @Test
+  @SuppressWarnings("rawtypes")
+  void shouldTranslateExistsAssociationSubquery() {
+    Subquery<Integer> subqueryMock = mock(Subquery.class);
+    when(query.subquery(Integer.class)).thenReturn(subqueryMock);
+    EntityType<Object> entityType = mock(EntityType.class);
+    doReturn(entityType).when(root).getModel();
+    Root<Object> correlatedRoot = mock(Root.class);
+    doReturn(correlatedRoot).when(subqueryMock).correlate(any(Root.class));
+    Join innerJoin = mock(Join.class);
+    doReturn(innerJoin).when(correlatedRoot).join(eq("orders"), any());
+    doReturn(entityType).when(pathResolver).resolveAssociationTarget(any(), eq("orders"));
+    Expression literal = mock(Expression.class);
+    when(cb.literal(1)).thenReturn(literal);
+    Predicate existsPredicate = mock(Predicate.class);
+    when(cb.exists(subqueryMock)).thenReturn(existsPredicate);
+    when(cb.and(any(Predicate[].class))).thenReturn(existsPredicate);
+
+    SubqueryCondition subquery =
+        new SubqueryCondition(
+            SubqueryKind.EXISTS,
+            CorrelationMode.ASSOCIATION,
+            "orders",
+            null,
+            List.of(),
+            null,
+            null,
+            new GroupCondition(LogicalOperator.AND, List.of()));
+    GroupCondition rootCondition =
+        new GroupCondition(LogicalOperator.AND, List.of((QueryCondition) subquery));
+    QueryPlan<Object> plan = plan(rootCondition);
+
+    Specification<Object> spec = factory.create(plan);
+    Predicate result = spec.toPredicate(root, query, cb);
+
+    assertThat(result).isSameAs(existsPredicate);
+    verify(cb).exists(subqueryMock);
+  }
+
+  @Test
+  @SuppressWarnings("rawtypes")
+  void shouldTranslateNotExistsAssociationSubquery() {
+    Subquery<Integer> outerSub = mock(Subquery.class);
+    when(query.subquery(Integer.class)).thenReturn(outerSub);
+    EntityType<Object> entityType = mock(EntityType.class);
+    doReturn(entityType).when(root).getModel();
+    Root<Object> correlated = mock(Root.class);
+    doReturn(correlated).when(outerSub).correlate(any(Root.class));
+    Join ordersJoin = mock(Join.class);
+    doReturn(ordersJoin).when(correlated).join(eq("orders"), any());
+    doReturn(entityType).when(pathResolver).resolveAssociationTarget(any(), eq("orders"));
+    Expression literal = mock(Expression.class);
+    when(cb.literal(1)).thenReturn(literal);
+    Predicate existsPredicate = mock(Predicate.class);
+    when(cb.exists(outerSub)).thenReturn(existsPredicate);
+    Predicate notExistsPredicate = mock(Predicate.class);
+    when(cb.not(existsPredicate)).thenReturn(notExistsPredicate);
+    when(cb.and(any(Predicate[].class))).thenReturn(notExistsPredicate);
+
+    SubqueryCondition subquery =
+        new SubqueryCondition(
+            SubqueryKind.NOT_EXISTS,
+            CorrelationMode.ASSOCIATION,
+            "orders",
+            null,
+            List.of(),
+            null,
+            null,
+            new GroupCondition(LogicalOperator.AND, List.of()));
+    GroupCondition rootCondition =
+        new GroupCondition(LogicalOperator.AND, List.of((QueryCondition) subquery));
+    QueryPlan<Object> plan = plan(rootCondition);
+
+    Specification<Object> spec = factory.create(plan);
+    Predicate result = spec.toPredicate(root, query, cb);
+
+    assertThat(result).isSameAs(notExistsPredicate);
+    verify(cb).not(existsPredicate);
+  }
+
+  @Test
+  @SuppressWarnings("rawtypes")
+  void shouldTranslateEntitySubqueryWithCorrelationAndBody() {
+    Subquery<Integer> subqueryMock = mock(Subquery.class);
+    when(query.subquery(Integer.class)).thenReturn(subqueryMock);
+    Root<Object> subRoot = mock(Root.class);
+    doReturn(subRoot).when(subqueryMock).from(Object.class);
+    EntityType<Object> subEntityType = mock(EntityType.class);
+    doReturn(subEntityType).when(subRoot).getModel();
+
+    Path<?> outerIdPath = mock(Path.class);
+    doReturn(outerIdPath).when(pathResolver).resolve(eq(root), any(), eq("id"), eq(JoinMode.LEFT));
+    Path<?> innerPath = mock(Path.class);
+    doReturn(innerPath)
+        .when(pathResolver)
+        .resolve(eq(subRoot), any(), eq("customer.id"), eq(JoinMode.LEFT));
+    Path<?> subBodyPath = mock(Path.class);
+    doReturn(String.class).when(subBodyPath).getJavaType();
+    doReturn(subBodyPath)
+        .when(pathResolver)
+        .resolve(eq(subRoot), any(), eq("status"), eq(JoinMode.LEFT));
+    when(valueConversionService.convert("PAID", String.class, Operators.EQUALS)).thenReturn("PAID");
+
+    Predicate eqPair = mock(Predicate.class);
+    when(cb.equal(innerPath, outerIdPath)).thenReturn(eqPair);
+    Predicate innerEqPredicate = mock(Predicate.class);
+    OperatorHandler eqHandler = mock(OperatorHandler.class);
+    when(operatorRegistry.get(Operators.EQUALS)).thenReturn(eqHandler);
+    when(eqHandler.create(any(OperatorContext.class))).thenReturn(innerEqPredicate);
+    Predicate correlationPredicate = mock(Predicate.class);
+    Predicate bodyPredicate = mock(Predicate.class);
+    when(cb.and(new Predicate[] {eqPair})).thenReturn(correlationPredicate);
+    when(cb.and(new Predicate[] {innerEqPredicate})).thenReturn(bodyPredicate);
+    Expression literal = mock(Expression.class);
+    when(cb.literal(1)).thenReturn(literal);
+    Predicate existsPredicate = mock(Predicate.class);
+    when(cb.exists(subqueryMock)).thenReturn(existsPredicate);
+    Predicate outerCombined = mock(Predicate.class);
+    when(cb.and(new Predicate[] {existsPredicate})).thenReturn(outerCombined);
+
+    SubqueryCondition subquery =
+        new SubqueryCondition(
+            SubqueryKind.EXISTS,
+            CorrelationMode.ENTITY,
+            null,
+            Object.class,
+            List.of(new CorrelationPair("id", "customer.id")),
+            null,
+            null,
+            new GroupCondition(
+                LogicalOperator.AND,
+                List.of(new PredicateCondition("status", Operators.EQUALS, "PAID", false, false))));
+    GroupCondition rootCondition =
+        new GroupCondition(LogicalOperator.AND, List.of((QueryCondition) subquery));
+    QueryPlan<Object> plan = plan(rootCondition);
+
+    Specification<Object> spec = factory.create(plan);
+    Predicate result = spec.toPredicate(root, query, cb);
+
+    assertThat(result).isSameAs(outerCombined);
+    verify(subqueryMock).where(any(Predicate[].class));
+    verify(subqueryMock).select(literal);
+  }
+
+  @Test
+  @SuppressWarnings("rawtypes")
+  void shouldTranslateInSubqueryWithoutCorrelations() {
+    Subquery<Integer> subqueryMock = mock(Subquery.class);
+    when(query.subquery(Integer.class)).thenReturn(subqueryMock);
+    Root<Object> subRoot = mock(Root.class);
+    doReturn(subRoot).when(subqueryMock).from(Object.class);
+    EntityType<Object> subEntityType = mock(EntityType.class);
+    doReturn(subEntityType).when(subRoot).getModel();
+
+    Path<Object> innerSelect = mock(Path.class);
+    doReturn(innerSelect)
+        .when(pathResolver)
+        .resolve(eq(subRoot), any(), eq("ref"), eq(JoinMode.LEFT));
+    Path<Object> outerField = mock(Path.class);
+    doReturn(outerField).when(pathResolver).resolve(eq(root), any(), eq("id"), eq(JoinMode.LEFT));
+    Predicate inPredicate = mock(Predicate.class);
+    doReturn(inPredicate).when(outerField).in((Expression<?>) any());
+    Predicate outerCombined = mock(Predicate.class);
+    when(cb.and(any(Predicate[].class))).thenReturn(outerCombined);
+
+    SubqueryCondition subquery =
+        new SubqueryCondition(
+            SubqueryKind.IN,
+            CorrelationMode.ENTITY,
+            null,
+            Object.class,
+            List.of(),
+            "id",
+            "ref",
+            new GroupCondition(LogicalOperator.AND, List.of()));
+    GroupCondition rootCondition =
+        new GroupCondition(LogicalOperator.AND, List.of((QueryCondition) subquery));
+    QueryPlan<Object> plan = plan(rootCondition);
+
+    Specification<Object> spec = factory.create(plan);
+    Predicate result = spec.toPredicate(root, query, cb);
+
+    assertThat(result).isSameAs(outerCombined);
+    verify(subqueryMock).select(any(Expression.class));
+  }
+
+  @Test
+  @SuppressWarnings("rawtypes")
+  void shouldTranslateNotInSubquery() {
+    Subquery<Integer> subqueryMock = mock(Subquery.class);
+    when(query.subquery(Integer.class)).thenReturn(subqueryMock);
+    Root<Object> subRoot = mock(Root.class);
+    doReturn(subRoot).when(subqueryMock).from(Object.class);
+    EntityType<Object> subEntityType = mock(EntityType.class);
+    doReturn(subEntityType).when(subRoot).getModel();
+
+    Path<Object> innerSelect = mock(Path.class);
+    doReturn(innerSelect)
+        .when(pathResolver)
+        .resolve(eq(subRoot), any(), eq("ref"), eq(JoinMode.LEFT));
+    Path<Object> outerField = mock(Path.class);
+    doReturn(outerField).when(pathResolver).resolve(eq(root), any(), eq("id"), eq(JoinMode.LEFT));
+    Predicate inPredicate = mock(Predicate.class);
+    doReturn(inPredicate).when(outerField).in((Expression<?>) any());
+    Predicate notInPredicate = mock(Predicate.class);
+    when(cb.not(inPredicate)).thenReturn(notInPredicate);
+    Predicate outerCombined = mock(Predicate.class);
+    when(cb.and(any(Predicate[].class))).thenReturn(outerCombined);
+
+    SubqueryCondition subquery =
+        new SubqueryCondition(
+            SubqueryKind.NOT_IN,
+            CorrelationMode.ENTITY,
+            null,
+            Object.class,
+            List.of(),
+            "id",
+            "ref",
+            new GroupCondition(LogicalOperator.AND, List.of()));
+    GroupCondition rootCondition =
+        new GroupCondition(LogicalOperator.AND, List.of((QueryCondition) subquery));
+    QueryPlan<Object> plan = plan(rootCondition);
+
+    Specification<Object> spec = factory.create(plan);
+    Predicate result = spec.toPredicate(root, query, cb);
+
+    assertThat(result).isSameAs(outerCombined);
+    verify(cb).not(inPredicate);
+  }
+
+  @Test
+  @SuppressWarnings("rawtypes")
+  void shouldCorrelateJoinWhenNestedSubqueryOuterIsJoin() {
+    Subquery<Integer> outerSub = mock(Subquery.class);
+    Subquery<Integer> innerSub = mock(Subquery.class);
+    when(query.subquery(Integer.class)).thenReturn(outerSub, innerSub);
+    EntityType<Object> entityType = mock(EntityType.class);
+    doReturn(entityType).when(root).getModel();
+    Root<Object> outerCorrelated = mock(Root.class);
+    doReturn(outerCorrelated).when(outerSub).correlate(any(Root.class));
+    Join<?, ?> outerAssocJoin = mock(Join.class);
+    doReturn(outerAssocJoin).when(outerCorrelated).join(eq("orders"), any());
+    doReturn(entityType).when(pathResolver).resolveAssociationTarget(any(), eq("orders"));
+    Join<?, ?> innerCorrelated = mock(Join.class);
+    doReturn(innerCorrelated).when(innerSub).correlate(any(Join.class));
+    doReturn(mock(Join.class)).when(innerCorrelated).join(eq("items"), any());
+    doReturn(entityType).when(pathResolver).resolveAssociationTarget(any(), eq("items"));
+    Expression literal = mock(Expression.class);
+    when(cb.literal(1)).thenReturn(literal);
+    Predicate existsInner = mock(Predicate.class);
+    when(cb.exists(innerSub)).thenReturn(existsInner);
+    when(cb.and(any(Predicate[].class))).thenReturn(existsInner);
+    Predicate existsOuter = mock(Predicate.class);
+    when(cb.exists(outerSub)).thenReturn(existsOuter);
+
+    SubqueryCondition innerCond =
+        new SubqueryCondition(
+            SubqueryKind.EXISTS,
+            CorrelationMode.ASSOCIATION,
+            "items",
+            null,
+            List.of(),
+            null,
+            null,
+            new GroupCondition(LogicalOperator.AND, List.of()));
+    SubqueryCondition outerCond =
+        new SubqueryCondition(
+            SubqueryKind.EXISTS,
+            CorrelationMode.ASSOCIATION,
+            "orders",
+            null,
+            List.of(),
+            null,
+            null,
+            new GroupCondition(LogicalOperator.AND, List.of((QueryCondition) innerCond)));
+    GroupCondition rootCondition =
+        new GroupCondition(LogicalOperator.AND, List.of((QueryCondition) outerCond));
+    QueryPlan<Object> plan = plan(rootCondition);
+
+    Specification<Object> spec = factory.create(plan);
+    spec.toPredicate(root, query, cb);
+
+    verify(innerSub).correlate(any(Join.class));
   }
 
   @Test
