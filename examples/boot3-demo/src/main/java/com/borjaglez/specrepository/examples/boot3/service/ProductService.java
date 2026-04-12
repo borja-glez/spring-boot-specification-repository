@@ -11,6 +11,8 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.borjaglez.specrepository.core.AggregateFunction;
+import com.borjaglez.specrepository.core.GroupedRow;
 import com.borjaglez.specrepository.core.Operators;
 import com.borjaglez.specrepository.core.QueryPlan;
 import com.borjaglez.specrepository.examples.boot3.entity.Product;
@@ -218,6 +220,24 @@ public class ProductService {
   /** Grouped count: number of distinct categories with products. */
   public long countGroupedByCategory() {
     return productRepository.query().groupBy("category.name").count();
+  }
+
+  /**
+   * Reporting demo: aggregate per status with HAVING and structured GroupedRow output. Returns
+   * statuses whose total price exceeds the supplied threshold, along with their order count and
+   * aggregated revenue, ordered by status.
+   */
+  public List<GroupedRow> findStatusRevenueAbove(BigDecimal threshold) {
+    return productRepository
+        .query()
+        .where("status", Operators.IS_NOT_NULL, null)
+        .groupBy("status")
+        .sort(Sort.by("status"))
+        .select("status")
+        .sumAs("revenue", "price")
+        .countAs("items", "id")
+        .having(AggregateFunction.SUM, "price", Operators.GREATER_THAN, threshold)
+        .findAllGrouped();
   }
 
   /** Execute a pre-built QueryPlan from HTTP filter parsing. */

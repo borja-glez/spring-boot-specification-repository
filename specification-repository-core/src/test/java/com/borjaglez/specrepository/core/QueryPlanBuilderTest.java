@@ -285,6 +285,99 @@ class QueryPlanBuilderTest {
             SubqueryKind.NOT_IN);
   }
 
+  @Test
+  void shouldBuildAggregateWithAlias() {
+    QueryPlan<String> plan =
+        new QueryPlanBuilder<>(String.class)
+            .groupBy("status")
+            .sumAs("total", "amount")
+            .avgAs("avgScore", "score")
+            .minAs("minDate", "createdAt")
+            .maxAs("maxDate", "updatedAt")
+            .countAs("items", "id")
+            .aggregate(AggregateFunction.SUM, "extra", "extraTotal")
+            .build();
+
+    assertThat(plan.selections())
+        .containsExactly(
+            new AggregateSelection(AggregateFunction.SUM, "amount", "total"),
+            new AggregateSelection(AggregateFunction.AVG, "score", "avgScore"),
+            new AggregateSelection(AggregateFunction.MIN, "createdAt", "minDate"),
+            new AggregateSelection(AggregateFunction.MAX, "updatedAt", "maxDate"),
+            new AggregateSelection(AggregateFunction.COUNT, "id", "items"),
+            new AggregateSelection(AggregateFunction.SUM, "extra", "extraTotal"));
+  }
+
+  @Test
+  void shouldStoreHavingConditionsInBuildOrder() {
+    QueryPlan<String> plan =
+        new QueryPlanBuilder<>(String.class)
+            .groupBy("status")
+            .sum("amount")
+            .having(AggregateFunction.SUM, "amount", Operators.GREATER_THAN, 100)
+            .having(AggregateFunction.COUNT, "id", Operators.LESS_THAN, 10)
+            .build();
+
+    assertThat(plan.having())
+        .containsExactly(
+            new HavingCondition(AggregateFunction.SUM, "amount", Operators.GREATER_THAN, 100),
+            new HavingCondition(AggregateFunction.COUNT, "id", Operators.LESS_THAN, 10));
+  }
+
+  @Test
+  void shouldRejectHavingWithoutGroupBy() {
+    assertThatIllegalStateException()
+        .isThrownBy(
+            () ->
+                new QueryPlanBuilder<>(String.class)
+                    .sum("amount")
+                    .having(AggregateFunction.SUM, "amount", Operators.GREATER_THAN, 1)
+                    .build())
+        .withMessage("having requires at least one groupBy field");
+  }
+
+  @Test
+  void queryPlanLegacyConstructorWithPolicyShouldDefaultHavingToEmpty() {
+    AllowedFieldsPolicy policy =
+        AllowedFieldsPolicy.of(java.util.Set.of("name"), java.util.Set.of("name"));
+    QueryPlan<String> plan =
+        new QueryPlan<>(
+            String.class,
+            new GroupCondition(LogicalOperator.AND, java.util.List.of()),
+            java.util.List.of(),
+            java.util.List.of(),
+            java.util.List.of(),
+            java.util.List.of(),
+            null,
+            java.util.List.of(),
+            Sort.unsorted(),
+            false,
+            policy);
+    assertThat(plan.having()).isEmpty();
+    assertThat(plan.allowedFieldsPolicy()).isSameAs(policy);
+  }
+
+  @Test
+  void queryPlanShouldRejectNullHaving() {
+    assertThatNullPointerException()
+        .isThrownBy(
+            () ->
+                new QueryPlan<>(
+                    String.class,
+                    new GroupCondition(LogicalOperator.AND, java.util.List.of()),
+                    java.util.List.of(),
+                    java.util.List.of(),
+                    java.util.List.of(),
+                    java.util.List.of(),
+                    null,
+                    java.util.List.of(),
+                    null,
+                    Sort.unsorted(),
+                    false,
+                    AllowedFieldsPolicy.allowAll()))
+        .withMessage("having must not be null");
+  }
+
   private record NameEmailProjection(String name, String email) {}
 
   private record CountProjection(Long count) {}

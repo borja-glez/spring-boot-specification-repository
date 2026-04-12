@@ -11,7 +11,7 @@ Extensible Spring Data JPA query library with a fluent DSL and native-friendly a
 
 - Fluent query DSL for chained `where`, `and`, `or`, `join`, and `fetch` operations
 - Correlated subqueries: `exists` / `notExists` (association or entity-based) and `inSubquery` / `notInSubquery`
-- Aggregate projections with `sum`, `avg`, `min`, `max`, and `count(field)`
+- Aggregate projections with `sum`, `avg`, `min`, `max`, and `count(field)`, plus aliasing, `having(...)` and structured `GroupedRow` results (see [docs/reporting.md](docs/reporting.md))
 - Pure builder model -- the builder only creates an immutable query plan
 - `SpecificationRepository` as a repository base abstraction for execution
 - Per-query field whitelisting for secure API exposure (`AllowedFieldsPolicy`)
@@ -176,6 +176,10 @@ Notes:
 - grouped aggregate queries return one row per group
 - `count(field)` counts non-null values for the selected field
 - `sum(...)` and `avg(...)` require numeric fields
+- aggregates can be aliased (`sumAs("revenue", "amount")`) and filtered with `having(...)`
+- `findAllGrouped()` returns a list of `GroupedRow`, supporting lookup by alias or column name
+
+See [docs/reporting.md](docs/reporting.md) for the full reporting and analytical query reference.
 
 ## Usage Examples
 

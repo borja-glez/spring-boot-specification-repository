@@ -17,6 +17,7 @@ public class QueryPlanBuilder<T> {
   private final List<String> projections = new ArrayList<>();
   private final List<Selection> selections = new ArrayList<>();
   private final List<String> groupBy = new ArrayList<>();
+  private final List<HavingCondition> having = new ArrayList<>();
   private Sort sort = Sort.unsorted();
   private Class<?> projectionType;
   private boolean distinct;
@@ -125,32 +126,58 @@ public class QueryPlanBuilder<T> {
   }
 
   public QueryPlanBuilder<T> sum(String field) {
-    selections.add(new AggregateSelection(AggregateFunction.SUM, field));
-    return this;
+    return aggregate(AggregateFunction.SUM, field, null);
+  }
+
+  public QueryPlanBuilder<T> sumAs(String alias, String field) {
+    return aggregate(AggregateFunction.SUM, field, alias);
   }
 
   public QueryPlanBuilder<T> avg(String field) {
-    selections.add(new AggregateSelection(AggregateFunction.AVG, field));
-    return this;
+    return aggregate(AggregateFunction.AVG, field, null);
+  }
+
+  public QueryPlanBuilder<T> avgAs(String alias, String field) {
+    return aggregate(AggregateFunction.AVG, field, alias);
   }
 
   public QueryPlanBuilder<T> min(String field) {
-    selections.add(new AggregateSelection(AggregateFunction.MIN, field));
-    return this;
+    return aggregate(AggregateFunction.MIN, field, null);
+  }
+
+  public QueryPlanBuilder<T> minAs(String alias, String field) {
+    return aggregate(AggregateFunction.MIN, field, alias);
   }
 
   public QueryPlanBuilder<T> max(String field) {
-    selections.add(new AggregateSelection(AggregateFunction.MAX, field));
-    return this;
+    return aggregate(AggregateFunction.MAX, field, null);
+  }
+
+  public QueryPlanBuilder<T> maxAs(String alias, String field) {
+    return aggregate(AggregateFunction.MAX, field, alias);
   }
 
   public QueryPlanBuilder<T> count(String field) {
-    selections.add(new AggregateSelection(AggregateFunction.COUNT, field));
+    return aggregate(AggregateFunction.COUNT, field, null);
+  }
+
+  public QueryPlanBuilder<T> countAs(String alias, String field) {
+    return aggregate(AggregateFunction.COUNT, field, alias);
+  }
+
+  public QueryPlanBuilder<T> aggregate(AggregateFunction function, String field, String alias) {
+    selections.add(new AggregateSelection(function, field, alias));
     return this;
   }
 
   public QueryPlanBuilder<T> groupBy(String... fields) {
     groupBy.addAll(Arrays.asList(fields));
+    return this;
+  }
+
+  public QueryPlanBuilder<T> having(
+      AggregateFunction function, String field, FilterOperator operator, Object value) {
+    having.add(new HavingCondition(function, field, operator, value));
     return this;
   }
 
@@ -170,6 +197,9 @@ public class QueryPlanBuilder<T> {
   }
 
   public QueryPlan<T> build() {
+    if (!having.isEmpty() && groupBy.isEmpty()) {
+      throw new IllegalStateException("having requires at least one groupBy field");
+    }
     return new QueryPlan<>(
         entityType,
         rootGroup.build(),
@@ -179,6 +209,7 @@ public class QueryPlanBuilder<T> {
         List.copyOf(selections),
         projectionType,
         List.copyOf(groupBy),
+        List.copyOf(having),
         sort,
         distinct,
         allowedFieldsPolicy);

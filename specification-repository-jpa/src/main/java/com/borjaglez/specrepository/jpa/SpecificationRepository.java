@@ -10,6 +10,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.repository.NoRepositoryBean;
 
+import com.borjaglez.specrepository.core.GroupedRow;
 import com.borjaglez.specrepository.core.QueryPlan;
 
 @NoRepositoryBean
@@ -46,4 +47,8 @@ public interface SpecificationRepository<T, ID>
   }
 
   long count(QueryPlan<T> plan);
+
+  default List<GroupedRow> findAllGrouped(QueryPlan<T> plan) {
+    throw new UnsupportedOperationException("Grouped queries are not supported by this repository");
+  }
 }

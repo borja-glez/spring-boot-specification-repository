@@ -21,8 +21,11 @@ import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import org.springframework.test.context.ContextConfiguration;
 
+import com.borjaglez.specrepository.core.AggregateFunction;
 import com.borjaglez.specrepository.core.AllowedFieldsPolicy;
 import com.borjaglez.specrepository.core.DisallowedFieldException;
+import com.borjaglez.specrepository.core.FilterOperator;
+import com.borjaglez.specrepository.core.GroupedRow;
 import com.borjaglez.specrepository.core.Operators;
 import com.borjaglez.specrepository.core.QueryPlan;
 import com.borjaglez.specrepository.jpa.SpecificationRepositoryImpl;
@@ -939,6 +942,298 @@ class SpecificationRepositoryIntegrationTest {
                     .findAll())
         .isInstanceOf(DisallowedFieldException.class)
         .hasMessage("Field 'status' is not allowed for sorting");
+  }
+
+  // -- HAVING / multiple aggregates / grouped rows --
+
+  @Test
+  void shouldFilterGroupedResultsWithHavingGreaterThan() {
+    List<?> results =
+        repository
+            .query()
+            .where("status", Operators.IS_NOT_NULL, null)
+            .groupBy("status")
+            .sort(Sort.by("status"))
+            .select("status")
+            .count("id")
+            .having(AggregateFunction.COUNT, "id", Operators.GREATER_THAN, 1L)
+            .findAll();
+
+    assertThat(results).hasSize(1);
+    assertThat((Object[]) results.get(0)).containsExactly("ACTIVE", 2L);
+  }
+
+  @Test
+  void shouldFilterWithMultipleHavingPredicatesAndedTogether() {
+    List<?> results =
+        repository
+            .query()
+            .where("status", Operators.IS_NOT_NULL, null)
+            .groupBy("status")
+            .sort(Sort.by("status"))
+            .select("status")
+            .sum("age")
+            .count("id")
+            .having(AggregateFunction.SUM, "age", Operators.GREATER_THAN_OR_EQUAL, 41)
+            .having(AggregateFunction.COUNT, "id", Operators.LESS_THAN_OR_EQUAL, 1L)
+            .findAll();
+
+    assertThat(results).hasSize(1);
+    assertThat((Object[]) results.get(0)).containsExactly("INACTIVE", 41, 1L);
+  }
+
+  @Test
+  void shouldSupportEveryHavingComparator() {
+    assertHavingMatch(Operators.EQUALS, 2L, "ACTIVE");
+    assertHavingMatch(Operators.NOT_EQUALS, 2L, "INACTIVE");
+    assertHavingMatch(Operators.LESS_THAN, 2L, "INACTIVE");
+    assertHavingMatch(Operators.LESS_THAN_OR_EQUAL, 1L, "INACTIVE");
+    assertHavingMatch(Operators.IS_NOT_NULL, null, "ACTIVE", "INACTIVE");
+  }
+
+  @Test
+  void shouldFilterWithBetweenHavingClause() {
+    List<?> results =
+        repository
+            .query()
+            .where("status", Operators.IS_NOT_NULL, null)
+            .groupBy("status")
+            .sort(Sort.by("status"))
+            .select("status")
+            .count("id")
+            .having(AggregateFunction.COUNT, "id", Operators.BETWEEN, java.util.List.of(1L, 1L))
+            .findAll();
+
+    assertThat(results).hasSize(1);
+    assertThat((Object[]) results.get(0)).containsExactly("INACTIVE", 1L);
+  }
+
+  @Test
+  void shouldFilterWithIsNullHavingForNullableSum() {
+    List<?> results =
+        repository
+            .query()
+            .groupBy("status")
+            .sort(Sort.by("status"))
+            .select("status")
+            .count("id")
+            .having(AggregateFunction.COUNT, "id", Operators.IS_NULL, null)
+            .findAll();
+
+    assertThat(results).isEmpty();
+  }
+
+  @Test
+  void shouldFilterWithBetweenHavingUsingNonListIterable() {
+    java.util.LinkedHashSet<Long> bounds = new java.util.LinkedHashSet<>();
+    bounds.add(1L);
+    bounds.add(2L);
+    Iterable<Long> iterable = () -> bounds.iterator();
+    List<?> results =
+        repository
+            .query()
+            .where("status", Operators.IS_NOT_NULL, null)
+            .groupBy("status")
+            .sort(Sort.by("status"))
+            .select("status")
+            .count("id")
+            .having(AggregateFunction.COUNT, "id", Operators.BETWEEN, iterable)
+            .findAll();
+
+    assertThat(results).hasSize(2);
+  }
+
+  @Test
+  void shouldRejectBetweenHavingWithWrongValueShape() {
+    assertThatThrownBy(
+            () ->
+                repository
+                    .query()
+                    .groupBy("status")
+                    .count("id")
+                    .having(AggregateFunction.COUNT, "id", Operators.BETWEEN, "not a list")
+                    .findAll())
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("BETWEEN having requires exactly 2 values");
+  }
+
+  @Test
+  void shouldRejectBetweenHavingWithWrongArity() {
+    assertThatThrownBy(
+            () ->
+                repository
+                    .query()
+                    .groupBy("status")
+                    .count("id")
+                    .having(
+                        AggregateFunction.COUNT,
+                        "id",
+                        Operators.BETWEEN,
+                        java.util.List.of(1L, 2L, 3L))
+                    .findAll())
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("BETWEEN having requires exactly 2 values");
+  }
+
+  @Test
+  void shouldRejectUnsupportedHavingOperator() {
+    assertThatThrownBy(
+            () ->
+                repository
+                    .query()
+                    .groupBy("status")
+                    .count("id")
+                    .having(AggregateFunction.COUNT, "id", Operators.CONTAINS, "x")
+                    .findAll())
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessage("Unsupported operator for having clause: contains");
+  }
+
+  @Test
+  void shouldRejectHavingWithCustomOperator() {
+    assertThatThrownBy(
+            () ->
+                repository
+                    .query()
+                    .groupBy("status")
+                    .count("id")
+                    .having(AggregateFunction.COUNT, "id", FilterOperator.of("foobar"), 1L)
+                    .findAll())
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessage("Unsupported operator for having clause: foobar");
+  }
+
+  @Test
+  void shouldAcceptAllowedHavingFieldUnderPolicy() {
+    AllowedFieldsPolicy policy = AllowedFieldsPolicy.of(Set.of("status", "id"), Set.of("status"));
+
+    List<?> results =
+        repository
+            .query()
+            .allowedFields(policy)
+            .where("status", Operators.IS_NOT_NULL, null)
+            .groupBy("status")
+            .sort(Sort.by("status"))
+            .select("status")
+            .count("id")
+            .having(AggregateFunction.COUNT, "id", Operators.GREATER_THAN_OR_EQUAL, 1L)
+            .findAll();
+
+    assertThat(results).hasSize(2);
+  }
+
+  @Test
+  void shouldValidateHavingFieldAgainstAllowedFieldsPolicy() {
+    AllowedFieldsPolicy policy = AllowedFieldsPolicy.of(Set.of("status"), Set.of("status"));
+
+    assertThatThrownBy(
+            () ->
+                repository
+                    .query()
+                    .allowedFields(policy)
+                    .groupBy("status")
+                    .count("id")
+                    .having(AggregateFunction.COUNT, "id", Operators.GREATER_THAN, 1L)
+                    .findAll())
+        .isInstanceOf(DisallowedFieldException.class)
+        .hasMessage("Field 'id' is not allowed for filtering");
+  }
+
+  @Test
+  void shouldSupportMultipleAggregatesInOneQuery() {
+    List<GroupedRow> rows =
+        repository
+            .query()
+            .where("status", Operators.IS_NOT_NULL, null)
+            .groupBy("status")
+            .sort(Sort.by("status"))
+            .select("status")
+            .sumAs("totalAge", "age")
+            .avgAs("averageAge", "age")
+            .countAs("customers", "id")
+            .minAs("youngest", "age")
+            .maxAs("oldest", "age")
+            .findAllGrouped();
+
+    assertThat(rows).hasSize(2);
+    GroupedRow active = rows.get(0);
+    assertThat(active.get("status")).isEqualTo("ACTIVE");
+    assertThat(active.get("totalAge")).isEqualTo(57);
+    assertThat(((Number) active.get("averageAge")).doubleValue()).isEqualTo(28.5d);
+    assertThat(active.get("customers")).isEqualTo(2L);
+    assertThat(active.get("youngest")).isEqualTo(25);
+    assertThat(active.get("oldest")).isEqualTo(32);
+  }
+
+  @Test
+  void shouldReturnSingleColumnGroupedRow() {
+    List<GroupedRow> rows =
+        repository
+            .query()
+            .where("status", Operators.IS_NOT_NULL, null)
+            .groupBy("status")
+            .sort(Sort.by("status"))
+            .countAs("customers", "id")
+            .findAllGrouped();
+
+    assertThat(rows).hasSize(2);
+    assertThat(rows.get(0).columns()).containsExactly("customers");
+    assertThat(rows.get(0).get("customers")).isEqualTo(2L);
+    assertThat(rows.get(1).get(0)).isEqualTo(1L);
+  }
+
+  @Test
+  void shouldFallbackToDerivedColumnNameWhenAliasMissing() {
+    List<GroupedRow> rows =
+        repository
+            .query()
+            .where("status", Operators.IS_NOT_NULL, null)
+            .groupBy("status")
+            .sort(Sort.by("status"))
+            .select("status")
+            .count("id")
+            .findAllGrouped();
+
+    assertThat(rows.get(0).columns()).containsExactly("status", "COUNT_id");
+    assertThat(rows.get(0).get("COUNT_id")).isEqualTo(2L);
+  }
+
+  @Test
+  void findAllGroupedShouldRequireSelections() {
+    assertThatThrownBy(() -> repository.query().findAllGrouped())
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("findAllGrouped requires");
+  }
+
+  @Test
+  void havingWithoutGroupByShouldFailFastInBuilder() {
+    assertThatThrownBy(
+            () ->
+                repository
+                    .query()
+                    .sum("age")
+                    .having(AggregateFunction.SUM, "age", Operators.GREATER_THAN, 1)
+                    .findAll())
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessage("having requires at least one groupBy field");
+  }
+
+  private void assertHavingMatch(
+      FilterOperator operator, Object value, String... expectedStatuses) {
+    List<?> rows =
+        repository
+            .query()
+            .where("status", Operators.IS_NOT_NULL, null)
+            .groupBy("status")
+            .sort(Sort.by("status"))
+            .select("status")
+            .count("id")
+            .having(AggregateFunction.COUNT, "id", operator, value)
+            .findAll();
+
+    assertThat(rows)
+        .extracting(row -> ((Object[]) row)[0])
+        .containsExactly((Object[]) expectedStatuses);
   }
 
   @Configuration(proxyBeanMethods = false)
