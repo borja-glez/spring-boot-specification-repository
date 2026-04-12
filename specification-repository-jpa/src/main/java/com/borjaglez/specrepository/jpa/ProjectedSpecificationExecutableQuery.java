@@ -5,6 +5,7 @@ import java.util.Optional;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Slice;
 
 import com.borjaglez.specrepository.core.ProjectedQueryPlanBuilder;
 import com.borjaglez.specrepository.core.QueryPlan;
@@ -24,6 +25,10 @@ public class ProjectedSpecificationExecutableQuery<T, P> extends ProjectedQueryP
 
   public Page<P> findAll(Pageable pageable) {
     return repository.findAllProjected(build(), pageable);
+  }
+
+  public Slice<P> findSlice(Pageable pageable) {
+    return repository.findSliceProjected(build(), pageable);
   }
 
   public Optional<P> findOne() {

@@ -6,6 +6,7 @@ import java.util.function.Consumer;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Slice;
 import org.springframework.data.domain.Sort;
 
 import com.borjaglez.specrepository.core.AllowedFieldsPolicy;
@@ -210,6 +211,10 @@ public class SpecificationExecutableQuery<T> extends QueryPlanBuilder<T> {
 
   public Page<T> findAll(Pageable pageable) {
     return repository.findAll(build(), pageable);
+  }
+
+  public Slice<T> findSlice(Pageable pageable) {
+    return repository.findSlice(build(), pageable);
   }
 
   public Optional<T> findOne() {

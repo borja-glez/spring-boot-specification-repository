@@ -5,6 +5,7 @@ import java.util.Optional;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Slice;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.repository.NoRepositoryBean;
@@ -26,6 +27,13 @@ public interface SpecificationRepository<T, ID>
   Page<T> findAll(QueryPlan<T> plan, Pageable pageable);
 
   default <P> Page<P> findAllProjected(QueryPlan<T> plan, Pageable pageable) {
+    throw new UnsupportedOperationException(
+        "Projected queries are not supported by this repository");
+  }
+
+  Slice<T> findSlice(QueryPlan<T> plan, Pageable pageable);
+
+  default <P> Slice<P> findSliceProjected(QueryPlan<T> plan, Pageable pageable) {
     throw new UnsupportedOperationException(
         "Projected queries are not supported by this repository");
   }
