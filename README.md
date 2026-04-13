@@ -1,6 +1,6 @@
 # spring-boot-specification-repository
 
-[![Maven Central](https://img.shields.io/maven-central/v/com.borjaglez/specification-repository-core)](https://central.sonatype.com/artifact/com.borjaglez/specification-repository-core)
+[![Maven Central](https://img.shields.io/maven-central/v/com.borjaglez.specrepository/specification-repository-core)](https://central.sonatype.com/artifact/com.borjaglez.specrepository/specification-repository-core)
 [![CI](https://github.com/borja-glez/spring-boot-specification-repository/actions/workflows/ci.yml/badge.svg)](https://github.com/borja-glez/spring-boot-specification-repository/actions/workflows/ci.yml)
 [![License](https://img.shields.io/github/license/borja-glez/spring-boot-specification-repository)](LICENSE)
 ![Java 21+](https://img.shields.io/badge/Java-21%2B-blue)
@@ -42,14 +42,14 @@ The `specification-repository-core` and `specification-repository-jpa` modules s
 **Gradle**
 
 ```kotlin
-implementation("com.borjaglez:specification-repository-boot3-starter:0.1.0")
+implementation("com.borjaglez.specrepository:specification-repository-boot3-starter:0.1.0")
 ```
 
 **Maven**
 
 ```xml
 <dependency>
-    <groupId>com.borjaglez</groupId>
+    <groupId>com.borjaglez.specrepository</groupId>
     <artifactId>specification-repository-boot3-starter</artifactId>
     <version>0.1.0</version>
 </dependency>
@@ -60,14 +60,14 @@ implementation("com.borjaglez:specification-repository-boot3-starter:0.1.0")
 **Gradle**
 
 ```kotlin
-implementation("com.borjaglez:specification-repository-boot4-starter:0.1.0")
+implementation("com.borjaglez.specrepository:specification-repository-boot4-starter:0.1.0")
 ```
 
 **Maven**
 
 ```xml
 <dependency>
-    <groupId>com.borjaglez</groupId>
+    <groupId>com.borjaglez.specrepository</groupId>
     <artifactId>specification-repository-boot4-starter</artifactId>
     <version>0.1.0</version>
 </dependency>
@@ -686,7 +686,7 @@ classpath. Works with both Spring Boot 3 and Spring Boot 4.
 **Gradle**
 
 ```kotlin
-implementation("com.borjaglez:specification-repository-http:0.1.0")
+implementation("com.borjaglez.specrepository:specification-repository-http:0.1.0")
 ```
 
 ### Query Parameter Contract
