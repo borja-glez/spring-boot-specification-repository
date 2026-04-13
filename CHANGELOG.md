@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **Breaking**: Maven Central group ID migrated from `com.borjaglez` to `com.borjaglez.specrepository`. Consumers must update their dependency coordinates — artifact IDs remain unchanged (#33).
+
 ### Added
 - DSL support for `EXISTS` / `NOT EXISTS` and `IN (subquery)` / `NOT IN (subquery)` with association-based or entity-based correlation (#23)
 

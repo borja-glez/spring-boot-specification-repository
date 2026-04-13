@@ -1,15 +1,16 @@
 # Publishing
 
-Artifacts are published under group ID `com.borjaglez` and configured for OSSRH / Maven Central publication.
+Artifacts are published under group ID `com.borjaglez.specrepository` and configured for OSSRH / Maven Central publication.
 
 ## Published Modules
 
 | Module | Artifact |
 |---|---|
-| `specification-repository-core` | `com.borjaglez:specification-repository-core` |
-| `specification-repository-jpa` | `com.borjaglez:specification-repository-jpa` |
-| `specification-repository-boot3-starter` | `com.borjaglez:specification-repository-boot3-starter` |
-| `specification-repository-boot4-starter` | `com.borjaglez:specification-repository-boot4-starter` |
+| `specification-repository-core` | `com.borjaglez.specrepository:specification-repository-core` |
+| `specification-repository-jpa` | `com.borjaglez.specrepository:specification-repository-jpa` |
+| `specification-repository-boot3-starter` | `com.borjaglez.specrepository:specification-repository-boot3-starter` |
+| `specification-repository-boot4-starter` | `com.borjaglez.specrepository:specification-repository-boot4-starter` |
+| `specification-repository-http` | `com.borjaglez.specrepository:specification-repository-http` |
 
 The `specification-repository-test-support` module and all `examples/*` modules are NOT published.
 
@@ -17,7 +18,7 @@ The `specification-repository-test-support` module and all `examples/*` modules 
 
 ### 1. Sonatype Central Portal Account
 
-Create an account at [central.sonatype.org](https://central.sonatype.org/) and verify ownership of the `com.borjaglez` namespace.
+Create an account at [central.sonatype.org](https://central.sonatype.org/) and verify ownership of the `com.borjaglez` namespace. The `com.borjaglez.specrepository` sub-namespace is inherited from the verified parent — no separate verification required.
 
 ### 2. Generate a GPG Signing Key
 
