@@ -4,15 +4,26 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [0.2.0] - 2026-05-14
 
-## [Unreleased]
-
-### Changed
-- **Breaking**: Maven Central group ID migrated from `com.borjaglez` to `com.borjaglez.specrepository`. Consumers must update their dependency coordinates — artifact IDs remain unchanged (#33).
+### Miscellaneous
+- Release workflow update readme update (7801094)
+## [0.2.0-rc.0] - 2026-04-13
 
 ### Added
-- DSL support for `EXISTS` / `NOT EXISTS` and `IN (subquery)` / `NOT IN (subquery)` with association-based or entity-based correlation (#23)
+- Add HAVING and structured grouped results (#25) (#40) (66cebc1)
+- Add Slice pagination and document keyset as follow-up (#39) (4d8dc5b)
+- Add EXISTS and subquery support to DSL (#38) (b919105)
+- Add HTTP filter parser module (#22) (#37) (f3add7e)
+- Add field whitelist for filtering and sorting (#36) (b95f229)
+- Expose specification repository extension points (#35) (4f5fc4c)
+- Support DTO and record projections (#34) (05ed8a2)
+- Add aggregate query support to DSL and demos (#31) (77d6c62)
 
+### Miscellaneous
+- Migrate Maven Central group ID to com.borjaglez.specrepository (#33) (#41) (9791be3)
+- Release workflow update readme update (74a9dd5)
+- Bump version to 0.1.1-SNAPSHOT (fc2fc41)
 ## [0.1.0-rc.1] - 2026-04-06
 
 ### Miscellaneous
