@@ -61,14 +61,10 @@ class DefaultOperatorHandlersTest {
     assertThat(result).isSameAs(predicate);
   }
 
-  @SuppressWarnings("unchecked")
   @Test
   void equalsShouldIgnoreCaseWhenRequested() {
-    Expression<String> upper = mock(Expression.class);
-    Expression<String> unaccent = mock(Expression.class);
-    when(cb.upper(any())).thenReturn(upper);
-    when(cb.function(eq("unaccent"), eq(String.class), any())).thenReturn(unaccent);
-    when(cb.equal(unaccent, "ACTIVE")).thenReturn(predicate);
+    Normalized normalized = normalizeBothSides("active");
+    when(cb.equal(normalized.column(), normalized.term())).thenReturn(predicate);
 
     Predicate result = registry.get(Operators.EQUALS).create(contextIgnoreCase("active"));
 
@@ -102,14 +98,10 @@ class DefaultOperatorHandlersTest {
     assertThat(result).isSameAs(predicate);
   }
 
-  @SuppressWarnings("unchecked")
   @Test
   void notEqualsShouldIgnoreCaseWhenRequested() {
-    Expression<String> upper = mock(Expression.class);
-    Expression<String> unaccent = mock(Expression.class);
-    when(cb.upper(any())).thenReturn(upper);
-    when(cb.function(eq("unaccent"), eq(String.class), any())).thenReturn(unaccent);
-    when(cb.notEqual(unaccent, "INACTIVE")).thenReturn(predicate);
+    Normalized normalized = normalizeBothSides("inactive");
+    when(cb.notEqual(normalized.column(), normalized.term())).thenReturn(predicate);
 
     Predicate result = registry.get(Operators.NOT_EQUALS).create(contextIgnoreCase("inactive"));
 
@@ -174,14 +166,10 @@ class DefaultOperatorHandlersTest {
     assertThat(result).isSameAs(predicate);
   }
 
-  @SuppressWarnings("unchecked")
   @Test
   void containsShouldIgnoreCaseWhenRequested() {
-    Expression<String> upper = mock(Expression.class);
-    Expression<String> unaccent = mock(Expression.class);
-    when(cb.upper(any())).thenReturn(upper);
-    when(cb.function(eq("unaccent"), eq(String.class), any())).thenReturn(unaccent);
-    when(cb.like(eq(unaccent), eq("%TEST%"))).thenReturn(predicate);
+    Normalized normalized = normalizeBothSides("%test%");
+    when(cb.like(normalized.column(), normalized.term())).thenReturn(predicate);
 
     Predicate result = registry.get(Operators.CONTAINS).create(contextIgnoreCase("test"));
 
@@ -376,6 +364,23 @@ class DefaultOperatorHandlersTest {
     Predicate result = registry.get(Operators.NOT_IN).create(context(List.of("X")));
 
     assertThat(result).isSameAs(negated);
+  }
+
+  /** Column and search term, both normalized by the database as unaccent(upper(x)). */
+  private record Normalized(Expression<String> column, Expression<String> term) {}
+
+  @SuppressWarnings("unchecked")
+  private Normalized normalizeBothSides(String rawTerm) {
+    Expression<String> literal = mock(Expression.class);
+    Expression<String> upperTerm = mock(Expression.class);
+    Expression<String> upperColumn = mock(Expression.class);
+    Expression<String> term = mock(Expression.class);
+    Expression<String> column = mock(Expression.class);
+    doReturn(literal).when(cb).literal(rawTerm);
+    when(cb.upper(any())).thenAnswer(i -> i.getArgument(0) == literal ? upperTerm : upperColumn);
+    when(cb.function(eq("unaccent"), eq(String.class), any()))
+        .thenAnswer(i -> i.getArgument(2) == upperTerm ? term : column);
+    return new Normalized(column, term);
   }
 
   private OperatorContext context(Object value) {

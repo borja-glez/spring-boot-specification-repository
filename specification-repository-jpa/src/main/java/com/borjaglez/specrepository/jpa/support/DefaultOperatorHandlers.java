@@ -73,22 +73,23 @@ public final class DefaultOperatorHandlers {
 
   private static Predicate compare(OperatorContext context, boolean negate) {
     CriteriaBuilder cb = context.criteriaBuilder();
+    if (context.ignoreCase() && context.value() != null) {
+      Expression<String> column = normalized(cb, context.path());
+      Expression<String> value = normalizedValue(cb, context.value().toString());
+      return negate ? cb.notEqual(column, value) : cb.equal(column, value);
+    }
     Expression<?> expression =
         context.ignoreCase() ? normalized(cb, context.path()) : context.path();
-    Object value =
-        context.ignoreCase() && context.value() != null
-            ? context.value().toString().toUpperCase()
-            : context.value();
-    Predicate predicate = negate ? cb.notEqual(expression, value) : cb.equal(expression, value);
-    return predicate;
+    Object value = context.value();
+    return negate ? cb.notEqual(expression, value) : cb.equal(expression, value);
   }
 
   private static Predicate stringLike(OperatorContext context, String pattern, boolean negate) {
     CriteriaBuilder cb = context.criteriaBuilder();
-    Expression<String> expression =
-        context.ignoreCase() ? normalized(cb, context.path()) : context.path().as(String.class);
-    String value = context.ignoreCase() ? pattern.toUpperCase() : pattern;
-    Predicate predicate = cb.like(expression, value);
+    Predicate predicate =
+        context.ignoreCase()
+            ? cb.like(normalized(cb, context.path()), normalizedValue(cb, pattern))
+            : cb.like(context.path().as(String.class), pattern);
     return negate ? predicate.not() : predicate;
   }
 
@@ -151,6 +152,16 @@ public final class DefaultOperatorHandlers {
   private static Expression<String> normalized(CriteriaBuilder criteriaBuilder, Path<?> path) {
     return criteriaBuilder.function(
         UNACCENT, String.class, criteriaBuilder.upper(path.as(String.class)));
+  }
+
+  /**
+   * Normalizes the search term exactly like the column: both sides go through the database's {@code
+   * unaccent(upper(...))}, so "café" matches "CAFE" and the result does not depend on the JVM
+   * default locale.
+   */
+  private static Expression<String> normalizedValue(CriteriaBuilder criteriaBuilder, String value) {
+    return criteriaBuilder.function(
+        UNACCENT, String.class, criteriaBuilder.upper(criteriaBuilder.literal(value)));
   }
 
   private enum ComparisonMode {
