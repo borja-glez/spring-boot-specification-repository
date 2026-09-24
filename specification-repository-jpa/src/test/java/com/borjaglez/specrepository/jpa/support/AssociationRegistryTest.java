@@ -3,13 +3,17 @@ package com.borjaglez.specrepository.jpa.support;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+
+import java.util.Set;
 
 import jakarta.persistence.criteria.Fetch;
 import jakarta.persistence.criteria.From;
 import jakarta.persistence.criteria.Join;
 import jakarta.persistence.criteria.JoinType;
+import jakarta.persistence.metamodel.Attribute;
 
 import org.junit.jupiter.api.Test;
 
@@ -47,6 +51,50 @@ class AssociationRegistryTest {
 
     assertThat(first).isSameAs(second);
     verify(from, times(1)).join("profile", JoinType.LEFT);
+  }
+
+  @SuppressWarnings({"unchecked", "rawtypes"})
+  private Join<?, ?> existingJoinOnFrom(String attributeName, JoinType type) {
+    Join existing = mock(Join.class);
+    Attribute attribute = mock(Attribute.class);
+    doReturn(attributeName).when(attribute).getName();
+    doReturn(attribute).when(existing).getAttribute();
+    doReturn(type).when(existing).getJoinType();
+    doReturn(Set.of(existing)).when(from).getJoins();
+    return existing;
+  }
+
+  @Test
+  void getOrCreateJoinShouldReuseAJoinAnotherRegistryCreatedOnTheSameFrom() {
+    Join<?, ?> existing = existingJoinOnFrom("profile", JoinType.LEFT);
+    AssociationRegistry registry = new AssociationRegistry();
+
+    Join<?, ?> result = registry.getOrCreateJoin("profile", from, "profile", JoinMode.LEFT);
+
+    assertThat(result).isSameAs(existing);
+    verify(from, never()).join("profile", JoinType.LEFT);
+  }
+
+  @Test
+  void getOrCreateJoinShouldNotReuseAJoinOfAnotherType() {
+    existingJoinOnFrom("profile", JoinType.INNER);
+    doReturn(join).when(from).join("profile", JoinType.LEFT);
+    AssociationRegistry registry = new AssociationRegistry();
+
+    Join<?, ?> result = registry.getOrCreateJoin("profile", from, "profile", JoinMode.LEFT);
+
+    assertThat(result).isSameAs(join);
+  }
+
+  @Test
+  void getOrCreateJoinShouldNotReuseAJoinOnAnotherAttribute() {
+    existingJoinOnFrom("orders", JoinType.LEFT);
+    doReturn(join).when(from).join("profile", JoinType.LEFT);
+    AssociationRegistry registry = new AssociationRegistry();
+
+    Join<?, ?> result = registry.getOrCreateJoin("profile", from, "profile", JoinMode.LEFT);
+
+    assertThat(result).isSameAs(join);
   }
 
   @Test
