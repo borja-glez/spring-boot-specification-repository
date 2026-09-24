@@ -755,6 +755,71 @@ class SpecificationRepositoryIntegrationTest {
     assertThat(count).isEqualTo(2);
   }
 
+  // -- Plan-based projected and grouped methods through the repository proxy --
+  // Spring Data invokes default interface methods itself instead of delegating to the repository
+  // base class, so these methods must reach SpecificationRepositoryImpl through the proxy.
+
+  private QueryPlan<TestCustomer> activeNamesPlan() {
+    return repository
+        .query()
+        .where("status", Operators.EQUALS, "ACTIVE")
+        .sort(Sort.by("name"))
+        .select("name")
+        .selectInto(NameOnlyRecord.class)
+        .plan();
+  }
+
+  @Test
+  void shouldFindAllProjectedWithQueryPlanThroughProxy() {
+    List<NameOnlyRecord> results = repository.findAllProjected(activeNamesPlan());
+
+    assertThat(results).containsExactly(new NameOnlyRecord("Borja"), new NameOnlyRecord("Lucia"));
+  }
+
+  @Test
+  void shouldFindProjectedPageWithQueryPlanThroughProxy() {
+    Page<NameOnlyRecord> page =
+        repository.findAllProjected(activeNamesPlan(), PageRequest.of(0, 1));
+
+    assertThat(page.getContent()).containsExactly(new NameOnlyRecord("Borja"));
+    assertThat(page.getTotalElements()).isEqualTo(2);
+  }
+
+  @Test
+  void shouldFindProjectedSliceWithQueryPlanThroughProxy() {
+    Slice<NameOnlyRecord> slice =
+        repository.findSliceProjected(activeNamesPlan(), PageRequest.of(0, 1));
+
+    assertThat(slice.getContent()).containsExactly(new NameOnlyRecord("Borja"));
+    assertThat(slice.hasNext()).isTrue();
+  }
+
+  @Test
+  void shouldFindOneProjectedWithQueryPlanThroughProxy() {
+    Optional<NameOnlyRecord> result = repository.findOneProjected(activeNamesPlan());
+
+    assertThat(result).hasValue(new NameOnlyRecord("Borja"));
+  }
+
+  @Test
+  void shouldFindAllGroupedWithQueryPlanThroughProxy() {
+    QueryPlan<TestCustomer> plan =
+        repository
+            .query()
+            .where("status", Operators.IS_NOT_NULL, null)
+            .groupBy("status")
+            .sort(Sort.by("status"))
+            .select("status")
+            .countAs("customers", "id")
+            .plan();
+
+    List<GroupedRow> rows = repository.findAllGrouped(plan);
+
+    assertThat(rows).hasSize(2);
+    assertThat(rows.get(0).get("status")).isEqualTo("ACTIVE");
+    assertThat(rows.get(0).get("customers")).isEqualTo(2L);
+  }
+
   // -- findAll and count with QueryPlan directly --
 
   @Test
