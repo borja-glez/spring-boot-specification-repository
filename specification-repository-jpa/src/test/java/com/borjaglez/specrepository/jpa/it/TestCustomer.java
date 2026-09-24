@@ -2,9 +2,12 @@ package com.borjaglez.specrepository.jpa.it;
 
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
 import jakarta.persistence.CascadeType;
+import jakarta.persistence.ElementCollection;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -31,6 +34,8 @@ public class TestCustomer {
 
   @OneToMany(mappedBy = "customer", cascade = CascadeType.ALL)
   private List<TestOrder> orders = new ArrayList<>();
+
+  @ElementCollection private Set<String> tags = new LinkedHashSet<>();
 
   public TestCustomer() {}
 
@@ -73,5 +78,14 @@ public class TestCustomer {
 
   public void addOrder(TestOrder order) {
     orders.add(order);
+  }
+
+  public Set<String> getTags() {
+    return tags;
+  }
+
+  public TestCustomer tagged(String... values) {
+    tags.addAll(List.of(values));
+    return this;
   }
 }

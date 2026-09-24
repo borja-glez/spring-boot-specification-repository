@@ -8,6 +8,7 @@ import jakarta.persistence.metamodel.Attribute;
 import jakarta.persistence.metamodel.ManagedType;
 import jakarta.persistence.metamodel.PluralAttribute;
 import jakarta.persistence.metamodel.SingularAttribute;
+import jakarta.persistence.metamodel.Type;
 
 import com.borjaglez.specrepository.core.JoinMode;
 
@@ -35,7 +36,10 @@ public class PathResolver {
       Attribute<?, ?> attribute = currentType.getAttribute(segment);
       boolean last = index == segments.length - 1;
 
-      if (!last && isAssociation(attribute)) {
+      // Associations are joined to keep navigating. A collection of basic values (for example an
+      // @ElementCollection of strings) is joined too when it is the last segment, so conditions
+      // compare its elements instead of the whole collection.
+      if (isAssociation(attribute) && (!last || isBasicCollection(attribute))) {
         if (!associationPath.isEmpty()) {
           associationPath.append('.');
         }
@@ -43,6 +47,9 @@ public class PathResolver {
         currentFrom =
             registry.getOrCreateJoin(associationPath.toString(), currentFrom, segment, joinMode);
         currentPath = currentFrom;
+        if (last) {
+          break;
+        }
         currentType = managedType(attribute);
         continue;
       }
@@ -114,6 +121,11 @@ public class PathResolver {
 
   private boolean isAssociation(Attribute<?, ?> attribute) {
     return attribute.isAssociation() || attribute instanceof PluralAttribute<?, ?, ?>;
+  }
+
+  private boolean isBasicCollection(Attribute<?, ?> attribute) {
+    return attribute instanceof PluralAttribute<?, ?, ?> plural
+        && plural.getElementType().getPersistenceType() == Type.PersistenceType.BASIC;
   }
 
   private boolean isEmbeddable(Attribute<?, ?> attribute) {
