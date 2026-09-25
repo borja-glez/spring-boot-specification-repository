@@ -165,6 +165,14 @@ public class QueryPlanBuilder<T> {
     return aggregate(AggregateFunction.COUNT, field, alias);
   }
 
+  public QueryPlanBuilder<T> countDistinct(String field) {
+    return aggregate(AggregateFunction.COUNT_DISTINCT, field, null);
+  }
+
+  public QueryPlanBuilder<T> countDistinctAs(String alias, String field) {
+    return aggregate(AggregateFunction.COUNT_DISTINCT, field, alias);
+  }
+
   public QueryPlanBuilder<T> aggregate(AggregateFunction function, String field, String alias) {
     selections.add(new AggregateSelection(function, field, alias));
     return this;

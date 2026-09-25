@@ -5,5 +5,7 @@ public enum AggregateFunction {
   AVG,
   MIN,
   MAX,
-  COUNT
+  COUNT,
+  /** Counts distinct values; use it on the root id when to-many joins repeat root rows. */
+  COUNT_DISTINCT
 }

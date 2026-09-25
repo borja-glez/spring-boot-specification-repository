@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.tuple;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
@@ -1301,6 +1302,50 @@ class SpecificationRepositoryIntegrationTest {
 
     assertThat(rows.get(0).columns()).containsExactly("status", "COUNT_id");
     assertThat(rows.get(0).get("COUNT_id")).isEqualTo(2L);
+  }
+
+  @Test
+  void shouldCountDistinctRootsWhenFilteringThroughAToManyPath() {
+    TestCustomer buyer =
+        repository.findAll().stream()
+            .filter(c -> c.getName().equals("Borja"))
+            .findFirst()
+            .orElseThrow();
+    buyer.addOrder(new TestOrder(BigDecimal.TEN, "PAID", false, buyer));
+    buyer.addOrder(new TestOrder(BigDecimal.ONE, "PAID", false, buyer));
+    repository.save(buyer);
+
+    List<GroupedRow> rows =
+        repository
+            .query()
+            .where("orders.status", Operators.EQUALS, "PAID")
+            .groupBy("status")
+            .select("status")
+            .countAs("joinedRows", "id")
+            .countDistinctAs("customers", "id")
+            .findAllGrouped();
+
+    assertThat(rows)
+        .singleElement()
+        .satisfies(
+            row -> {
+              assertThat(row.get("joinedRows")).isEqualTo(2L);
+              assertThat(row.get("customers")).isEqualTo(1L);
+            });
+  }
+
+  @Test
+  void shouldNameCountDistinctColumnsAfterFunctionAndField() {
+    List<GroupedRow> rows =
+        repository
+            .query()
+            .where("status", Operators.EQUALS, "ACTIVE")
+            .groupBy("status")
+            .select("status")
+            .countDistinct("id")
+            .findAllGrouped();
+
+    assertThat(rows.getFirst().get("COUNT_DISTINCT_id")).isEqualTo(2L);
   }
 
   @Test
