@@ -25,6 +25,23 @@ public class PathResolver {
       AssociationRegistry registry,
       String path,
       JoinMode joinMode) {
+    return resolve(from, fromType, registry, path, joinMode, true);
+  }
+
+  /**
+   * Resolves a dotted path.
+   *
+   * @param joinBasicCollections whether a collection of basic values at the end of the path is
+   *     joined, so conditions compare its elements. Pass {@code false} for operators that need the
+   *     collection itself, such as {@code isempty}.
+   */
+  public Path<?> resolve(
+      From<?, ?> from,
+      ManagedType<?> fromType,
+      AssociationRegistry registry,
+      String path,
+      JoinMode joinMode,
+      boolean joinBasicCollections) {
     String[] segments = path.split("\\.");
     Path<?> currentPath = from;
     From<?, ?> currentFrom = from;
@@ -39,7 +56,8 @@ public class PathResolver {
       // Associations are joined to keep navigating. A collection of basic values (for example an
       // @ElementCollection of strings) is joined too when it is the last segment, so conditions
       // compare its elements instead of the whole collection.
-      if (isAssociation(attribute) && (!last || isBasicCollection(attribute))) {
+      if (isAssociation(attribute)
+          && (!last || (joinBasicCollections && isBasicCollection(attribute)))) {
         if (!associationPath.isEmpty()) {
           associationPath.append('.');
         }

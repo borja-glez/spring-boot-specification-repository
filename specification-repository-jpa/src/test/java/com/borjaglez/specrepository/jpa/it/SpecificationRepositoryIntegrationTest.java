@@ -844,6 +844,17 @@ class SpecificationRepositoryIntegrationTest {
   }
 
   @Test
+  void shouldCheckEmptinessOfBasicCollection() {
+    repository.save(new TestCustomer("Tagged", "ACTIVE", null).tagged("vip"));
+
+    long untagged = repository.query().where("tags", Operators.IS_EMPTY, null).count();
+    long tagged = repository.query().where("tags", Operators.IS_NOT_EMPTY, null).count();
+
+    assertThat(untagged).isEqualTo(4);
+    assertThat(tagged).isEqualTo(1);
+  }
+
+  @Test
   void shouldStillTreatAnEntityCollectionAsAWholeWhenItIsTheLastSegment() {
     TestCustomer withOrder = new TestCustomer("Buyer", "ACTIVE", null);
     withOrder.addOrder(new TestOrder(BigDecimal.TEN, "PAID", false, withOrder));
