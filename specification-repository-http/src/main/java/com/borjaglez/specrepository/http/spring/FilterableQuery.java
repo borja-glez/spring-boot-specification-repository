@@ -19,6 +19,13 @@ import com.borjaglez.specrepository.http.HttpFilterParser;
  * FilterableQuery.class)}. When a parameter carries {@code @FilterableQuery} directly, that
  * declaration wins over any meta-present one.
  *
+ * <p>Field access is denied by default: a client may filter only by the fields listed in {@link
+ * #filterableFields()} and sort only by the fields listed in {@link #sortableFields()}. An empty
+ * list allows nothing for its usage, so declaring only one list keeps the other usage denied, and a
+ * parameter without any list accepts no filter and no sort. A request that uses an undeclared usage
+ * is rejected with an {@link UndeclaredFieldListException} (HTTP 400). Set {@link
+ * #allowAllFields()} to accept every field instead.
+ *
  * <p>{@link #caseInsensitiveFields()} lets the server make matching on some fields case-insensitive
  * without any change to the client syntax.
  */
@@ -31,6 +38,14 @@ public @interface FilterableQuery {
   String[] filterableFields() default {};
 
   String[] sortableFields() default {};
+
+  /**
+   * Accepts filtering and sorting by any field, as {@link AllowedFieldsPolicy#allowAll()} does.
+   * Defaults to {@code false}: only the fields declared in {@link #filterableFields()} and {@link
+   * #sortableFields()} are accepted. Cannot be combined with those lists; resolving a parameter
+   * that declares both fails with an {@link IllegalStateException}.
+   */
+  boolean allowAllFields() default false;
 
   /**
    * Fields whose filter conditions are matched case-insensitively, in both {@code filter} and
