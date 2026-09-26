@@ -1741,7 +1741,7 @@ abstract class AbstractSpecificationRepositoryIntegrationTest {
                     .select("status")
                     .avg("age")
                     .having(AggregateFunction.AVG, "age", Operators.GREATER_THAN, "abc")
-                    .findAll())
+                    .findRows())
         .isInstanceOfSatisfying(
             InvalidFilterValueException.class,
             ex -> {
@@ -1761,7 +1761,7 @@ abstract class AbstractSpecificationRepositoryIntegrationTest {
                     .select("status")
                     .count("id")
                     .having(AggregateFunction.COUNT, "id", Operators.BETWEEN, List.of("1", "many"))
-                    .findAll())
+                    .findRows())
         .isInstanceOfSatisfying(
             InvalidFilterValueException.class,
             ex -> {
