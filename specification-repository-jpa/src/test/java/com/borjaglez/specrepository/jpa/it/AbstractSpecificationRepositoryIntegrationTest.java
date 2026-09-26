@@ -1059,6 +1059,48 @@ abstract class AbstractSpecificationRepositoryIntegrationTest {
     assertThat(withoutOrders).isEqualTo(4);
   }
 
+  // -- Fetching element collections of basic values --
+
+  @Test
+  void shouldLeftFetchABasicCollection() {
+    repository.save(new TestCustomer("Tagged", "ACTIVE", null).tagged("vip", "newsletter"));
+    fetchEntityManager.flush();
+    fetchEntityManager.clear();
+
+    List<TestCustomer> found = repository.query().leftFetch("tags").sort(Sort.by("name")).findAll();
+
+    assertThat(found)
+        .extracting(TestCustomer::getName)
+        .containsExactly("Anna", "Borja", "John", "Lucia", "Tagged");
+    assertThat(found)
+        .allSatisfy(c -> assertThat(org.hibernate.Hibernate.isInitialized(c.getTags())).isTrue());
+    assertThat(found.get(4).getTags()).containsExactlyInAnyOrder("vip", "newsletter");
+    assertThat(found.get(0).getTags()).isEmpty();
+  }
+
+  @Test
+  void shouldInnerFetchABasicCollectionDroppingRootsWithoutElements() {
+    repository.save(new TestCustomer("Tagged", "ACTIVE", null).tagged("vip", "newsletter"));
+    repository.save(new TestCustomer("Other", "ACTIVE", null).tagged("beta"));
+    fetchEntityManager.flush();
+    fetchEntityManager.clear();
+
+    List<TestCustomer> found =
+        repository.query().innerFetch("tags").sort(Sort.by("name")).findAll();
+
+    assertThat(found).extracting(TestCustomer::getName).containsExactly("Other", "Tagged");
+    assertThat(found)
+        .allSatisfy(c -> assertThat(org.hibernate.Hibernate.isInitialized(c.getTags())).isTrue());
+    assertThat(found.get(1).getTags()).containsExactlyInAnyOrder("vip", "newsletter");
+  }
+
+  @Test
+  void shouldRejectAFetchPathThatContinuesAfterABasicCollection() {
+    assertThatThrownBy(() -> repository.query().leftFetch("tags.value").findAll())
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("tags.value");
+  }
+
   // -- EXISTS / NOT EXISTS over element collections of basic values --
 
   @Test

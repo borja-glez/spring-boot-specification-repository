@@ -114,16 +114,30 @@ public class PathResolver {
     ManagedType<?> currentType = root.getModel();
     StringBuilder associationPath = new StringBuilder();
 
-    for (String segment : segments) {
+    for (int index = 0; index < segments.length; index++) {
+      String segment = segments[index];
       Attribute<?, ?> attribute = currentType.getAttribute(segment);
+      boolean last = index == segments.length - 1;
+      // A collection of basic values (for example an @ElementCollection of strings) is fetched as
+      // a whole: its elements have no attributes, so it can only end the path.
+      if (!last && isBasicCollection(attribute)) {
+        throw new IllegalArgumentException(
+            "Cannot fetch '"
+                + path
+                + "': '"
+                + segment
+                + "' is a collection of basic values and must be the last segment");
+      }
       if (!associationPath.isEmpty()) {
         associationPath.append('.');
       }
       associationPath.append(segment);
       Fetch<?, ?> fetch =
           registry.getOrCreateFetch(associationPath.toString(), currentFrom, segment, joinMode);
-      currentFrom = (From<?, ?>) fetch;
-      currentType = managedType(attribute);
+      if (!last) {
+        currentFrom = (From<?, ?>) fetch;
+        currentType = managedType(attribute);
+      }
     }
   }
 

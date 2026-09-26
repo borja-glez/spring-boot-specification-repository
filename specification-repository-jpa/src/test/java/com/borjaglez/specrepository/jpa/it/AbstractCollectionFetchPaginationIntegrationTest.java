@@ -78,6 +78,26 @@ abstract class AbstractCollectionFetchPaginationIntegrationTest {
   }
 
   @Test
+  void pagesCustomersWithTheirTagsInTheDatabase() {
+    customers.save(new TestCustomer("Bea", "ACTIVE", null).tagged("vip", "newsletter"));
+    customers.save(new TestCustomer("Beto", "ACTIVE", null).tagged("beta"));
+    entityManager.flush();
+    entityManager.clear();
+
+    Page<TestCustomer> page =
+        customers.query().leftFetch("tags").sort(Sort.by("name")).findAll(PageRequest.of(0, 3));
+
+    assertThat(page.getContent())
+        .extracting(TestCustomer::getName)
+        .containsExactly("Anna", "Bea", "Beto");
+    assertThat(page.getTotalElements()).isEqualTo(7);
+    assertThat(page.getContent())
+        .allSatisfy(c -> assertThat(Hibernate.isInitialized(c.getTags())).isTrue())
+        .extracting(c -> c.getTags().size())
+        .containsExactly(0, 2, 1);
+  }
+
+  @Test
   void usesThePageableSortOverThePlanSort() {
     Page<TestCustomer> page =
         customers

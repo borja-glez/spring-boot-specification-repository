@@ -330,6 +330,41 @@ class PathResolverTest {
   interface FetchFrom extends Fetch<Object, Object>, From<Object, Object> {}
 
   @Test
+  void fetchShouldFetchABasicCollectionAsTheLastSegment() {
+    doReturn(basicCollection()).when(entityType).getAttribute("tags");
+    FetchFrom tagsFetch = mock(FetchFrom.class);
+    doReturn(tagsFetch)
+        .when(registry)
+        .getOrCreateFetch(eq("tags"), eq(root), eq("tags"), eq(JoinMode.LEFT));
+
+    pathResolver.fetch(root, registry, "tags", JoinMode.LEFT);
+
+    verify(registry).getOrCreateFetch("tags", root, "tags", JoinMode.LEFT);
+  }
+
+  @Test
+  void fetchShouldRejectAPathThatContinuesAfterABasicCollection() {
+    doReturn(basicCollection()).when(entityType).getAttribute("tags");
+
+    assertThatThrownBy(() -> pathResolver.fetch(root, registry, "tags.value", JoinMode.LEFT))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("tags.value")
+        .hasMessageContaining("last segment");
+    org.mockito.Mockito.verifyNoInteractions(registry);
+  }
+
+  private PluralAttribute<?, ?, ?> basicCollection() {
+    PluralAttribute<?, ?, ?> tagsAttr = mock(PluralAttribute.class);
+    jakarta.persistence.metamodel.Type<?> elementType =
+        mock(jakarta.persistence.metamodel.Type.class);
+    doReturn(jakarta.persistence.metamodel.Type.PersistenceType.BASIC)
+        .when(elementType)
+        .getPersistenceType();
+    doReturn(elementType).when(tagsAttr).getElementType();
+    return tagsAttr;
+  }
+
+  @Test
   @SuppressWarnings("unchecked")
   void shouldNotJoinAnEntityCollectionWhenItIsTheLastSegment() {
     PluralAttribute<?, ?, ?> ordersAttr = mock(PluralAttribute.class);
