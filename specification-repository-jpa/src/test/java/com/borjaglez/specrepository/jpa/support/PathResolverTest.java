@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 
@@ -21,6 +22,7 @@ import jakarta.persistence.metamodel.SingularAttribute;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import com.borjaglez.specrepository.core.InvalidFilterException;
 import com.borjaglez.specrepository.core.JoinMode;
 
 class PathResolverTest {
@@ -395,5 +397,121 @@ class PathResolverTest {
     Path<?> result = pathResolver.resolve(root, registry, "profile", JoinMode.LEFT);
 
     assertThat(result).isSameAs(profilePath);
+  }
+
+  // -- Unknown fields --
+
+  @Test
+  void shouldRejectAnUnknownFirstSegmentWithTheFullPath() {
+    IllegalArgumentException providerError = unknownAttribute(entityType, "nope");
+
+    assertThatThrownBy(() -> pathResolver.resolve(root, registry, "nope", JoinMode.LEFT))
+        .isInstanceOfSatisfying(
+            InvalidFilterException.class,
+            ex -> {
+              assertThat(ex.field()).isEqualTo("nope");
+              assertThat(ex.reason()).isEqualTo("unknown field");
+              assertThat(ex.getCause()).isSameAs(providerError);
+            });
+    org.mockito.Mockito.verifyNoInteractions(registry);
+  }
+
+  @Test
+  void shouldNameTheUnknownSegmentWhenItIsNotTheLast() {
+    IllegalArgumentException providerError = unknownAttribute(entityType, "nope");
+
+    assertThatThrownBy(() -> pathResolver.resolve(root, registry, "nope.city", JoinMode.LEFT))
+        .isInstanceOfSatisfying(
+            InvalidFilterException.class,
+            ex -> {
+              assertThat(ex.field()).isEqualTo("nope.city");
+              assertThat(ex.reason()).isEqualTo("unknown field 'nope'");
+              assertThat(ex.getCause()).isSameAs(providerError);
+            });
+  }
+
+  @Test
+  void shouldRejectAnUnknownNestedSegmentWithTheFullPath() {
+    ManagedType<?> profileType = profileAssociation();
+    IllegalArgumentException providerError = unknownAttribute(profileType, "nope");
+    Join<?, ?> profileJoin = mock(Join.class);
+    doReturn(profileJoin)
+        .when(registry)
+        .getOrCreateJoin(eq("profile"), eq(root), eq("profile"), eq(JoinMode.LEFT));
+
+    assertThatThrownBy(() -> pathResolver.resolve(root, registry, "profile.nope", JoinMode.LEFT))
+        .isInstanceOfSatisfying(
+            InvalidFilterException.class,
+            ex -> {
+              assertThat(ex.field()).isEqualTo("profile.nope");
+              assertThat(ex.reason()).isEqualTo("unknown field");
+              assertThat(ex.getCause()).isSameAs(providerError);
+            });
+  }
+
+  @Test
+  void joinShouldRejectAnUnknownSegmentWithTheFullPath() {
+    ManagedType<?> profileType = profileAssociation();
+    IllegalArgumentException providerError = unknownAttribute(profileType, "nope");
+    Join<?, ?> profileJoin = mock(Join.class);
+    doReturn(profileJoin)
+        .when(registry)
+        .getOrCreateJoin(eq("profile"), eq(root), eq("profile"), eq(JoinMode.LEFT));
+
+    assertThatThrownBy(() -> pathResolver.join(root, registry, "profile.nope", JoinMode.LEFT))
+        .isInstanceOfSatisfying(
+            InvalidFilterException.class,
+            ex -> {
+              assertThat(ex.field()).isEqualTo("profile.nope");
+              assertThat(ex.reason()).isEqualTo("unknown field");
+              assertThat(ex.getCause()).isSameAs(providerError);
+            });
+  }
+
+  @Test
+  void fetchShouldRejectAnUnknownSegmentWithTheFullPath() {
+    IllegalArgumentException providerError = unknownAttribute(entityType, "nope");
+
+    assertThatThrownBy(() -> pathResolver.fetch(root, registry, "nope.city", JoinMode.LEFT))
+        .isInstanceOfSatisfying(
+            InvalidFilterException.class,
+            ex -> {
+              assertThat(ex.field()).isEqualTo("nope.city");
+              assertThat(ex.reason()).isEqualTo("unknown field 'nope'");
+              assertThat(ex.getCause()).isSameAs(providerError);
+            });
+    org.mockito.Mockito.verifyNoInteractions(registry);
+  }
+
+  @Test
+  void resolveAssociationTargetShouldRejectAnUnknownSegmentWithTheFullPath() {
+    ManagedType<?> profileType = profileAssociation();
+    IllegalArgumentException providerError = unknownAttribute(profileType, "nope");
+
+    assertThatThrownBy(() -> pathResolver.resolveAssociationTarget(entityType, "profile.nope"))
+        .isInstanceOfSatisfying(
+            InvalidFilterException.class,
+            ex -> {
+              assertThat(ex.field()).isEqualTo("profile.nope");
+              assertThat(ex.reason()).isEqualTo("unknown field");
+              assertThat(ex.getCause()).isSameAs(providerError);
+            });
+  }
+
+  private ManagedType<?> profileAssociation() {
+    SingularAttribute<?, ?> profileAttr = mock(SingularAttribute.class);
+    doReturn(true).when(profileAttr).isAssociation();
+    ManagedType<?> profileType = mock(ManagedType.class);
+    doReturn(profileType).when(profileAttr).getType();
+    doReturn(profileAttr).when(entityType).getAttribute("profile");
+    return profileType;
+  }
+
+  private IllegalArgumentException unknownAttribute(ManagedType<?> type, String name) {
+    IllegalArgumentException providerError =
+        new IllegalArgumentException(
+            "Unable to locate Attribute with the given name [" + name + "]");
+    doThrow(providerError).when(type).getAttribute(name);
+    return providerError;
   }
 }

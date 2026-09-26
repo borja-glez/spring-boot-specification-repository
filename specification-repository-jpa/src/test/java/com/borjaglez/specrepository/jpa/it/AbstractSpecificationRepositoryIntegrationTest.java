@@ -12,6 +12,7 @@ import java.util.Set;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.dao.InvalidDataAccessApiUsageException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Slice;
@@ -23,6 +24,7 @@ import com.borjaglez.specrepository.core.AllowedFieldsPolicy;
 import com.borjaglez.specrepository.core.DisallowedFieldException;
 import com.borjaglez.specrepository.core.FilterOperator;
 import com.borjaglez.specrepository.core.GroupedRow;
+import com.borjaglez.specrepository.core.InvalidFilterException;
 import com.borjaglez.specrepository.core.Operators;
 import com.borjaglez.specrepository.core.QueryPlan;
 
@@ -1462,6 +1464,98 @@ abstract class AbstractSpecificationRepositoryIntegrationTest {
                     .findAll())
         .isInstanceOf(DisallowedFieldException.class)
         .hasMessage("Field 'status' is not allowed for sorting");
+  }
+
+  // -- Unknown operators and fields --
+
+  @Test
+  void shouldRejectAnUnknownOperatorAsAnInvalidFilter() {
+    assertThatThrownBy(
+            () -> repository.query().where("name", Operators.custom("like"), "x").findAll())
+        .isInstanceOfSatisfying(
+            InvalidFilterException.class,
+            ex -> {
+              assertThat(ex.field()).isEqualTo("name");
+              assertThat(ex.reason()).isEqualTo("unknown operator 'like'");
+            });
+  }
+
+  @Test
+  void shouldRejectAnUnknownOperatorInsideAnOrGroupAsAnInvalidFilter() {
+    assertThatThrownBy(
+            () ->
+                repository
+                    .query()
+                    .where("status", Operators.EQUALS, "ACTIVE")
+                    .or(group -> group.where("name", Operators.custom("like"), "x"))
+                    .count())
+        .isInstanceOfSatisfying(
+            InvalidFilterException.class, ex -> assertThat(ex.field()).isEqualTo("name"));
+  }
+
+  @Test
+  void shouldRejectAnUnknownOperatorInsideASubqueryBodyAsAnInvalidFilter() {
+    assertThatThrownBy(
+            () ->
+                repository
+                    .query()
+                    .<String>exists(
+                        "tags", sub -> sub.where("value", Operators.custom("like"), "x"))
+                    .findAll())
+        .isInstanceOfSatisfying(
+            InvalidFilterException.class,
+            ex -> {
+              assertThat(ex.field()).isEqualTo("value");
+              assertThat(ex.reason()).isEqualTo("unknown operator 'like'");
+            });
+  }
+
+  @Test
+  void shouldRejectAnUnknownFieldAsAnInvalidFilter() {
+    assertThatThrownBy(
+            () -> repository.query().where("doesNotExist", Operators.EQUALS, "x").findAll())
+        .isInstanceOfSatisfying(
+            InvalidFilterException.class,
+            ex -> {
+              assertThat(ex.field()).isEqualTo("doesNotExist");
+              assertThat(ex.reason()).isEqualTo("unknown field");
+              assertThat(ex).hasCauseInstanceOf(IllegalArgumentException.class);
+            });
+  }
+
+  @Test
+  void shouldRejectAnUnknownNestedFieldAsAnInvalidFilter() {
+    assertThatThrownBy(
+            () -> repository.query().where("profile.nope", Operators.EQUALS, "x").count())
+        .isInstanceOfSatisfying(
+            InvalidFilterException.class,
+            ex -> {
+              assertThat(ex.field()).isEqualTo("profile.nope");
+              assertThat(ex.reason()).isEqualTo("unknown field");
+            });
+  }
+
+  @Test
+  void shouldRejectAnUnknownJoinPathAsAnInvalidFilter() {
+    assertThatThrownBy(() -> repository.query().leftJoin("nope.city").findAll())
+        .isInstanceOfSatisfying(
+            InvalidFilterException.class,
+            ex -> {
+              assertThat(ex.field()).isEqualTo("nope.city");
+              assertThat(ex.reason()).isEqualTo("unknown field 'nope'");
+            });
+  }
+
+  @Test
+  void shouldExposeAnInvalidFilterAsTheCauseThroughTheRepositoryProxy() {
+    QueryPlan<TestCustomer> plan =
+        repository.query().where("name", Operators.custom("like"), "x").plan();
+
+    assertThatThrownBy(() -> repository.findAll(plan))
+        .isInstanceOf(InvalidDataAccessApiUsageException.class)
+        .cause()
+        .isInstanceOfSatisfying(
+            InvalidFilterException.class, ex -> assertThat(ex.field()).isEqualTo("name"));
   }
 
   // -- HAVING / multiple aggregates / grouped rows --
