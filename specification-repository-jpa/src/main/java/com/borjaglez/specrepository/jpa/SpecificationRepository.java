@@ -13,6 +13,13 @@ import org.springframework.data.repository.NoRepositoryBean;
 import com.borjaglez.specrepository.core.GroupedRow;
 import com.borjaglez.specrepository.core.QueryPlan;
 
+/**
+ * Repository with the specification-repository query DSL.
+ *
+ * <p>Every method is abstract on purpose: Spring Data invokes {@code default} methods of repository
+ * interfaces itself instead of delegating them to the repository base class, so a default body here
+ * would shadow {@link SpecificationRepositoryImpl} for every repository proxy.
+ */
 @NoRepositoryBean
 public interface SpecificationRepository<T, ID>
     extends JpaRepository<T, ID>, JpaSpecificationExecutor<T> {
@@ -20,35 +27,21 @@ public interface SpecificationRepository<T, ID>
 
   List<T> findAll(QueryPlan<T> plan);
 
-  default <P> List<P> findAllProjected(QueryPlan<T> plan) {
-    throw new UnsupportedOperationException(
-        "Projected queries are not supported by this repository");
-  }
+  <P> List<P> findAllProjected(QueryPlan<T> plan);
 
   Page<T> findAll(QueryPlan<T> plan, Pageable pageable);
 
-  default <P> Page<P> findAllProjected(QueryPlan<T> plan, Pageable pageable) {
-    throw new UnsupportedOperationException(
-        "Projected queries are not supported by this repository");
-  }
+  <P> Page<P> findAllProjected(QueryPlan<T> plan, Pageable pageable);
 
   Slice<T> findSlice(QueryPlan<T> plan, Pageable pageable);
 
-  default <P> Slice<P> findSliceProjected(QueryPlan<T> plan, Pageable pageable) {
-    throw new UnsupportedOperationException(
-        "Projected queries are not supported by this repository");
-  }
+  <P> Slice<P> findSliceProjected(QueryPlan<T> plan, Pageable pageable);
 
   Optional<T> findOne(QueryPlan<T> plan);
 
-  default <P> Optional<P> findOneProjected(QueryPlan<T> plan) {
-    throw new UnsupportedOperationException(
-        "Projected queries are not supported by this repository");
-  }
+  <P> Optional<P> findOneProjected(QueryPlan<T> plan);
 
   long count(QueryPlan<T> plan);
 
-  default List<GroupedRow> findAllGrouped(QueryPlan<T> plan) {
-    throw new UnsupportedOperationException("Grouped queries are not supported by this repository");
-  }
+  List<GroupedRow> findAllGrouped(QueryPlan<T> plan);
 }
