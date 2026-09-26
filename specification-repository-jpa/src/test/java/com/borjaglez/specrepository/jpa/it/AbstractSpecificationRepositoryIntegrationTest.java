@@ -402,6 +402,81 @@ abstract class AbstractSpecificationRepositoryIntegrationTest {
         .containsExactly("Borja");
   }
 
+  // -- count with innerFetch --
+
+  private void giveOrders(String name, int count) {
+    TestCustomer customer =
+        repository.query().where("name", Operators.EQUALS, name).findOne().orElseThrow();
+    for (int i = 0; i < count; i++) {
+      customer
+          .getOrders()
+          .add(
+              new TestOrder(
+                  new BigDecimal("10.00").add(BigDecimal.valueOf(i)), "PAID", false, customer));
+    }
+    repository.save(customer);
+    fetchEntityManager.flush();
+    fetchEntityManager.clear();
+  }
+
+  @Test
+  void shouldCountOnlyTheRootsKeptByAnInnerFetchOfACollection() {
+    giveOrders("Borja", 2);
+    giveOrders("Lucia", 1);
+
+    var plan = repository.query().innerFetch("orders");
+
+    assertThat(plan.findAll())
+        .extracting(TestCustomer::getName)
+        .containsExactlyInAnyOrder("Borja", "Lucia");
+    assertThat(plan.count()).isEqualTo(2);
+    Page<TestCustomer> page = plan.findAll(PageRequest.of(0, 1, Sort.by("name")));
+    assertThat(page.getContent()).extracting(TestCustomer::getName).containsExactly("Borja");
+    assertThat(page.getTotalElements()).isEqualTo(2);
+    assertThat(page.getTotalPages()).isEqualTo(2);
+  }
+
+  @Test
+  void shouldCountOnlyTheRootsKeptByAnInnerFetchOfASingleAssociation() {
+    var plan = repository.query().innerFetch("profile");
+
+    assertThat(plan.findAll()).hasSize(3);
+    assertThat(plan.count()).isEqualTo(3);
+    Page<TestCustomer> page = plan.findAll(PageRequest.of(0, 2, Sort.by("name")));
+    assertThat(page.getContent())
+        .extracting(TestCustomer::getName)
+        .containsExactly("Borja", "John");
+    assertThat(page.getTotalElements()).isEqualTo(3);
+  }
+
+  @Test
+  void shouldNotJoinTwiceWhenAnInnerFetchedPathIsAlsoFilteredOn() {
+    giveOrders("Borja", 2);
+    giveOrders("Lucia", 1);
+
+    var plan =
+        repository
+            .query()
+            .innerJoin("orders")
+            .innerFetch("orders")
+            .where("orders.total", Operators.EQUALS, new BigDecimal("11.00"));
+
+    assertThat(plan.findAll()).extracting(TestCustomer::getName).containsExactly("Borja");
+    assertThat(plan.count()).isEqualTo(1);
+    assertThat(plan.findAll(PageRequest.of(0, 10)).getTotalElements()).isEqualTo(1);
+  }
+
+  @Test
+  void shouldKeepCountingEveryRootWithALeftFetch() {
+    giveOrders("Borja", 2);
+
+    var plan = repository.query().leftFetch("orders").leftFetch("profile");
+
+    assertThat(plan.findAll()).hasSize(4);
+    assertThat(plan.count()).isEqualTo(4);
+    assertThat(plan.findAll(PageRequest.of(0, 3)).getTotalElements()).isEqualTo(4);
+  }
+
   // -- findOne --
 
   @Test
