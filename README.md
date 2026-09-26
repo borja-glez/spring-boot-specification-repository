@@ -637,9 +637,35 @@ combined with AND when the query runs:
   client conditions: a client `orFilter` cannot widen them.
 
 Server conditions are added by deriving a plan (see
-[Extending a plan received over HTTP](#extending-a-plan-received-over-http)). What the server
-defines itself (selections, `groupBy`, aggregates, joins, fetches and subquery bodies) is not
-checked either.
+[Extending a plan received over HTTP](#extending-a-plan-received-over-http)).
+
+#### What the policy covers
+
+The policy checks field names that can come from a client. The parts of a plan that only the server
+can define are not checked:
+
+| Part of the plan | Where it comes from | Checked against |
+|---|---|---|
+| `filter` and `orFilter` request parameters | client (HTTP), into `rootCondition()` | filterable fields |
+| other conditions in `rootCondition()` (`where`, `and`, `or` on a plain builder) | caller | filterable fields |
+| outer field of `inSubquery` / `notInSubquery`, outer fields of `correlate(...)`, in `rootCondition()` | caller | filterable fields |
+| `sort` request parameter and the plan sort, also one set with `sort(...)` or `sortedByDefault(...)` on a derived builder | client or server | sortable fields |
+| sort of a sorted `Pageable` | client (HTTP) | sortable fields |
+| `having(...)` fields, also ones added on a derived builder | caller (the HTTP syntax has none) | filterable fields |
+| server conditions (`where`, `and`, `or`, `exists`, ... on a derived builder), including their subqueries | server | not checked |
+| `select`, `selectInto`, aggregates (`sum`, `countAs`, ...), `groupBy` | server | not checked |
+| joins and fetches (`leftJoin`, `leftFetch`, ...) | server | not checked |
+| fields inside a subquery body (the sub-entity's conditions and selected field) | server | not checked |
+
+The HTTP syntax cannot express selections, grouping, aggregates, joins, fetches or `having`, so an
+endpoint that resolves a plan with `@FilterableQuery` gives the client control over filters and the
+sort only. Everything else is chosen in code and trusted. A fetch still matters: it puts the
+association in the serialized entity, so decide in code which associations an endpoint returns.
+
+Never let a client choose selections, fetches, joins or grouping paths directly, for example by
+passing a request parameter to `select(...)`, `groupBy(...)` or `leftFetch(...)`. If an endpoint must
+offer that choice, validate the value yourself (map it from a fixed set of options) before it reaches
+the builder.
 
 ### Pre-Built Query Plans
 
