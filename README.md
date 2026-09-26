@@ -43,7 +43,7 @@ The `specification-repository-core` and `specification-repository-jpa` modules s
 **Gradle**
 
 ```kotlin
-implementation("com.borjaglez.specrepository:specification-repository-boot3-starter:0.3.0")
+implementation("com.borjaglez.specrepository:specification-repository-boot3-starter:0.3.1")
 ```
 
 **Maven**
@@ -52,7 +52,7 @@ implementation("com.borjaglez.specrepository:specification-repository-boot3-star
 <dependency>
     <groupId>com.borjaglez.specrepository</groupId>
     <artifactId>specification-repository-boot3-starter</artifactId>
-    <version>0.3.0</version>
+    <version>0.3.1</version>
 </dependency>
 ```
 
@@ -61,7 +61,7 @@ implementation("com.borjaglez.specrepository:specification-repository-boot3-star
 **Gradle**
 
 ```kotlin
-implementation("com.borjaglez.specrepository:specification-repository-boot4-starter:0.3.0")
+implementation("com.borjaglez.specrepository:specification-repository-boot4-starter:0.3.1")
 ```
 
 **Maven**
@@ -70,7 +70,7 @@ implementation("com.borjaglez.specrepository:specification-repository-boot4-star
 <dependency>
     <groupId>com.borjaglez.specrepository</groupId>
     <artifactId>specification-repository-boot4-starter</artifactId>
-    <version>0.3.0</version>
+    <version>0.3.1</version>
 </dependency>
 ```
 
@@ -738,7 +738,7 @@ classpath. Works with both Spring Boot 3 and Spring Boot 4.
 **Gradle**
 
 ```kotlin
-implementation("com.borjaglez.specrepository:specification-repository-http:0.3.0")
+implementation("com.borjaglez.specrepository:specification-repository-http:0.3.1")
 ```
 
 ### Query Parameter Contract
