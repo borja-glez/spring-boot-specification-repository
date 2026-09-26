@@ -11,6 +11,14 @@ Both honor the same sort priority: when the supplied `Pageable` is sorted, its
 `Sort` overrides any `sort(...)` set on the builder; otherwise the builder's
 sort is used.
 
+The `Pageable` sort usually comes from the client (the `sort` request
+parameter), so it is checked against the plan's `AllowedFieldsPolicy` before it
+overrides the plan sort: a property outside the policy's sortable fields throws
+`DisallowedFieldException` (usage `sorting`) before any SQL runs. This applies
+to `findAll(plan, pageable)`, `findSlice(plan, pageable)`, their projected
+variants and the fluent `findAll(Pageable)` / `findSlice(Pageable)`. With
+`AllowedFieldsPolicy.allowAll()` (the default) any `Pageable` sort is accepted.
+
 ## `findAll(Pageable)` — counted pagination
 
 ```java
