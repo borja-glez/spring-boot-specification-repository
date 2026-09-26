@@ -154,6 +154,11 @@ by every `having(...)` clause is validated against the *filterable* fields
 set, exactly like `where(...)` clauses. Use this to expose `having` to
 external API callers safely.
 
+The rest of a report is defined by the server and is not checked against the
+policy: `groupBy(...)`, `select(...)`, `selectInto(...)` and the aggregate
+fields. Do not build them from client input without validating it yourself.
+See [What the policy covers](../README.md#what-the-policy-covers).
+
 ## Putting it together
 
 ```java

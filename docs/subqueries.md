@@ -155,6 +155,8 @@ inner repository.
 Only client conditions are validated. A subquery added as a server condition,
 through a builder derived from a plan (`plan.toBuilder()` or
 `repository.query(plan)`), is not checked against the policy.
+See [What the policy covers](../README.md#what-the-policy-covers) for the
+other parts of a plan.
 
 ## Limitations
 

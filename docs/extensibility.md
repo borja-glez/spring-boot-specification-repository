@@ -56,6 +56,12 @@ List<Order> mine = orderRepository.query(planFromClient)
 `AllowedFieldsPolicy.validate(plan)` runs the same check on demand; the HTTP argument resolver
 calls it so that a disallowed client field fails before the controller runs.
 
+Selections, `groupBy`, aggregates, joins, fetches and subquery bodies are defined by the server and
+are not checked against the policy. Never pass a client value straight to `select(...)`,
+`groupBy(...)` or `leftFetch(...)`; validate it yourself first. The README table
+[What the policy covers](../README.md#what-the-policy-covers) lists every part of a plan and whether
+it is checked.
+
 ### `@FilterableQuery` denies by default
 
 For HTTP endpoints, `@FilterableQuery` builds the policy from its `filterableFields` and
