@@ -1,5 +1,6 @@
 package com.borjaglez.specrepository.jpa.support;
 
+import java.time.DateTimeException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -16,6 +17,7 @@ import jakarta.persistence.criteria.Root;
 import jakarta.persistence.criteria.Subquery;
 import jakarta.persistence.metamodel.ManagedType;
 
+import org.springframework.core.convert.ConversionException;
 import org.springframework.data.jpa.domain.Specification;
 
 import com.borjaglez.specrepository.core.AllowedFieldsPolicy;
@@ -26,6 +28,7 @@ import com.borjaglez.specrepository.core.FilterOperator;
 import com.borjaglez.specrepository.core.GroupCondition;
 import com.borjaglez.specrepository.core.HavingCondition;
 import com.borjaglez.specrepository.core.InvalidFilterException;
+import com.borjaglez.specrepository.core.InvalidFilterValueException;
 import com.borjaglez.specrepository.core.JoinInstruction;
 import com.borjaglez.specrepository.core.JoinMode;
 import com.borjaglez.specrepository.core.LogicalOperator;
@@ -205,15 +208,15 @@ public class QueryPlanSpecificationFactory {
     }
     if (Operators.BETWEEN.equals(operator)) {
       List<?> bounds = havingRangeValues(condition.value());
-      Object lower = valueConversionService.convert(bounds.get(0), targetType, operator);
-      Object upper = valueConversionService.convert(bounds.get(1), targetType, operator);
+      Object lower = convertValue(condition.field(), bounds.get(0), targetType, operator);
+      Object upper = convertValue(condition.field(), bounds.get(1), targetType, operator);
       return cb.between((Expression<Comparable>) aggregate, (Comparable) lower, (Comparable) upper);
     }
     if (!isSupportedComparator(operator)) {
       throw new IllegalArgumentException(
           "Unsupported operator for having clause: " + operator.value());
     }
-    Object converted = valueConversionService.convert(condition.value(), targetType, operator);
+    Object converted = convert(condition.field(), condition.value(), targetType, operator);
     if (Operators.EQUALS.equals(operator)) {
       return cb.equal(aggregate, converted);
     }
@@ -288,8 +291,11 @@ public class QueryPlanSpecificationFactory {
               predicateCondition.field(),
               !WHOLE_COLLECTION_OPERATORS.contains(predicateCondition.operator()));
       Object convertedValue =
-          valueConversionService.convert(
-              predicateCondition.value(), path.getJavaType(), predicateCondition.operator());
+          convert(
+              predicateCondition.field(),
+              predicateCondition.value(),
+              path.getJavaType(),
+              predicateCondition.operator());
       Predicate predicate =
           handler.create(
               new OperatorContext(
@@ -308,6 +314,34 @@ public class QueryPlanSpecificationFactory {
     return condition.logicalOperator() == LogicalOperator.OR
         ? criteriaBuilder.or(predicateArray)
         : criteriaBuilder.and(predicateArray);
+  }
+
+  /**
+   * Converts a filter value to the field's type, element by element for lists, so a failure reports
+   * the value that could not be converted.
+   */
+  private Object convert(String field, Object value, Class<?> targetType, FilterOperator operator) {
+    if (!(value instanceof Iterable<?> iterable)) {
+      return convertValue(field, value, targetType, operator);
+    }
+    List<Object> converted = new ArrayList<>();
+    for (Object element : iterable) {
+      converted.add(convertValue(field, element, targetType, operator));
+    }
+    return converted;
+  }
+
+  /**
+   * Converts one value, reporting a conversion failure as an {@link InvalidFilterValueException}.
+   * Other runtime exceptions indicate a bug and propagate unchanged.
+   */
+  private Object convertValue(
+      String field, Object value, Class<?> targetType, FilterOperator operator) {
+    try {
+      return valueConversionService.convert(value, targetType, operator);
+    } catch (ConversionException | DateTimeException | IllegalArgumentException e) {
+      throw new InvalidFilterValueException(field, value, targetType, e);
+    }
   }
 
   private Predicate translateSubquery(
