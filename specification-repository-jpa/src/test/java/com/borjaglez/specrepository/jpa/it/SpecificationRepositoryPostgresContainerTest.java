@@ -90,6 +90,24 @@ class SpecificationRepositoryPostgresContainerTest {
         .isEqualTo(1);
   }
 
+  @Test
+  void ignoreCaseShouldMatchLikeWildcardsInTheSearchTermLiterally() {
+    jdbcTemplate.execute("create extension if not exists unaccent");
+    repository.save(new TestCustomer("100% Algodón", "ACTIVE", null));
+    repository.save(new TestCustomer("Algodón puro", "ACTIVE", null));
+    repository.save(new TestCustomer("C:\\algodón", "ACTIVE", null));
+
+    assertThat(repository.query().where("name", Operators.CONTAINS, "%", true, false).findAll())
+        .extracting(TestCustomer::getName)
+        .containsExactly("100% Algodón");
+    assertThat(
+            repository.query().where("name", Operators.CONTAINS, "0% algodon", true, false).count())
+        .isEqualTo(1);
+    assertThat(repository.query().where("name", Operators.CONTAINS, "\\", true, false).findAll())
+        .extracting(TestCustomer::getName)
+        .containsExactly("C:\\algodón");
+  }
+
   @Configuration(proxyBeanMethods = false)
   @EnableAutoConfiguration
   @EnableJpaRepositories(

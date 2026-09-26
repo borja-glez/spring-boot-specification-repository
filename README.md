@@ -591,10 +591,10 @@ record ProductSummary(String name, String categoryName) {}
 |---|---|---|
 | `EQUALS` | Equality comparison | `.where("status", Operators.EQUALS, "ACTIVE")` |
 | `NOT_EQUALS` | Negated equality | `.where("status", Operators.NOT_EQUALS, "DISCONTINUED")` |
-| `CONTAINS` | SQL `LIKE '%value%'` | `.where("name", Operators.CONTAINS, "Pro")` |
-| `NOT_CONTAINS` | Negated `LIKE '%value%'` | `.where("name", Operators.NOT_CONTAINS, "test")` |
-| `STARTS_WITH` | SQL `LIKE 'value%'` | `.where("name", Operators.STARTS_WITH, "Mac")` |
-| `ENDS_WITH` | SQL `LIKE '%value'` | `.where("email", Operators.ENDS_WITH, "@example.com")` |
+| `CONTAINS` | SQL `LIKE '%value%'`; the value is matched literally (`%`, `_` and `\` are escaped) | `.where("name", Operators.CONTAINS, "Pro")` |
+| `NOT_CONTAINS` | Negated `LIKE '%value%'`; the value is matched literally | `.where("name", Operators.NOT_CONTAINS, "test")` |
+| `STARTS_WITH` | SQL `LIKE 'value%'`; the value is matched literally | `.where("name", Operators.STARTS_WITH, "Mac")` |
+| `ENDS_WITH` | SQL `LIKE '%value'`; the value is matched literally | `.where("email", Operators.ENDS_WITH, "@example.com")` |
 | `GREATER_THAN` | `>` comparison | `.where("price", Operators.GREATER_THAN, "100")` |
 | `GREATER_THAN_OR_EQUAL` | `>=` comparison | `.where("price", Operators.GREATER_THAN_OR_EQUAL, "50")` |
 | `LESS_THAN` | `<` comparison | `.where("price", Operators.LESS_THAN, "500")` |

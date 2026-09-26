@@ -27,6 +27,8 @@ import com.borjaglez.specrepository.jpa.spi.OperatorHandler;
 
 class DefaultOperatorHandlersTest {
 
+  private static final char ESCAPE = '\\';
+
   private CriteriaBuilder cb;
   private Path<?> path;
   private Predicate predicate;
@@ -159,7 +161,7 @@ class DefaultOperatorHandlersTest {
   @SuppressWarnings("unchecked")
   @Test
   void containsShouldCreateLikePredicate() {
-    when(cb.like(any(Expression.class), eq("%test%"))).thenReturn(predicate);
+    when(cb.like(any(Expression.class), eq("%test%"), eq(ESCAPE))).thenReturn(predicate);
 
     Predicate result = registry.get(Operators.CONTAINS).create(context("test"));
 
@@ -169,7 +171,7 @@ class DefaultOperatorHandlersTest {
   @Test
   void containsShouldIgnoreCaseWhenRequested() {
     Normalized normalized = normalizeBothSides("%test%");
-    when(cb.like(normalized.column(), normalized.term())).thenReturn(predicate);
+    when(cb.like(normalized.column(), normalized.term(), ESCAPE)).thenReturn(predicate);
 
     Predicate result = registry.get(Operators.CONTAINS).create(contextIgnoreCase("test"));
 
@@ -181,7 +183,7 @@ class DefaultOperatorHandlersTest {
   @SuppressWarnings("unchecked")
   @Test
   void notContainsShouldCreateNegatedLikePredicate() {
-    when(cb.like(any(Expression.class), eq("%test%"))).thenReturn(predicate);
+    when(cb.like(any(Expression.class), eq("%test%"), eq(ESCAPE))).thenReturn(predicate);
     Predicate negated = mock(Predicate.class);
     when(predicate.not()).thenReturn(negated);
 
@@ -195,7 +197,7 @@ class DefaultOperatorHandlersTest {
   @SuppressWarnings("unchecked")
   @Test
   void startsWithShouldCreateLikePredicate() {
-    when(cb.like(any(Expression.class), eq("test%"))).thenReturn(predicate);
+    when(cb.like(any(Expression.class), eq("test%"), eq(ESCAPE))).thenReturn(predicate);
 
     Predicate result = registry.get(Operators.STARTS_WITH).create(context("test"));
 
@@ -207,11 +209,55 @@ class DefaultOperatorHandlersTest {
   @SuppressWarnings("unchecked")
   @Test
   void endsWithShouldCreateLikePredicate() {
-    when(cb.like(any(Expression.class), eq("%test"))).thenReturn(predicate);
+    when(cb.like(any(Expression.class), eq("%test"), eq(ESCAPE))).thenReturn(predicate);
 
     Predicate result = registry.get(Operators.ENDS_WITH).create(context("test"));
 
     assertThat(result).isSameAs(predicate);
+  }
+
+  // LIKE wildcards in the search term
+
+  @SuppressWarnings("unchecked")
+  @Test
+  void likeOperatorsShouldEscapeWildcardsAndEscapeCharacterInTheTerm() {
+    String term = "50%_a\\b";
+    String escaped = "50\\%\\_a\\\\b";
+    when(cb.like(any(Expression.class), eq("%" + escaped + "%"), eq(ESCAPE))).thenReturn(predicate);
+    when(cb.like(any(Expression.class), eq(escaped + "%"), eq(ESCAPE))).thenReturn(predicate);
+    when(cb.like(any(Expression.class), eq("%" + escaped), eq(ESCAPE))).thenReturn(predicate);
+    Predicate negated = mock(Predicate.class);
+    when(predicate.not()).thenReturn(negated);
+
+    assertThat(registry.get(Operators.CONTAINS).create(context(term))).isSameAs(predicate);
+    assertThat(registry.get(Operators.NOT_CONTAINS).create(context(term))).isSameAs(negated);
+    assertThat(registry.get(Operators.STARTS_WITH).create(context(term))).isSameAs(predicate);
+    assertThat(registry.get(Operators.ENDS_WITH).create(context(term))).isSameAs(predicate);
+  }
+
+  @Test
+  void likeOperatorsShouldEscapeTheTermBeforeNormalizingItWhenIgnoringCase() {
+    String term = "50%_a\\b";
+    String escaped = "50\\%\\_a\\\\b";
+    Normalized contains = normalizeBothSides("%" + escaped + "%");
+    when(cb.like(contains.column(), contains.term(), ESCAPE)).thenReturn(predicate);
+    Predicate negated = mock(Predicate.class);
+    when(predicate.not()).thenReturn(negated);
+
+    assertThat(registry.get(Operators.CONTAINS).create(contextIgnoreCase(term)))
+        .isSameAs(predicate);
+    assertThat(registry.get(Operators.NOT_CONTAINS).create(contextIgnoreCase(term)))
+        .isSameAs(negated);
+
+    Normalized startsWith = normalizeBothSides(escaped + "%");
+    when(cb.like(startsWith.column(), startsWith.term(), ESCAPE)).thenReturn(predicate);
+    assertThat(registry.get(Operators.STARTS_WITH).create(contextIgnoreCase(term)))
+        .isSameAs(predicate);
+
+    Normalized endsWith = normalizeBothSides("%" + escaped);
+    when(cb.like(endsWith.column(), endsWith.term(), ESCAPE)).thenReturn(predicate);
+    assertThat(registry.get(Operators.ENDS_WITH).create(contextIgnoreCase(term)))
+        .isSameAs(predicate);
   }
 
   // GREATER_THAN
