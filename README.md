@@ -575,6 +575,7 @@ record ProductSummary(String name, String categoryName) {}
 - grouped `select(...)` + aggregate combinations return `Object[]` rows at runtime
 - `selectInto(...)` maps the current selection list into a constructor-based DTO or record
 - `groupBy(...)` is applied to the generated `CriteriaQuery`
+- `groupBy(...)` does not add its fields to the result rows; select them with `select(...)`, in the order you want the columns
 - grouped `count()` and grouped aggregate queries honor the same filters as `findAll()`
 - nested paths and aggregate selections can be combined before `selectInto(...)`
 - constructor argument order must match the declared selection order

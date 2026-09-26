@@ -52,6 +52,10 @@ Long   customers   = (Long)   active.get("customers");
 
 Notes:
 
+- `groupBy(...)` does not add its fields to the result: a row only contains
+  the declared selections. Select the group fields with `select(...)`, in the
+  order you want the columns, or the rows will not say which group they
+  belong to.
 - Column order matches the order in which selections were declared.
 - For `FieldSelection` (`select(...)`) the column name is the field name.
 - For `AggregateSelection` the column name is the alias if provided, or
@@ -75,11 +79,15 @@ supported (yet).
 ```java
 List<GroupedRow> bigSpenders = orderRepository.query()
     .groupBy("customerId")
+    .select("customerId")
     .sumAs("revenue", "amount")
     .countAs("orders", "id")
     .having(AggregateFunction.SUM, "amount", Operators.GREATER_THAN, 1_000)
     .having(AggregateFunction.COUNT, "id", Operators.GREATER_THAN_OR_EQUAL, 5)
     .findAllGrouped();
+
+// each row: [customerId, revenue, orders]
+Object customerId = bigSpenders.get(0).get("customerId");
 ```
 
 ### Supported operators
