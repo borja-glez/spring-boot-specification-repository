@@ -75,6 +75,11 @@ public class SpecificationRepositoryImpl<T, ID extends Serializable>
     if (plan.hasSelections()) {
       return (List<T>) executeProjectedQuery(plan, null);
     }
+    return fetchEntities(plan, 0);
+  }
+
+  /** The entities of the plan, at most {@code limit} of them ({@code 0}: all). */
+  private List<T> fetchEntities(QueryPlan<T> plan, int limit) {
     CriteriaBuilder builder = entityManager.getCriteriaBuilder();
     CriteriaQuery<T> query = builder.createQuery(getDomainClass());
     Root<T> root = query.from(getDomainClass());
@@ -83,7 +88,11 @@ public class SpecificationRepositoryImpl<T, ID extends Serializable>
     if (plan.sort().isSorted()) {
       query.orderBy(QueryUtils.toOrders(plan.sort(), root, builder));
     }
-    return entityManager.createQuery(query).getResultList();
+    TypedQuery<T> typedQuery = entityManager.createQuery(query);
+    if (limit > 0) {
+      typedQuery.setMaxResults(limit);
+    }
+    return typedQuery.getResultList();
   }
 
   @Override
@@ -158,10 +167,17 @@ public class SpecificationRepositoryImpl<T, ID extends Serializable>
   @Override
   @SuppressWarnings("unchecked")
   public Optional<T> findOne(QueryPlan<T> plan) {
-    List<T> results =
-        plan.projectionType() != null
-            ? (List<T>) executeProjectedQuery(plan, null, requiredProjectionType(plan), 1)
-            : findAll(plan);
+    // Only the first row is read: the database stops there instead of sending every match.
+    List<T> results;
+    if (plan.projectionType() != null) {
+      results = (List<T>) executeProjectedQuery(plan, null, requiredProjectionType(plan), 1);
+    } else if (plan.hasSelections()) {
+      results = (List<T>) executeProjectedQuery(plan, null, 1);
+    } else {
+      // A limit over a fetched collection makes Hibernate paginate in memory (or fail, with
+      // fail_on_pagination_over_collection_fetch): plans with fetches keep reading every row.
+      results = fetchEntities(plan, plan.fetches().isEmpty() ? 1 : 0);
+    }
     return results.stream().findFirst();
   }
 

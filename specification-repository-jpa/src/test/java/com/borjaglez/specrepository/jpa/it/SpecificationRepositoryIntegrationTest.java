@@ -256,6 +256,44 @@ class SpecificationRepositoryIntegrationTest {
     assertThat(result).isPresent().get().extracting(TestCustomer::getName).isEqualTo("Borja");
   }
 
+  @org.springframework.beans.factory.annotation.Autowired
+  private jakarta.persistence.EntityManager entityManager;
+
+  @Test
+  void shouldReadOnlyTheFirstRowForFindOne() {
+    entityManager.flush();
+    entityManager.clear();
+    org.hibernate.stat.Statistics statistics =
+        entityManager
+            .getEntityManagerFactory()
+            .unwrap(org.hibernate.SessionFactory.class)
+            .getStatistics();
+    statistics.setStatisticsEnabled(true);
+    statistics.clear();
+    try {
+      Optional<TestCustomer> first =
+          repository
+              .query()
+              .where("status", Operators.EQUALS, "ACTIVE")
+              .sort(org.springframework.data.domain.Sort.by("name"))
+              .findOne();
+
+      assertThat(first).get().extracting(TestCustomer::getName).isEqualTo("Borja");
+      assertThat(statistics.getEntityStatistics(TestCustomer.class.getName()).getLoadCount())
+          .isEqualTo(1);
+    } finally {
+      statistics.setStatisticsEnabled(false);
+    }
+  }
+
+  @Test
+  void shouldFindOneWithAFetchedCollection() {
+    Optional<TestCustomer> result =
+        repository.query().leftFetch("orders").where("name", Operators.EQUALS, "Borja").findOne();
+
+    assertThat(result).get().extracting(TestCustomer::getName).isEqualTo("Borja");
+  }
+
   @Test
   void shouldReturnEmptyOptionalWhenNoMatch() {
     Optional<TestCustomer> result =
