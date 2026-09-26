@@ -4,6 +4,27 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [0.3.0] - 2026-09-26
+
+### Added
+- Add COUNT_DISTINCT aggregate (#45) (5a9b792)
+
+### Documentation
+- Update README for v0.2.0 (b977913)
+
+### Fixed
+- Return and count each root once when a filter crosses a collection (#62) (c470fd4)
+- Fetch an association that is also joined (#60) (dc9388c)
+- Share association joins between filters, projections and grouping (#58) (2de3cf2)
+- Treat eq/neq with a null value as is null / is not null (#56) (6e429ce)
+- Ignore accents in the search term of case-insensitive filters (#54) (8f71007)
+- Pass basePackages of @EnableSpecificationRepositories on to Spring Data (#51) (c318b4f)
+- Make findOne read a single row (#49) (d263200)
+- Join basic element collections in filter paths (#47) (bd5089f)
+- Route plan-based repository methods to the implementation (#43) (fb481d1)
+
+### Miscellaneous
+- Bump version to 0.2.1-SNAPSHOT (0f0b90e)
 ## [0.2.0] - 2026-05-14
 
 ### Miscellaneous
