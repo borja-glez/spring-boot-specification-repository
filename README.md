@@ -527,6 +527,10 @@ PostgreSQL `unaccent` extension to be enabled.
 Important: this is NOT a portable SQL abstraction yet. If you run the same overload on another
 dialect, you must provide a compatible database function or replace the operator handling strategy.
 
+HTTP endpoints cannot request this flag from the client; the server declares case-insensitive
+fields with `@FilterableQuery(caseInsensitiveFields = ...)` (see
+[Case-insensitive fields](#case-insensitive-fields)).
+
 ### Field Whitelisting
 
 When the DSL is exposed through a public API, restrict which fields clients can filter and sort by:
@@ -766,6 +770,9 @@ GET /api/products?filter=name:contains:Laptop&filter=status:eq:ACTIVE
 - **Sorting**: `sort=field,direction` (repeatable; direction is `asc` or `desc`, default `asc`).
 - **Pagination**: handled by Spring's standard `Pageable` resolver — this module does not parse
   `page`/`size`.
+- **Case sensitivity of values**: matching is case-sensitive unless the server declares the field in
+  `@FilterableQuery(caseInsensitiveFields = ...)` (see [Case-insensitive fields](#case-insensitive-fields)).
+  Clients cannot choose it; there is no syntax for it.
 
 Field names are validated against a strict pattern (`[a-zA-Z][a-zA-Z0-9_]*` with optional dotted
 segments), so paths like `../../secret` are rejected as syntax errors.
@@ -819,6 +826,40 @@ Composition may be nested (add `ElementType.ANNOTATION_TYPE` to the composed ann
 `@Target` to meta-annotate it again), and a composed annotation can expose attributes of its own
 with `@AliasFor(annotation = FilterableQuery.class)`, for example a `value()` that sets the entity.
 A `@FilterableQuery` declared directly on the parameter wins over a meta-present one.
+
+#### Case-insensitive fields
+
+A public search box usually wants `name:contains:cafe` to find "Café de Colombia". The server
+declares which fields are matched case-insensitively; the client syntax does not change:
+
+```java
+@GetMapping("/search")
+public Page<Product> search(
+        @FilterableQuery(
+                value = Product.class,
+                filterableFields = {"name", "description", "status"},
+                caseInsensitiveFields = {"name", "description"})
+                QueryPlan<Product> query,
+        Pageable pageable) {
+    return productRepository.findAll(query, pageable);
+}
+```
+
+- Conditions on those fields, in `filter` and in `orFilter`, are built with `ignoreCase = true`
+  when the operator is `eq`, `neq`, `contains`, `notcontains`, `startswith` or `endswith`.
+- Other operators on those fields (`gt`, `gte`, `lt`, `lte`, `between`, `in`, `notin`, the null and
+  empty checks, and custom operators) are not affected: they keep the default matching and are not
+  rejected.
+- The attribute is honoured through composed annotations and `@AliasFor` overrides like the other
+  attributes.
+- With the default operator handlers, `ignoreCase` compares `unaccent(UPPER(path))` with
+  `unaccent(UPPER(value))`, so on PostgreSQL the match is **also accent-insensitive** and requires
+  the `unaccent` extension (`CREATE EXTENSION unaccent;`). Other databases need a compatible
+  `unaccent` function or custom operator handlers (see
+  [Case-Insensitive Search](#case-insensitive-search-postgresql)).
+
+Outside Spring MVC, pass the same set to
+`HttpFilterParser.toQueryPlan(entityType, params, policy, caseInsensitiveFields)`.
 
 `HttpFilterAutoConfiguration` is also registered for the `@WebMvcTest` slice on Spring Boot 3 and
 Spring Boot 4, so controller slice tests resolve `@FilterableQuery QueryPlan<T>` parameters without

@@ -14,6 +14,7 @@ import org.springframework.data.domain.Sort;
 
 import com.borjaglez.specrepository.core.AllowedFieldsPolicy;
 import com.borjaglez.specrepository.core.FilterOperator;
+import com.borjaglez.specrepository.core.Operators;
 import com.borjaglez.specrepository.core.QueryPlan;
 import com.borjaglez.specrepository.core.QueryPlanBuilder;
 import com.borjaglez.specrepository.core.SpecificationQueryBuilder;
@@ -29,6 +30,15 @@ public final class HttpFilterParser {
       Set.of("isnull", "isnotnull", "isempty", "isnotempty");
 
   private static final Set<String> MULTI_VALUE_OPERATORS = Set.of("in", "notin", "between");
+
+  private static final Set<FilterOperator> CASE_INSENSITIVE_OPERATORS =
+      Set.of(
+          Operators.EQUALS,
+          Operators.NOT_EQUALS,
+          Operators.CONTAINS,
+          Operators.NOT_CONTAINS,
+          Operators.STARTS_WITH,
+          Operators.ENDS_WITH);
 
   private final HttpFilterParserConfiguration config;
 
@@ -52,34 +62,66 @@ public final class HttpFilterParser {
       QueryPlanBuilder<T> builder, Map<String, List<String>> params) {
     Objects.requireNonNull(builder, "builder must not be null");
     ParsedHttpQuery parsed = parse(params);
-    return applyParsed(builder, parsed);
+    return applyParsed(builder, parsed, Set.of());
   }
 
   public <T> QueryPlan<T> toQueryPlan(Class<T> entityType, Map<String, List<String>> params) {
     Objects.requireNonNull(entityType, "entityType must not be null");
     ParsedHttpQuery parsed = parse(params);
     QueryPlanBuilder<T> builder = SpecificationQueryBuilder.forEntity(entityType);
-    return applyParsed(builder, parsed).build();
+    return applyParsed(builder, parsed, Set.of()).build();
   }
 
   public <T> QueryPlan<T> toQueryPlan(
       Class<T> entityType, Map<String, List<String>> params, AllowedFieldsPolicy policy) {
-    Objects.requireNonNull(entityType, "entityType must not be null");
-    Objects.requireNonNull(policy, "policy must not be null");
-    ParsedHttpQuery parsed = parse(params);
-    QueryPlanBuilder<T> builder = SpecificationQueryBuilder.forEntity(entityType);
-    return applyParsed(builder, parsed).allowedFields(policy).build();
+    return toQueryPlan(entityType, params, policy, Set.of());
   }
 
-  private <T> QueryPlanBuilder<T> applyParsed(QueryPlanBuilder<T> builder, ParsedHttpQuery parsed) {
+  /**
+   * Builds a query plan like {@link #toQueryPlan(Class, Map, AllowedFieldsPolicy)} and matches the
+   * given fields case-insensitively.
+   *
+   * <p>Conditions on a field in {@code caseInsensitiveFields}, in {@code filter} as well as in
+   * {@code orFilter}, get {@code ignoreCase = true} when their operator is {@code eq}, {@code neq},
+   * {@code contains}, {@code notcontains}, {@code startswith} or {@code endswith}. Other operators
+   * on those fields keep the default matching. With the default operator handlers on PostgreSQL the
+   * comparison is also accent-insensitive ({@code unaccent}).
+   *
+   * @param caseInsensitiveFields fields matched case-insensitively; empty for none
+   */
+  public <T> QueryPlan<T> toQueryPlan(
+      Class<T> entityType,
+      Map<String, List<String>> params,
+      AllowedFieldsPolicy policy,
+      Set<String> caseInsensitiveFields) {
+    Objects.requireNonNull(entityType, "entityType must not be null");
+    Objects.requireNonNull(policy, "policy must not be null");
+    Objects.requireNonNull(caseInsensitiveFields, "caseInsensitiveFields must not be null");
+    ParsedHttpQuery parsed = parse(params);
+    QueryPlanBuilder<T> builder = SpecificationQueryBuilder.forEntity(entityType);
+    return applyParsed(builder, parsed, caseInsensitiveFields).allowedFields(policy).build();
+  }
+
+  private <T> QueryPlanBuilder<T> applyParsed(
+      QueryPlanBuilder<T> builder, ParsedHttpQuery parsed, Set<String> caseInsensitiveFields) {
     for (ParsedFilter filter : parsed.filters()) {
-      builder.where(filter.field(), filter.operator(), filter.value());
+      builder.where(
+          filter.field(),
+          filter.operator(),
+          filter.value(),
+          ignoreCase(filter, caseInsensitiveFields),
+          false);
     }
     for (ParsedOrGroup orGroup : parsed.orGroups()) {
       builder.or(
           g -> {
             for (ParsedFilter filter : orGroup.filters()) {
-              g.where(filter.field(), filter.operator(), filter.value());
+              g.where(
+                  filter.field(),
+                  filter.operator(),
+                  filter.value(),
+                  ignoreCase(filter, caseInsensitiveFields),
+                  false);
             }
           });
     }
@@ -87,6 +129,11 @@ public final class HttpFilterParser {
       builder.sort(parsed.sort());
     }
     return builder;
+  }
+
+  private static boolean ignoreCase(ParsedFilter filter, Set<String> caseInsensitiveFields) {
+    return caseInsensitiveFields.contains(filter.field())
+        && CASE_INSENSITIVE_OPERATORS.contains(filter.operator());
   }
 
   private List<ParsedFilter> parseFilters(Map<String, List<String>> params) {

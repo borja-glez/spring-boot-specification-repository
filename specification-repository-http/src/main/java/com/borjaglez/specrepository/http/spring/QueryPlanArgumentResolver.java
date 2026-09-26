@@ -42,7 +42,9 @@ public class QueryPlanArgumentResolver implements HandlerMethodArgumentResolver 
     FilterableQuery annotation = findAnnotation(parameter);
     Map<String, List<String>> params = extractParams(webRequest);
     AllowedFieldsPolicy policy = buildPolicy(annotation);
-    return parser.toQueryPlan(annotation.value(), params, policy);
+    Set<String> caseInsensitiveFields =
+        Arrays.stream(annotation.caseInsensitiveFields()).collect(Collectors.toSet());
+    return parser.toQueryPlan(annotation.value(), params, policy, caseInsensitiveFields);
   }
 
   /**

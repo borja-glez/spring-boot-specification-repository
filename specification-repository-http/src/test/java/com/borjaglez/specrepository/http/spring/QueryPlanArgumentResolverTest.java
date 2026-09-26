@@ -10,6 +10,7 @@ import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 import java.lang.reflect.Method;
+import java.util.List;
 import java.util.Map;
 
 import org.junit.jupiter.api.Test;
@@ -20,6 +21,7 @@ import org.springframework.web.method.HandlerMethod;
 
 import com.borjaglez.specrepository.core.AllowedFieldsPolicy;
 import com.borjaglez.specrepository.core.DisallowedFieldException;
+import com.borjaglez.specrepository.core.GroupCondition;
 import com.borjaglez.specrepository.core.Operators;
 import com.borjaglez.specrepository.core.PredicateCondition;
 import com.borjaglez.specrepository.core.QueryPlan;
@@ -111,6 +113,44 @@ class QueryPlanArgumentResolverTest {
 
   @SuppressWarnings("unused")
   void composedWrongTypeMethod(@TestEntitySearch String notAQueryPlan) {}
+
+  @Target({ElementType.PARAMETER, ElementType.ANNOTATION_TYPE})
+  @Retention(RetentionPolicy.RUNTIME)
+  @FilterableQuery(
+      value = TestEntity.class,
+      filterableFields = {"name", "code"},
+      caseInsensitiveFields = {"name"})
+  @interface CaseInsensitiveSearch {}
+
+  @Target(ElementType.PARAMETER)
+  @Retention(RetentionPolicy.RUNTIME)
+  @CaseInsensitiveSearch
+  @interface NestedCaseInsensitiveSearch {}
+
+  @Target(ElementType.PARAMETER)
+  @Retention(RetentionPolicy.RUNTIME)
+  @FilterableQuery(TestEntity.class)
+  @interface OverridableCaseInsensitiveSearch {
+    @AliasFor(annotation = FilterableQuery.class, attribute = "caseInsensitiveFields")
+    String[] value();
+  }
+
+  @SuppressWarnings("unused")
+  void caseInsensitiveMethod(
+      @FilterableQuery(
+              value = TestEntity.class,
+              caseInsensitiveFields = {"name"})
+          QueryPlan<TestEntity> query) {}
+
+  @SuppressWarnings("unused")
+  void composedCaseInsensitiveMethod(@CaseInsensitiveSearch QueryPlan<TestEntity> query) {}
+
+  @SuppressWarnings("unused")
+  void nestedCaseInsensitiveMethod(@NestedCaseInsensitiveSearch QueryPlan<TestEntity> query) {}
+
+  @SuppressWarnings("unused")
+  void aliasCaseInsensitiveMethod(
+      @OverridableCaseInsensitiveSearch("code") QueryPlan<TestEntity> query) {}
 
   @Test
   void shouldSupportAnnotatedQueryPlanParameter() throws Exception {
@@ -285,9 +325,75 @@ class QueryPlanArgumentResolverTest {
     assertTestEntitySearchPolicy(plan.allowedFieldsPolicy());
   }
 
+  @Test
+  void shouldIgnoreCaseOnlyForDeclaredCaseInsensitiveFields() throws Exception {
+    QueryPlan<?> plan =
+        resolve(
+            getParam("caseInsensitiveMethod", QueryPlan.class),
+            Map.of(
+                "filter",
+                new String[] {"name:contains:cafe", "code:contains:cafe", "name:gt:a"},
+                "orFilter",
+                new String[] {"name:eq:cafe;code:eq:cafe"}));
+
+    var conditions = plan.rootCondition().conditions();
+    assertThat(((PredicateCondition) conditions.get(0)).ignoreCase()).isTrue();
+    assertThat(((PredicateCondition) conditions.get(1)).ignoreCase()).isFalse();
+    assertThat(((PredicateCondition) conditions.get(2)).ignoreCase()).isFalse();
+    var orGroup = (GroupCondition) conditions.get(3);
+    assertThat(orGroup.conditions())
+        .map(c -> ((PredicateCondition) c).ignoreCase())
+        .containsExactly(true, false);
+    assertThat(plan.allowedFieldsPolicy()).isSameAs(AllowedFieldsPolicy.allowAll());
+  }
+
+  @Test
+  void shouldKeepCaseSensitiveMatchingByDefault() throws Exception {
+    QueryPlan<?> plan =
+        resolve(
+            getParam("defaultAnnotatedMethod", QueryPlan.class),
+            Map.of("filter", new String[] {"name:contains:cafe"}));
+
+    assertThat(((PredicateCondition) plan.rootCondition().conditions().get(0)).ignoreCase())
+        .isFalse();
+  }
+
+  @Test
+  void shouldHonourCaseInsensitiveFieldsFromComposedAnnotations() throws Exception {
+    for (String method : List.of("composedCaseInsensitiveMethod", "nestedCaseInsensitiveMethod")) {
+      QueryPlan<?> plan =
+          resolve(
+              getParam(method, QueryPlan.class),
+              Map.of("filter", new String[] {"name:contains:cafe", "code:contains:cafe"}));
+
+      assertThat(plan.rootCondition().conditions())
+          .map(c -> ((PredicateCondition) c).ignoreCase())
+          .containsExactly(true, false);
+      plan.allowedFieldsPolicy().validateFilter("code");
+      assertThatThrownBy(() -> plan.allowedFieldsPolicy().validateFilter("status"))
+          .isInstanceOf(DisallowedFieldException.class);
+    }
+  }
+
+  @Test
+  void shouldHonourCaseInsensitiveFieldsOverriddenWithAliasFor() throws Exception {
+    QueryPlan<?> plan =
+        resolve(
+            getParam("aliasCaseInsensitiveMethod", QueryPlan.class),
+            Map.of("filter", new String[] {"name:contains:cafe", "code:contains:cafe"}));
+
+    assertThat(plan.rootCondition().conditions())
+        .map(c -> ((PredicateCondition) c).ignoreCase())
+        .containsExactly(false, true);
+  }
+
   private QueryPlan<?> resolve(MethodParameter param) {
+    return resolve(param, Map.of());
+  }
+
+  private QueryPlan<?> resolve(MethodParameter param, Map<String, String[]> params) {
     NativeWebRequest webRequest = mock(NativeWebRequest.class);
-    when(webRequest.getParameterMap()).thenReturn(Map.of());
+    when(webRequest.getParameterMap()).thenReturn(params);
     return (QueryPlan<?>) resolver.resolveArgument(param, null, webRequest, null);
   }
 
