@@ -263,10 +263,36 @@ public class SpecificationExecutableQuery<T> extends QueryPlanBuilder<T> {
     return new ProjectedSpecificationExecutableQuery<>(this, repository);
   }
 
+  /**
+   * The matching entities.
+   *
+   * @throws IllegalStateException if the query selects fields or aggregates: read those with {@link
+   *     #findRows()} or {@link #findRow()}, or map them with {@link #selectInto(Class)}
+   */
   public List<T> findAll() {
     return repository.findAll(build());
   }
 
+  /**
+   * The selected fields and aggregates, one {@link GroupedRow} per result row.
+   *
+   * @throws IllegalStateException if the query has no selections
+   */
+  public List<GroupedRow> findRows() {
+    return repository.findRows(build());
+  }
+
+  /**
+   * The first row of {@link #findRows()}, reading only that row. A single aggregate without {@code
+   * groupBy}, such as {@code sum("age")}, returns exactly one row holding its value.
+   *
+   * @throws IllegalStateException if the query has no selections
+   */
+  public Optional<GroupedRow> findRow() {
+    return repository.findRow(build());
+  }
+
+  /** Same as {@link #findRows()}, named for {@code groupBy} reports. */
   public List<GroupedRow> findAllGrouped() {
     return repository.findAllGrouped(build());
   }

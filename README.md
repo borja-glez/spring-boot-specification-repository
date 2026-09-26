@@ -123,8 +123,9 @@ The builder creates an immutable query plan. The repository executes it.
 
 ### Projection Queries
 
-`select(...)` now affects the executed JPA query. Use `selectInto(...)` when you want typed DTO or
-record projections.
+`select(...)` affects the executed JPA query. A query with selections returns rows, not entities:
+map them with `selectInto(...)` into a DTO or record, or read them as `GroupedRow` with `findRows()`
+/ `findRow()`.
 
 ```java
 List<NameOnly> names = productRepository.query()
@@ -135,14 +136,22 @@ List<NameOnly> names = productRepository.query()
     .findAll();
 
 record NameOnly(String name) {}
+
+List<GroupedRow> rows = productRepository.query()
+    .where("status", Operators.EQUALS, "ACTIVE")
+    .select("name", "category.name")
+    .findRows();
+String first = (String) rows.get(0).get("name");
 ```
 
 Projection behavior:
 
-- one selected field returns scalar values at runtime (for example `List<String>`)
-- one aggregate function returns a scalar value at runtime (for example `Optional<Double>` from `avg(...)`)
-- multiple selected fields return `Object[]` rows at runtime
-- grouped aggregate queries can combine `select(...)` and aggregate functions, returning `Object[]` rows at runtime
+- `findRows()` returns `List<GroupedRow>`, one row per result, with lookup by column name or index
+- `findRow()` returns `Optional<GroupedRow>`, reading only the first row
+- the entity terminals (`findAll()`, `findAll(Pageable)`, `findSlice(Pageable)`, `findOne()`, and the
+  repository methods that take a `QueryPlan`) reject a query with selections and no `selectInto(...)`
+  with an `IllegalStateException`: selected values are never returned typed as the entity
+- to paginate selected fields or aggregates, map them with `selectInto(...)`
 - constructor-based DTO and record projections are supported through `selectInto(...)`; in a GraalVM
   native image the DTO constructors must be registered for reflection (see
   [GraalVM Native Image](#graalvm-native-image))
@@ -155,32 +164,36 @@ Projection behavior:
 Aggregate functions use the same projection pipeline as `select(...)`.
 
 ```java
-Optional<?> totalAge = customerRepository.query()
+Optional<GroupedRow> totalAge = customerRepository.query()
     .where("status", Operators.IS_NOT_NULL, null)
     .sum("age")
-    .findOne();
+    .findRow();
+Number total = (Number) totalAge.orElseThrow().get("SUM_age");
 
-Optional<?> averageAge = customerRepository.query()
+Double averageAge = (Double) customerRepository.query()
     .avg("age")
-    .findOne();
+    .findRow()
+    .map(row -> row.get(0))
+    .orElse(null);
 
-List<?> grouped = customerRepository.query()
+List<GroupedRow> grouped = customerRepository.query()
     .groupBy("status")
     .sort(Sort.by("status"))
     .select("status")
     .count("id")
     .sum("age")
-    .findAll();
+    .findRows();
 ```
 
 Notes:
 
-- non-grouped aggregate queries return a single row
+- non-grouped aggregate queries return a single row, read with `findRow()`
 - grouped aggregate queries return one row per group
 - `count(field)` counts non-null values for the selected field
 - `sum(...)` and `avg(...)` require numeric fields
 - aggregates can be aliased (`sumAs("revenue", "amount")`) and filtered with `having(...)`
-- `findAllGrouped()` returns a list of `GroupedRow`, supporting lookup by alias or column name
+- `findRows()` (and its alias `findAllGrouped()`) returns a list of `GroupedRow`, supporting lookup by
+  alias or column name (`FUNCTION_field`, for example `SUM_age`, without an alias)
 
 See [docs/reporting.md](docs/reporting.md) for the full reporting and analytical query reference.
 
@@ -412,14 +425,14 @@ long grouped = productRepository.query()
 Grouped aggregate queries are also supported through the same execution pipeline:
 
 ```java
-List<?> groupedTotals = productRepository.query()
+List<GroupedRow> groupedTotals = productRepository.query()
     .where("status", Operators.IS_NOT_NULL, null)
     .groupBy("status")
     .sort(Sort.by("status"))
     .select("status")
     .count("id")
     .sum("price")
-    .findAll();
+    .findRows();
 ```
 
 ### Single Result and Count
@@ -599,17 +612,17 @@ The default JPA repository executes `select(...)`, `groupBy(...)`, and aggregate
 following runtime semantics:
 
 ```java
-List<?> projected = productRepository.query()
+List<GroupedRow> projected = productRepository.query()
     .where("status", Operators.EQUALS, "ACTIVE")
     .select("name", "category.name")
-    .findAll();
+    .findRows();
 
-List<?> grouped = productRepository.query()
+List<GroupedRow> grouped = productRepository.query()
     .where("status", Operators.IS_NOT_NULL, null)
     .groupBy("status")
     .select("status")
     .count("id")
-    .findAll();
+    .findRows();
 
 List<ProductSummary> typed = productRepository.query()
     .where("status", Operators.EQUALS, "ACTIVE")
@@ -622,10 +635,10 @@ record ProductSummary(String name, String categoryName) {}
 
 - `select(...)` affects the executed JPA query
 - aggregate functions use the same projection pipeline as `select(...)`
-- one selected field returns scalar values at runtime
-- one aggregate function returns a scalar value at runtime
-- multiple selected fields return `Object[]` rows at runtime
-- grouped `select(...)` + aggregate combinations return `Object[]` rows at runtime
+- a query with selections and no `selectInto(...)` is read with `findRows()` / `findRow()`, which
+  return `GroupedRow` values in the declared selection order; `findAll()`, `findAll(Pageable)`,
+  `findSlice(Pageable)` and `findOne()` reject it with an `IllegalStateException`
+- a single aggregate without `groupBy(...)` returns one row, read with `findRow()`
 - `selectInto(...)` maps the current selection list into a constructor-based DTO or record; the JPA
   provider calls that constructor by reflection, so native images need a hint for the type (see
   [GraalVM Native Image](#graalvm-native-image))
@@ -996,7 +1009,7 @@ Postman collections are available in `examples/`:
 
 Specification repositories run in a GraalVM native image without extra hints. Repositories, the
 query DSL, subqueries, `select(...)` without `selectInto(...)`, aggregate functions and
-`findAllGrouped()` resolve paths through the JPA metamodel and need no reflection registration.
+`findRows()` / `findRow()` resolve paths through the JPA metamodel and need no reflection registration.
 The library itself registers no runtime hints (no `RuntimeHintsRegistrar`, no `aot.factories`).
 
 `selectInto(Dto.class)` is the exception. The repository builds the projection with

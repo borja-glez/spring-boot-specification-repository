@@ -347,12 +347,12 @@ abstract class AbstractSpecificationRepositoryIntegrationTest {
     borja.getOrders().add(new TestOrder(new java.math.BigDecimal("20.00"), "PAID", false, borja));
     repository.save(borja);
 
-    List<?> names =
+    List<GroupedRow> names =
         repository
             .query()
             .select("name")
             .where("orders.status", Operators.EQUALS, "PAID")
-            .findAll();
+            .findRows();
 
     assertThat(names).hasSize(2);
   }
@@ -670,22 +670,8 @@ abstract class AbstractSpecificationRepositoryIntegrationTest {
   }
 
   @Test
-  void shouldSliceProjectedResults() {
-    Slice<?> slice =
-        repository
-            .query()
-            .where("status", Operators.IS_NOT_NULL, null)
-            .sort(Sort.by("name"))
-            .select("name")
-            .findSlice(PageRequest.of(0, 2));
-
-    assertThat(slice.getContent()).extracting(Object::toString).containsExactly("Borja", "John");
-    assertThat(slice.hasNext()).isTrue();
-  }
-
-  @Test
   void shouldSliceGroupedAggregateResults() {
-    Slice<?> slice =
+    Slice<StatusCount> slice =
         repository
             .query()
             .where("status", Operators.IS_NOT_NULL, null)
@@ -693,9 +679,10 @@ abstract class AbstractSpecificationRepositoryIntegrationTest {
             .sort(Sort.by("status"))
             .select("status")
             .count("id")
+            .selectInto(StatusCount.class)
             .findSlice(PageRequest.of(0, 1));
 
-    assertThat(slice.getContent()).hasSize(1);
+    assertThat(slice.getContent()).containsExactly(new StatusCount("ACTIVE", 2L));
     assertThat(slice.hasNext()).isTrue();
   }
 
@@ -736,32 +723,31 @@ abstract class AbstractSpecificationRepositoryIntegrationTest {
 
   @Test
   void shouldProjectSingleSelectedField() {
-    List<?> results =
+    List<GroupedRow> results =
         repository
             .query()
             .where("status", Operators.EQUALS, "ACTIVE")
             .sort(Sort.by("name"))
             .select("name")
-            .findAll();
+            .findRows();
 
-    assertThat(results).extracting(Object::toString).containsExactly("Borja", "Lucia");
+    assertThat(results).extracting(row -> row.get("name")).containsExactly("Borja", "Lucia");
   }
 
   @Test
   void shouldProjectMultipleSelectedFields() {
-    List<?> results =
+    List<GroupedRow> results =
         repository
             .query()
             .where("status", Operators.EQUALS, "ACTIVE")
             .sort(Sort.by("name"))
             .select("name", "profile.city")
-            .findAll();
+            .findRows();
 
-    assertThat(results)
-        .hasSize(2)
-        .allSatisfy(result -> assertThat(result).isInstanceOf(Object[].class));
-    assertThat((Object[]) results.get(0)).containsExactly("Borja", "Madrid");
-    assertThat((Object[]) results.get(1)).containsExactly("Lucia", "Barcelona");
+    assertThat(results).hasSize(2);
+    assertThat(results.get(0).columns()).containsExactly("name", "profile.city");
+    assertThat(results.get(0).values()).containsExactly("Borja", "Madrid");
+    assertThat(results.get(1).values()).containsExactly("Lucia", "Barcelona");
   }
 
   @Test
@@ -817,39 +803,28 @@ abstract class AbstractSpecificationRepositoryIntegrationTest {
   }
 
   @Test
-  void shouldProjectPagedResults() {
-    Page<?> page =
-        repository
-            .query()
-            .where("status", Operators.IS_NOT_NULL, null)
-            .sort(Sort.by("name"))
-            .select("name")
-            .findAll(PageRequest.of(0, 2));
-
-    assertThat(page.getContent()).extracting(Object::toString).containsExactly("Borja", "John");
-    assertThat(page.getTotalElements()).isEqualTo(3);
-  }
-
-  @Test
   void shouldProjectPagedResultsUsingPageableSort() {
-    Page<?> page =
+    Page<NameOnlyRecord> page =
         repository
             .query()
             .where("status", Operators.EQUALS, "ACTIVE")
             .select("name")
+            .selectInto(NameOnlyRecord.class)
             .findAll(PageRequest.of(0, 10, Sort.by(Sort.Direction.DESC, "name")));
 
-    assertThat(page.getContent()).extracting(Object::toString).containsExactly("Lucia", "Borja");
+    assertThat(page.getContent())
+        .containsExactly(new NameOnlyRecord("Lucia"), new NameOnlyRecord("Borja"));
     assertThat(page.getTotalElements()).isEqualTo(2);
   }
 
   @Test
   void shouldProjectPagedResultsWithoutAnySort() {
-    Page<?> page =
+    Page<NameOnlyRecord> page =
         repository
             .query()
             .where("status", Operators.IS_NOT_NULL, null)
             .select("name")
+            .selectInto(NameOnlyRecord.class)
             .findAll(PageRequest.of(0, 10));
 
     assertThat(page.getContent()).hasSize(3);
@@ -858,61 +833,61 @@ abstract class AbstractSpecificationRepositoryIntegrationTest {
 
   @Test
   void shouldReturnSumAggregate() {
-    Optional<?> result =
-        repository.query().where("status", Operators.IS_NOT_NULL, null).sum("age").findOne();
+    Optional<GroupedRow> result =
+        repository.query().where("status", Operators.IS_NOT_NULL, null).sum("age").findRow();
 
-    assertThat(result).hasValueSatisfying(value -> assertThat(value).isEqualTo(98));
+    assertThat(result).hasValueSatisfying(row -> assertThat(row.get("SUM_age")).isEqualTo(98));
   }
 
   @Test
   void shouldReturnAverageAggregate() {
-    Optional<?> result = repository.query().avg("age").findOne();
+    Optional<GroupedRow> result = repository.query().avg("age").findRow();
 
     assertThat(result)
         .hasValueSatisfying(
-            value -> assertThat((Double) value).isEqualTo((25D + 32D + 41D + 19D) / 4D));
+            row -> assertThat((Double) row.get(0)).isEqualTo((25D + 32D + 41D + 19D) / 4D));
   }
 
   @Test
   void shouldReturnMinimumComparableAggregate() {
-    Optional<?> result = repository.query().min("createdAt").findOne();
+    Optional<GroupedRow> result = repository.query().min("createdAt").findRow();
 
     assertThat(result)
-        .hasValueSatisfying(value -> assertThat(value).isEqualTo(LocalDate.of(2024, 1, 10)));
+        .hasValueSatisfying(row -> assertThat(row.get(0)).isEqualTo(LocalDate.of(2024, 1, 10)));
   }
 
   @Test
   void shouldReturnMinimumNumericAggregate() {
-    Optional<?> result = repository.query().min("age").findOne();
+    Optional<GroupedRow> result = repository.query().min("age").findRow();
 
-    assertThat(result).hasValueSatisfying(value -> assertThat(value).isEqualTo(19));
+    assertThat(result).hasValueSatisfying(row -> assertThat(row.get(0)).isEqualTo(19));
   }
 
   @Test
   void shouldReturnMaximumAggregate() {
-    Optional<?> result = repository.query().max("age").findOne();
+    Optional<GroupedRow> result = repository.query().max("age").findRow();
 
-    assertThat(result).hasValueSatisfying(value -> assertThat(value).isEqualTo(41));
+    assertThat(result).hasValueSatisfying(row -> assertThat(row.get(0)).isEqualTo(41));
   }
 
   @Test
   void shouldReturnMaximumComparableAggregate() {
-    Optional<?> result = repository.query().max("createdAt").findOne();
+    Optional<GroupedRow> result = repository.query().max("createdAt").findRow();
 
     assertThat(result)
-        .hasValueSatisfying(value -> assertThat(value).isEqualTo(LocalDate.of(2024, 4, 5)));
+        .hasValueSatisfying(row -> assertThat(row.get(0)).isEqualTo(LocalDate.of(2024, 4, 5)));
   }
 
   @Test
   void shouldReturnFieldLevelCountAggregate() {
-    Optional<?> result = repository.query().count("status").findOne();
+    Optional<GroupedRow> result = repository.query().count("status").findRow();
 
-    assertThat(result).hasValueSatisfying(value -> assertThat(value).isEqualTo(3L));
+    assertThat(result).hasValueSatisfying(row -> assertThat(row.get(0)).isEqualTo(3L));
   }
 
   @Test
   void shouldReturnGroupedAggregates() {
-    List<?> results =
+    List<GroupedRow> results =
         repository
             .query()
             .where("status", Operators.IS_NOT_NULL, null)
@@ -921,18 +896,17 @@ abstract class AbstractSpecificationRepositoryIntegrationTest {
             .select("status")
             .count("id")
             .sum("age")
-            .findAll();
+            .findRows();
 
-    assertThat(results)
-        .hasSize(2)
-        .allSatisfy(result -> assertThat(result).isInstanceOf(Object[].class));
-    assertThat((Object[]) results.get(0)).containsExactly("ACTIVE", 2L, 57);
-    assertThat((Object[]) results.get(1)).containsExactly("INACTIVE", 1L, 41);
+    assertThat(results).hasSize(2);
+    assertThat(results.get(0).columns()).containsExactly("status", "COUNT_id", "SUM_age");
+    assertThat(results.get(0).values()).containsExactly("ACTIVE", 2L, 57);
+    assertThat(results.get(1).values()).containsExactly("INACTIVE", 1L, 41);
   }
 
   @Test
   void shouldPageGroupedAggregateResults() {
-    Page<?> page =
+    Page<StatusCount> page =
         repository
             .query()
             .where("status", Operators.IS_NOT_NULL, null)
@@ -940,54 +914,56 @@ abstract class AbstractSpecificationRepositoryIntegrationTest {
             .sort(Sort.by("status"))
             .select("status")
             .count("id")
+            .selectInto(StatusCount.class)
             .findAll(PageRequest.of(0, 1));
 
-    assertThat(page.getContent()).hasSize(1);
+    assertThat(page.getContent()).containsExactly(new StatusCount("ACTIVE", 2L));
     assertThat(page.getTotalElements()).isEqualTo(2);
   }
 
   @Test
   void shouldPageNonGroupedAggregateResultsAsSingleRow() {
-    Page<?> page = repository.query().sum("age").findAll(PageRequest.of(0, 10));
+    Page<TotalAge> page =
+        repository.query().sum("age").selectInto(TotalAge.class).findAll(PageRequest.of(0, 10));
 
     assertThat(page.getContent())
         .singleElement()
-        .satisfies(value -> assertThat(((Number) value).intValue()).isEqualTo(117));
+        .satisfies(value -> assertThat(value.total().intValue()).isEqualTo(117));
     assertThat(page.getTotalElements()).isEqualTo(1);
   }
 
   @Test
   void shouldRejectNonNumericSumField() {
-    assertThatThrownBy(() -> repository.query().sum("status").findAll())
+    assertThatThrownBy(() -> repository.query().sum("status").findRows())
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessage("SUM requires a numeric field: status");
   }
 
   @Test
   void shouldRejectNonComparableMinimumField() {
-    assertThatThrownBy(() -> repository.query().min("profile").findAll())
+    assertThatThrownBy(() -> repository.query().min("profile").findRows())
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("MIN requires a comparable field");
   }
 
   @Test
   void shouldRejectNonComparableMaximumField() {
-    assertThatThrownBy(() -> repository.query().max("profile").findAll())
+    assertThatThrownBy(() -> repository.query().max("profile").findRows())
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("MAX requires a comparable field");
   }
 
   @Test
   void shouldProjectFindOneResult() {
-    Optional<?> result =
+    Optional<GroupedRow> result =
         repository
             .query()
             .where("status", Operators.EQUALS, "ACTIVE")
             .sort(Sort.by("name"))
             .select("name")
-            .findOne();
+            .findRow();
 
-    assertThat(result).hasValueSatisfying(value -> assertThat(value).isEqualTo("Borja"));
+    assertThat(result).hasValueSatisfying(row -> assertThat(row.get(0)).isEqualTo("Borja"));
   }
 
   @Test
@@ -1028,6 +1004,109 @@ abstract class AbstractSpecificationRepositoryIntegrationTest {
     long count = repository.count(plan);
 
     assertThat(count).isEqualTo(2);
+  }
+
+  // -- Selections without selectInto are read as rows, never as entities --
+
+  private static final String SELECTION_READ_AS_ENTITY =
+      "The query selects fields or aggregates, so it returns rows, not entities:"
+          + " read it with findRows() or findRow(), or map it with selectInto(...)";
+
+  @Test
+  void shouldRejectReadingSelectedFieldsAsEntities() {
+    var query = repository.query().select("name");
+
+    assertThatThrownBy(query::findAll)
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessage(SELECTION_READ_AS_ENTITY);
+    assertThatThrownBy(() -> query.findAll(PageRequest.of(0, 2)))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessage(SELECTION_READ_AS_ENTITY);
+    assertThatThrownBy(() -> query.findSlice(PageRequest.of(0, 2)))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessage(SELECTION_READ_AS_ENTITY);
+    assertThatThrownBy(query::findOne)
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessage(SELECTION_READ_AS_ENTITY);
+  }
+
+  @Test
+  void shouldRejectReadingAPlanWithSelectionsAsEntities() {
+    // Through the repository proxy, Spring translates the IllegalStateException.
+    QueryPlan<TestCustomer> plan = repository.query().sum("age").plan();
+
+    assertThatThrownBy(() -> repository.findAll(plan))
+        .isInstanceOf(InvalidDataAccessApiUsageException.class)
+        .hasCauseInstanceOf(IllegalStateException.class)
+        .hasMessage(SELECTION_READ_AS_ENTITY);
+    assertThatThrownBy(() -> repository.findAll(plan, PageRequest.of(0, 2)))
+        .isInstanceOf(InvalidDataAccessApiUsageException.class)
+        .hasCauseInstanceOf(IllegalStateException.class)
+        .hasMessage(SELECTION_READ_AS_ENTITY);
+    assertThatThrownBy(() -> repository.findSlice(plan, PageRequest.of(0, 2)))
+        .isInstanceOf(InvalidDataAccessApiUsageException.class)
+        .hasCauseInstanceOf(IllegalStateException.class)
+        .hasMessage(SELECTION_READ_AS_ENTITY);
+    assertThatThrownBy(() -> repository.findOne(plan))
+        .isInstanceOf(InvalidDataAccessApiUsageException.class)
+        .hasCauseInstanceOf(IllegalStateException.class)
+        .hasMessage(SELECTION_READ_AS_ENTITY);
+  }
+
+  @Test
+  void shouldReadASingleScalarAggregateAsOneRow() {
+    Optional<GroupedRow> row =
+        repository
+            .query()
+            .where("status", Operators.EQUALS, "ACTIVE")
+            .sumAs("total", "age")
+            .findRow();
+
+    assertThat(row).hasValueSatisfying(value -> assertThat(value.get("total")).isEqualTo(57));
+  }
+
+  @Test
+  void shouldReadOnlyTheFirstRow() {
+    Optional<GroupedRow> row =
+        repository.query().sort(Sort.by("name")).select("name", "status").findRow();
+
+    assertThat(row)
+        .hasValueSatisfying(value -> assertThat(value.values()).containsExactly("Anna", null));
+  }
+
+  @Test
+  void shouldReadNoRowWhenNothingMatches() {
+    Optional<GroupedRow> row =
+        repository.query().where("name", Operators.EQUALS, "Nobody").select("name").findRow();
+
+    assertThat(row).isEmpty();
+  }
+
+  @Test
+  void shouldFindRowsWithQueryPlanThroughProxy() {
+    QueryPlan<TestCustomer> plan =
+        repository
+            .query()
+            .where("status", Operators.EQUALS, "ACTIVE")
+            .sort(Sort.by("name"))
+            .select("name")
+            .plan();
+
+    assertThat(repository.findRows(plan))
+        .extracting(row -> row.get("name"))
+        .containsExactly("Borja", "Lucia");
+    assertThat(repository.findRow(plan))
+        .hasValueSatisfying(row -> assertThat(row.get("name")).isEqualTo("Borja"));
+  }
+
+  @Test
+  void shouldRequireSelectionsToReadRows() {
+    assertThatThrownBy(() -> repository.query().findRows())
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessage("findRows requires at least one select() or aggregate selection");
+    assertThatThrownBy(() -> repository.query().findRow())
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessage("findRow requires at least one select() or aggregate selection");
   }
 
   // -- Plan-based projected and grouped methods through the repository proxy --
@@ -1707,7 +1786,7 @@ abstract class AbstractSpecificationRepositoryIntegrationTest {
 
   @Test
   void shouldFilterGroupedResultsWithHavingGreaterThan() {
-    List<?> results =
+    List<GroupedRow> results =
         repository
             .query()
             .where("status", Operators.IS_NOT_NULL, null)
@@ -1716,15 +1795,15 @@ abstract class AbstractSpecificationRepositoryIntegrationTest {
             .select("status")
             .count("id")
             .having(AggregateFunction.COUNT, "id", Operators.GREATER_THAN, 1L)
-            .findAll();
+            .findRows();
 
     assertThat(results).hasSize(1);
-    assertThat((Object[]) results.get(0)).containsExactly("ACTIVE", 2L);
+    assertThat(results.get(0).values()).containsExactly("ACTIVE", 2L);
   }
 
   @Test
   void shouldFilterWithMultipleHavingPredicatesAndedTogether() {
-    List<?> results =
+    List<GroupedRow> results =
         repository
             .query()
             .where("status", Operators.IS_NOT_NULL, null)
@@ -1735,10 +1814,10 @@ abstract class AbstractSpecificationRepositoryIntegrationTest {
             .count("id")
             .having(AggregateFunction.SUM, "age", Operators.GREATER_THAN_OR_EQUAL, 41)
             .having(AggregateFunction.COUNT, "id", Operators.LESS_THAN_OR_EQUAL, 1L)
-            .findAll();
+            .findRows();
 
     assertThat(results).hasSize(1);
-    assertThat((Object[]) results.get(0)).containsExactly("INACTIVE", 41, 1L);
+    assertThat(results.get(0).values()).containsExactly("INACTIVE", 41, 1L);
   }
 
   @Test
@@ -1752,7 +1831,7 @@ abstract class AbstractSpecificationRepositoryIntegrationTest {
 
   @Test
   void shouldFilterWithBetweenHavingClause() {
-    List<?> results =
+    List<GroupedRow> results =
         repository
             .query()
             .where("status", Operators.IS_NOT_NULL, null)
@@ -1761,17 +1840,17 @@ abstract class AbstractSpecificationRepositoryIntegrationTest {
             .select("status")
             .count("id")
             .having(AggregateFunction.COUNT, "id", Operators.BETWEEN, java.util.List.of(1L, 1L))
-            .findAll();
+            .findRows();
 
     assertThat(results).hasSize(1);
-    assertThat((Object[]) results.get(0)).containsExactly("INACTIVE", 1L);
+    assertThat(results.get(0).values()).containsExactly("INACTIVE", 1L);
   }
 
   @Test
   void shouldFilterWithHavingAgainstAvgAggregate() {
     // AVG returns Double; the test passes an Integer threshold to verify that the HAVING
     // value is converted against the aggregate result type, not the underlying field type.
-    List<?> results =
+    List<GroupedRow> results =
         repository
             .query()
             .where("status", Operators.IS_NOT_NULL, null)
@@ -1780,17 +1859,17 @@ abstract class AbstractSpecificationRepositoryIntegrationTest {
             .select("status")
             .avg("age")
             .having(AggregateFunction.AVG, "age", Operators.GREATER_THAN, 30)
-            .findAll();
+            .findRows();
 
     assertThat(results).hasSize(1);
-    assertThat(((Object[]) results.get(0))[0]).isEqualTo("INACTIVE");
+    assertThat(results.get(0).get(0)).isEqualTo("INACTIVE");
   }
 
   @Test
   void shouldFilterWithHavingAgainstCountAggregateUsingIntegerValue() {
     // COUNT returns Long; passing an int verifies the value is converted to Long via the
     // aggregate result type rather than the underlying id column type.
-    List<?> results =
+    List<GroupedRow> results =
         repository
             .query()
             .where("status", Operators.IS_NOT_NULL, null)
@@ -1799,17 +1878,17 @@ abstract class AbstractSpecificationRepositoryIntegrationTest {
             .select("status")
             .count("id")
             .having(AggregateFunction.COUNT, "id", Operators.GREATER_THAN_OR_EQUAL, 2)
-            .findAll();
+            .findRows();
 
     assertThat(results).hasSize(1);
-    assertThat(((Object[]) results.get(0))[0]).isEqualTo("ACTIVE");
+    assertThat(results.get(0).get(0)).isEqualTo("ACTIVE");
   }
 
   @Test
   void shouldExecuteIsNullHavingClause() {
     // COUNT can never be NULL, so this query is expected to return zero rows; the test
     // exercises the IS_NULL branch of the HAVING translation, not a real filtering use case.
-    List<?> results =
+    List<GroupedRow> results =
         repository
             .query()
             .groupBy("status")
@@ -1817,7 +1896,7 @@ abstract class AbstractSpecificationRepositoryIntegrationTest {
             .select("status")
             .count("id")
             .having(AggregateFunction.COUNT, "id", Operators.IS_NULL, null)
-            .findAll();
+            .findRows();
 
     assertThat(results).isEmpty();
   }
@@ -1828,7 +1907,7 @@ abstract class AbstractSpecificationRepositoryIntegrationTest {
     bounds.add(1L);
     bounds.add(2L);
     Iterable<Long> iterable = () -> bounds.iterator();
-    List<?> results =
+    List<GroupedRow> results =
         repository
             .query()
             .where("status", Operators.IS_NOT_NULL, null)
@@ -1837,7 +1916,7 @@ abstract class AbstractSpecificationRepositoryIntegrationTest {
             .select("status")
             .count("id")
             .having(AggregateFunction.COUNT, "id", Operators.BETWEEN, iterable)
-            .findAll();
+            .findRows();
 
     assertThat(results).hasSize(2);
   }
@@ -1851,7 +1930,7 @@ abstract class AbstractSpecificationRepositoryIntegrationTest {
                     .groupBy("status")
                     .count("id")
                     .having(AggregateFunction.COUNT, "id", Operators.BETWEEN, "not a list")
-                    .findAll())
+                    .findRows())
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("BETWEEN having requires exactly 2 values");
   }
@@ -1869,7 +1948,7 @@ abstract class AbstractSpecificationRepositoryIntegrationTest {
                         "id",
                         Operators.BETWEEN,
                         java.util.List.of(1L, 2L, 3L))
-                    .findAll())
+                    .findRows())
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("BETWEEN having requires exactly 2 values");
   }
@@ -1883,7 +1962,7 @@ abstract class AbstractSpecificationRepositoryIntegrationTest {
                     .groupBy("status")
                     .count("id")
                     .having(AggregateFunction.COUNT, "id", Operators.CONTAINS, "x")
-                    .findAll())
+                    .findRows())
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessage("Unsupported operator for having clause: contains");
   }
@@ -1897,7 +1976,7 @@ abstract class AbstractSpecificationRepositoryIntegrationTest {
                     .groupBy("status")
                     .count("id")
                     .having(AggregateFunction.COUNT, "id", FilterOperator.of("foobar"), 1L)
-                    .findAll())
+                    .findRows())
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessage("Unsupported operator for having clause: foobar");
   }
@@ -1906,7 +1985,7 @@ abstract class AbstractSpecificationRepositoryIntegrationTest {
   void shouldAcceptAllowedHavingFieldUnderPolicy() {
     AllowedFieldsPolicy policy = AllowedFieldsPolicy.of(Set.of("status", "id"), Set.of("status"));
 
-    List<?> results =
+    List<GroupedRow> results =
         repository
             .query()
             .allowedFields(policy)
@@ -1916,7 +1995,7 @@ abstract class AbstractSpecificationRepositoryIntegrationTest {
             .select("status")
             .count("id")
             .having(AggregateFunction.COUNT, "id", Operators.GREATER_THAN_OR_EQUAL, 1L)
-            .findAll();
+            .findRows();
 
     assertThat(results).hasSize(2);
   }
@@ -1933,7 +2012,7 @@ abstract class AbstractSpecificationRepositoryIntegrationTest {
                     .groupBy("status")
                     .count("id")
                     .having(AggregateFunction.COUNT, "id", Operators.GREATER_THAN, 1L)
-                    .findAll())
+                    .findRows())
         .isInstanceOf(DisallowedFieldException.class)
         .hasMessage("Field 'id' is not allowed for filtering");
   }
@@ -2088,14 +2167,14 @@ abstract class AbstractSpecificationRepositoryIntegrationTest {
                     .query()
                     .sum("age")
                     .having(AggregateFunction.SUM, "age", Operators.GREATER_THAN, 1)
-                    .findAll())
+                    .findRows())
         .isInstanceOf(IllegalStateException.class)
         .hasMessage("having requires at least one groupBy field");
   }
 
   private void assertHavingMatch(
       FilterOperator operator, Object value, String... expectedStatuses) {
-    List<?> rows =
+    List<GroupedRow> rows =
         repository
             .query()
             .where("status", Operators.IS_NOT_NULL, null)
@@ -2104,10 +2183,10 @@ abstract class AbstractSpecificationRepositoryIntegrationTest {
             .select("status")
             .count("id")
             .having(AggregateFunction.COUNT, "id", operator, value)
-            .findAll();
+            .findRows();
 
     assertThat(rows)
-        .extracting(row -> ((Object[]) row)[0])
+        .extracting(row -> row.get("status"))
         .containsExactly((Object[]) expectedStatuses);
   }
 
@@ -2224,6 +2303,10 @@ abstract class AbstractSpecificationRepositoryIntegrationTest {
   }
 
   private record NameOnlyRecord(String name) {}
+
+  private record StatusCount(String status, Long customers) {}
+
+  private record TotalAge(Number total) {}
 
   private record CustomerStatusSummary(String status, Long customerCount, Integer totalAge) {}
 
