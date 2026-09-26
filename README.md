@@ -750,6 +750,11 @@ public class ProductController {
 `filterableFields` and `sortableFields` are translated into an `AllowedFieldsPolicy`, so any
 client attempting to filter or sort by a non-whitelisted field receives a `DisallowedFieldException`.
 
+`HttpFilterAutoConfiguration` is also registered for the `@WebMvcTest` slice on Spring Boot 3 and
+Spring Boot 4, so controller slice tests resolve `@FilterableQuery QueryPlan<T>` parameters without
+an extra `@ImportAutoConfiguration(HttpFilterAutoConfiguration.class)`. Custom `HttpFilterParser` or
+`QueryPlanArgumentResolver` beans still take precedence.
+
 ### Programmatic Usage (no Spring)
 
 The parser is a pure Java class and can be used outside of Spring MVC:
