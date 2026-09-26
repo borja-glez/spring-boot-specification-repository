@@ -4,6 +4,31 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [0.3.1] - 2026-09-26
+
+### Documentation
+- Document native image hints for selectInto projections (#88) (3b59ae0)
+- State that groupBy fields must be selected to appear in rows (#87) (5b1bb81)
+- Describe how to work on an issue (#85) (af08c3d)
+- Update README for v0.3.0 (d89a469)
+
+### Fixed
+- Apply innerFetch when counting so Page totals match the rows (#97) (6479404)
+- Fetch an element collection of basic values (#98) (7bccbcc)
+- Page root ids first when a paginated plan fetches a collection (#94) (1c10abc)
+- Support exists and notExists on collections of basic values (#92) (438d891)
+- Escape % and _ in contains, notcontains, startswith and endswith (#91) (b055eb0)
+- Register HttpFilterAutoConfiguration for the @WebMvcTest slice (#90) (afa2e16)
+- Treat filter operators case-insensitively (#89) (d1fc72d)
+
+### Miscellaneous
+- Bump version to 0.3.1-SNAPSHOT (25d993f)
+
+### Testing
+- Run the JPA integration suites on PostgreSQL as well as H2 (#93) (1177d71)
+
+### Ci
+- Update workflow actions to their Node 24 releases (#84) (1b1ed43)
 ## [0.3.0] - 2026-09-26
 
 ### Added
