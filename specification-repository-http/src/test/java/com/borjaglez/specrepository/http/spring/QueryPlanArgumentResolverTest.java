@@ -219,6 +219,58 @@ class QueryPlanArgumentResolverTest {
   }
 
   @Test
+  void shouldRejectADisallowedFilterDuringArgumentResolution() throws Exception {
+    MethodParameter param = getParam("annotatedMethod", QueryPlan.class);
+    Map<String, String[]> params = Map.of("filter", new String[] {"status:eq:ACTIVE"});
+
+    assertThatThrownBy(() -> resolve(param, params))
+        .isInstanceOfSatisfying(
+            DisallowedFieldException.class,
+            exception -> {
+              assertThat(exception.field()).isEqualTo("status");
+              assertThat(exception.usage()).isEqualTo("filtering");
+            });
+  }
+
+  @Test
+  void shouldRejectADisallowedOrFilterDuringArgumentResolution() throws Exception {
+    MethodParameter param = getParam("annotatedMethod", QueryPlan.class);
+    Map<String, String[]> params =
+        Map.of("orFilter", new String[] {"name:eq:John;status:eq:ACTIVE"});
+
+    assertThatThrownBy(() -> resolve(param, params))
+        .isInstanceOf(DisallowedFieldException.class)
+        .hasMessage("Field 'status' is not allowed for filtering");
+  }
+
+  @Test
+  void shouldRejectADisallowedSortDuringArgumentResolution() throws Exception {
+    MethodParameter param = getParam("annotatedMethod", QueryPlan.class);
+    Map<String, String[]> params = Map.of("sort", new String[] {"status,desc"});
+
+    assertThatThrownBy(() -> resolve(param, params))
+        .isInstanceOfSatisfying(
+            DisallowedFieldException.class,
+            exception -> {
+              assertThat(exception.field()).isEqualTo("status");
+              assertThat(exception.usage()).isEqualTo("sorting");
+            });
+  }
+
+  @Test
+  void shouldKeepThePolicyOnAResolvedPlanWithAllowedInput() throws Exception {
+    QueryPlan<?> plan =
+        resolve(
+            getParam("annotatedMethod", QueryPlan.class),
+            Map.of("filter", new String[] {"name:eq:John"}, "sort", new String[] {"name,asc"}));
+
+    assertThat(plan.rootCondition().conditions()).hasSize(1);
+    assertThat(plan.serverCondition().conditions()).isEmpty();
+    assertThatThrownBy(() -> plan.allowedFieldsPolicy().validateSort("status"))
+        .isInstanceOf(DisallowedFieldException.class);
+  }
+
+  @Test
   void shouldUseAllowAllWhenNoFieldsSpecified() throws Exception {
     MethodParameter param = getParam("defaultAnnotatedMethod", QueryPlan.class);
     NativeWebRequest webRequest = mock(NativeWebRequest.class);

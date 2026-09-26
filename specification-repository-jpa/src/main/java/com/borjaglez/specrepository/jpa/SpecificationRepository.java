@@ -25,6 +25,14 @@ public interface SpecificationRepository<T, ID>
     extends JpaRepository<T, ID>, JpaSpecificationExecutor<T> {
   SpecificationExecutableQuery<T> query();
 
+  /**
+   * A query derived from {@code plan}, such as one resolved from an HTTP request. The conditions
+   * added through it are server conditions: ANDed with the plan's conditions and not checked
+   * against its {@code AllowedFieldsPolicy}, which the derived plan keeps. See {@link
+   * QueryPlan#toBuilder()}.
+   */
+  SpecificationExecutableQuery<T> query(QueryPlan<T> plan);
+
   List<T> findAll(QueryPlan<T> plan);
 
   <P> List<P> findAllProjected(QueryPlan<T> plan);

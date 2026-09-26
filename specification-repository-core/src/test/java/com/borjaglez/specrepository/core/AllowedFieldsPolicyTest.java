@@ -1,12 +1,14 @@
 package com.borjaglez.specrepository.core;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.assertj.core.api.Assertions.assertThatNullPointerException;
 
 import java.util.Set;
 
 import org.junit.jupiter.api.Test;
+import org.springframework.data.domain.Sort;
 
 class AllowedFieldsPolicyTest {
 
@@ -100,5 +102,130 @@ class AllowedFieldsPolicyTest {
     assertThatNullPointerException()
         .isThrownBy(() -> AllowedFieldsPolicy.of(Set.of(), null))
         .withMessage("sortable must not be null");
+  }
+
+  // -- validate(plan): the client input of a plan --
+
+  private static final AllowedFieldsPolicy CLIENT =
+      AllowedFieldsPolicy.of(Set.of("status", "region"), Set.of("placedAt"));
+
+  private static QueryPlanBuilder<String> clientQuery() {
+    return SpecificationQueryBuilder.forEntity(String.class).allowedFields(CLIENT);
+  }
+
+  @Test
+  void validateShouldAcceptAllowedClientInput() {
+    QueryPlan<String> plan =
+        clientQuery()
+            .where("status", Operators.EQUALS, "PLACED")
+            .or(group -> group.where("region", Operators.EQUALS, "north"))
+            .exists("lines", sub -> sub.where("sku", Operators.EQUALS, "A"))
+            .sort(Sort.by("placedAt"))
+            .build();
+
+    assertThatCode(() -> CLIENT.validate(plan)).doesNotThrowAnyException();
+  }
+
+  @Test
+  void validateShouldAcceptAllowedHavingAndSubqueryOuterFields() {
+    QueryPlan<String> plan =
+        clientQuery()
+            .inSubquery("region", Integer.class, "id", sub -> {})
+            .exists(Integer.class, sub -> sub.correlate("status", "status"))
+            .groupBy("status")
+            .having(AggregateFunction.COUNT, "status", Operators.GREATER_THAN, 1)
+            .build();
+
+    assertThatCode(() -> CLIENT.validate(plan)).doesNotThrowAnyException();
+  }
+
+  @Test
+  void validateShouldRejectADisallowedClientFilter() {
+    QueryPlan<String> plan = clientQuery().where("customerId", Operators.EQUALS, "u1").build();
+
+    assertDisallowed(plan, "customerId", "filtering");
+  }
+
+  @Test
+  void validateShouldRejectADisallowedFilterInANestedGroup() {
+    QueryPlan<String> plan =
+        clientQuery().or(group -> group.where("customerId", Operators.EQUALS, "u1")).build();
+
+    assertDisallowed(plan, "customerId", "filtering");
+  }
+
+  @Test
+  void validateShouldNotCheckServerConditions() {
+    QueryPlan<String> plan =
+        clientQuery().where("status", Operators.EQUALS, "PLACED").build().toBuilder()
+            .where("customerId", Operators.EQUALS, "u1")
+            .build();
+
+    assertThatCode(() -> CLIENT.validate(plan)).doesNotThrowAnyException();
+  }
+
+  @Test
+  void validateShouldRejectADisallowedHavingField() {
+    QueryPlan<String> plan =
+        clientQuery()
+            .groupBy("status")
+            .having(AggregateFunction.SUM, "total", Operators.GREATER_THAN, 1)
+            .build();
+
+    assertDisallowed(plan, "total", "filtering");
+  }
+
+  @Test
+  void validateShouldRejectADisallowedSort() {
+    QueryPlan<String> plan = clientQuery().sort(Sort.by("total")).build();
+
+    assertDisallowed(plan, "total", "sorting");
+  }
+
+  @Test
+  void validateShouldRejectADisallowedOuterFieldOfAnInSubquery() {
+    QueryPlan<String> plan =
+        clientQuery().inSubquery("customerId", Integer.class, "id", sub -> {}).build();
+
+    assertDisallowed(plan, "customerId", "filtering");
+  }
+
+  @Test
+  void validateShouldRejectADisallowedOuterFieldOfANotInSubquery() {
+    QueryPlan<String> plan =
+        clientQuery().notInSubquery("customerId", Integer.class, "id", sub -> {}).build();
+
+    assertDisallowed(plan, "customerId", "filtering");
+  }
+
+  @Test
+  void validateShouldRejectADisallowedCorrelatedOuterField() {
+    QueryPlan<String> plan =
+        clientQuery()
+            .exists(Integer.class, sub -> sub.correlate("customerId", "customerId"))
+            .build();
+
+    assertDisallowed(plan, "customerId", "filtering");
+  }
+
+  @Test
+  void validateWithAllowAllShouldAcceptAnyPlan() {
+    QueryPlan<String> plan =
+        SpecificationQueryBuilder.forEntity(String.class)
+            .where("anything", Operators.EQUALS, 1)
+            .sort(Sort.by("anything"))
+            .build();
+
+    assertThatCode(() -> AllowedFieldsPolicy.allowAll().validate(plan)).doesNotThrowAnyException();
+  }
+
+  private static void assertDisallowed(QueryPlan<String> plan, String field, String usage) {
+    assertThatExceptionOfType(DisallowedFieldException.class)
+        .isThrownBy(() -> CLIENT.validate(plan))
+        .satisfies(
+            exception -> {
+              assertThat(exception.field()).isEqualTo(field);
+              assertThat(exception.usage()).isEqualTo(usage);
+            });
   }
 }

@@ -42,6 +42,20 @@ List<User> users = userRepository.query()
 
 Without `allowedFields()`, all fields are permitted (backward-compatible default).
 
+The policy guards client input: the plan's client conditions (`rootCondition()`), its sort and its
+`having` fields. Conditions the server adds by deriving a plan (`plan.toBuilder()` or
+`repository.query(plan)`) go to `serverCondition()`, are ANDed with the client conditions and are
+not checked, so they may use fields the client cannot filter by:
+
+```java
+List<Order> mine = orderRepository.query(planFromClient)
+    .where("customerId", Operators.EQUALS, currentUser.id())   // not in the whitelist
+    .findAll();
+```
+
+`AllowedFieldsPolicy.validate(plan)` runs the same check on demand; the HTTP argument resolver
+calls it so that a disallowed client field fails before the controller runs.
+
 ### Security example: REST controller
 
 ```java

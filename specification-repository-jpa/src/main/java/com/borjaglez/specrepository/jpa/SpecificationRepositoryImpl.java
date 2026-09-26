@@ -81,6 +81,11 @@ public class SpecificationRepositoryImpl<T, ID extends Serializable>
   }
 
   @Override
+  public SpecificationExecutableQuery<T> query(QueryPlan<T> plan) {
+    return new SpecificationExecutableQuery<>(plan, this);
+  }
+
+  @Override
   @SuppressWarnings("unchecked")
   public List<T> findAll(QueryPlan<T> plan) {
     if (plan.projectionType() != null) {
@@ -204,6 +209,7 @@ public class SpecificationRepositoryImpl<T, ID extends Serializable>
     return new QueryPlan<>(
         plan.entityType(),
         plan.rootCondition(),
+        plan.serverCondition(),
         plan.joins(),
         List.of(),
         plan.projections(),

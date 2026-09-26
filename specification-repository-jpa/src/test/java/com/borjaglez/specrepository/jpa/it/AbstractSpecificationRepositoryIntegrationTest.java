@@ -1548,6 +1548,136 @@ abstract class AbstractSpecificationRepositoryIntegrationTest {
         .hasMessage("Field 'status' is not allowed for sorting");
   }
 
+  // -- Server conditions: the policy guards the client input only --
+
+  /** Orders of Carla (PAID 10, PENDING 20) and of Diego (PAID 30, PENDING 40). */
+  private void saveOrdersOfTwoCustomers() {
+    TestCustomer carla = repository.save(new TestCustomer("Carla", "ACTIVE", null));
+    TestCustomer diego = repository.save(new TestCustomer("Diego", "ACTIVE", null));
+    orders.save(new TestOrder(new BigDecimal("10.00"), "PAID", false, carla));
+    orders.save(new TestOrder(new BigDecimal("20.00"), "PENDING", false, carla));
+    orders.save(new TestOrder(new BigDecimal("30.00"), "PAID", false, diego));
+    orders.save(new TestOrder(new BigDecimal("40.00"), "PENDING", false, diego));
+  }
+
+  private static final AllowedFieldsPolicy ORDER_CLIENT_POLICY =
+      AllowedFieldsPolicy.of(Set.of("status"), Set.of("total"));
+
+  @Test
+  void aServerConditionOnAFieldOutsideThePolicyShouldScopeTheClientPlan() {
+    saveOrdersOfTwoCustomers();
+    QueryPlan<TestOrder> fromClient =
+        orders
+            .query()
+            .where("status", Operators.EQUALS, "PAID")
+            .allowedFields(ORDER_CLIENT_POLICY)
+            .plan();
+
+    List<TestOrder> mine =
+        orders.query(fromClient).where("customer.name", Operators.EQUALS, "Carla").findAll();
+
+    assertThat(mine).extracting(TestOrder::getTotal).containsExactly(new BigDecimal("10.00"));
+  }
+
+  @Test
+  void aClientFilterOnAServerOnlyFieldShouldStillBeRejected() {
+    saveOrdersOfTwoCustomers();
+    QueryPlan<TestOrder> fromClient =
+        orders
+            .query()
+            .or(
+                group ->
+                    group
+                        .where("status", Operators.EQUALS, "PAID")
+                        .where("customer.name", Operators.EQUALS, "Diego"))
+            .allowedFields(ORDER_CLIENT_POLICY)
+            .plan();
+
+    assertThatThrownBy(
+            () ->
+                orders
+                    .query(fromClient)
+                    .where("customer.name", Operators.EQUALS, "Carla")
+                    .findAll())
+        .isInstanceOfSatisfying(
+            DisallowedFieldException.class,
+            exception -> {
+              assertThat(exception.field()).isEqualTo("customer.name");
+              assertThat(exception.usage()).isEqualTo("filtering");
+            });
+  }
+
+  @Test
+  void aClientOrShouldNotWidenTheServerCondition() {
+    saveOrdersOfTwoCustomers();
+    QueryPlan<TestOrder> fromClient =
+        orders
+            .query()
+            .or(
+                group ->
+                    group
+                        .where("status", Operators.EQUALS, "PAID")
+                        .where("status", Operators.EQUALS, "PENDING"))
+            .allowedFields(ORDER_CLIENT_POLICY)
+            .plan();
+
+    List<TestOrder> mine =
+        orders
+            .query(fromClient)
+            .where("customer.name", Operators.EQUALS, "Carla")
+            .sort(Sort.by("total"))
+            .findAll();
+
+    assertThat(mine)
+        .extracting(TestOrder::getTotal)
+        .containsExactly(new BigDecimal("10.00"), new BigDecimal("20.00"));
+  }
+
+  @Test
+  void aDerivedQueryShouldApplyTheDefaultSortOnlyWithoutAClientSort() {
+    saveOrdersOfTwoCustomers();
+    QueryPlan<TestOrder> unsorted = orders.query().allowedFields(ORDER_CLIENT_POLICY).plan();
+    QueryPlan<TestOrder> sortedByClient =
+        orders.query().sort(Sort.by("total")).allowedFields(ORDER_CLIENT_POLICY).plan();
+
+    Page<TestOrder> byDefault =
+        orders
+            .query(unsorted)
+            .where("customer.name", Operators.EQUALS, "Diego")
+            .sortedByDefault(Sort.by(Sort.Direction.DESC, "total"))
+            .findAll(PageRequest.of(0, 5));
+    List<TestOrder> byClient =
+        orders
+            .query(sortedByClient)
+            .where("customer.name", Operators.EQUALS, "Diego")
+            .sortedByDefault(Sort.by(Sort.Direction.DESC, "total"))
+            .findAll();
+
+    assertThat(byDefault.getContent())
+        .extracting(TestOrder::getTotal)
+        .containsExactly(new BigDecimal("40.00"), new BigDecimal("30.00"));
+    assertThat(byDefault.getTotalElements()).isEqualTo(2);
+    assertThat(byClient)
+        .extracting(TestOrder::getTotal)
+        .containsExactly(new BigDecimal("30.00"), new BigDecimal("40.00"));
+  }
+
+  @Test
+  void aDerivedQueryShouldCountWithTheServerCondition() {
+    saveOrdersOfTwoCustomers();
+    QueryPlan<TestOrder> fromClient =
+        orders
+            .query()
+            .where("status", Operators.EQUALS, "PENDING")
+            .allowedFields(ORDER_CLIENT_POLICY)
+            .plan();
+
+    long count = orders.query(fromClient).where("customer.name", Operators.EQUALS, "Diego").count();
+
+    assertThat(count).isEqualTo(1);
+    assertThat(orders.count(fromClient)).isEqualTo(2);
+  }
+
   // -- Unknown operators and fields --
 
   @Test
