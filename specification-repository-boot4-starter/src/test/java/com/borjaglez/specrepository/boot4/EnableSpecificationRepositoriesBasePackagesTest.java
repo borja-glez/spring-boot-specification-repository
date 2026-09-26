@@ -1,4 +1,4 @@
-package com.borjaglez.specrepository.jpa;
+package com.borjaglez.specrepository.boot4;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -7,24 +7,16 @@ import org.springframework.core.annotation.AnnotatedElementUtils;
 import org.springframework.core.annotation.AnnotationAttributes;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 
-class EnableSpecificationRepositoriesTest {
+import com.borjaglez.specrepository.jpa.EnableSpecificationRepositories;
 
-  @Test
-  void shouldUseSpecificationRepositoryFactoryBean() {
-    EnableJpaRepositories annotation =
-        EnableSpecificationRepositories.class.getAnnotation(EnableJpaRepositories.class);
-
-    assertThat(annotation).isNotNull();
-    assertThat(annotation.repositoryBaseClass()).isEqualTo(SpecificationRepositoryImpl.class);
-    assertThat(annotation.repositoryFactoryBeanClass())
-        .isEqualTo(SpecificationRepositoryFactoryBean.class);
-  }
+/** On Spring Framework 7, as Boot 4 applications run it: the packages must reach Spring Data. */
+class EnableSpecificationRepositoriesBasePackagesTest {
 
   @EnableSpecificationRepositories(basePackages = "com.acme.repositories")
   static class Configured {}
 
   @Test
-  void shouldPassBasePackagesOnToSpringData() {
+  void basePackagesReachSpringData() {
     AnnotationAttributes attributes =
         AnnotatedElementUtils.getMergedAnnotationAttributes(
             Configured.class, EnableJpaRepositories.class);
