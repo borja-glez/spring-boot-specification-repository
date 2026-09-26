@@ -72,6 +72,14 @@ class SpecificationRepositoryIntegrationTest {
   // -- IS_NULL / IS_NOT_NULL --
 
   @Test
+  void shouldTreatEqualsNullAsIsNull() {
+    assertThat(repository.query().where("status", Operators.EQUALS, null).findAll())
+        .extracting(TestCustomer::getName)
+        .containsExactly("Anna");
+    assertThat(repository.query().where("status", Operators.NOT_EQUALS, null).count()).isEqualTo(3);
+  }
+
+  @Test
   void shouldFilterByIsNull() {
     long count = repository.query().where("status", Operators.IS_NULL, null).count();
 

@@ -73,15 +73,17 @@ public final class DefaultOperatorHandlers {
 
   private static Predicate compare(OperatorContext context, boolean negate) {
     CriteriaBuilder cb = context.criteriaBuilder();
-    if (context.ignoreCase() && context.value() != null) {
+    if (context.value() == null) {
+      // "= NULL" is never true in SQL: eq/neq with null mean is null / is not null.
+      return negate ? cb.isNotNull(context.path()) : cb.isNull(context.path());
+    }
+    if (context.ignoreCase()) {
       Expression<String> column = normalized(cb, context.path());
       Expression<String> value = normalizedValue(cb, context.value().toString());
       return negate ? cb.notEqual(column, value) : cb.equal(column, value);
     }
-    Expression<?> expression =
-        context.ignoreCase() ? normalized(cb, context.path()) : context.path();
     Object value = context.value();
-    return negate ? cb.notEqual(expression, value) : cb.equal(expression, value);
+    return negate ? cb.notEqual(context.path(), value) : cb.equal(context.path(), value);
   }
 
   private static Predicate stringLike(OperatorContext context, String pattern, boolean negate) {
