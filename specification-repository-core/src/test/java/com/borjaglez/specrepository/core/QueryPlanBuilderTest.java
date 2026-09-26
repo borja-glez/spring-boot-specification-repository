@@ -381,4 +381,19 @@ class QueryPlanBuilderTest {
   private record NameEmailProjection(String name, String email) {}
 
   private record CountProjection(Long count) {}
+
+  @Test
+  void shouldAddCountDistinctSelections() {
+    QueryPlan<Object> plan =
+        new QueryPlanBuilder<>(Object.class)
+            .groupBy("status")
+            .countDistinct("id")
+            .countDistinctAs("customers", "id")
+            .build();
+
+    assertThat(plan.selections())
+        .containsExactly(
+            new AggregateSelection(AggregateFunction.COUNT_DISTINCT, "id", null),
+            new AggregateSelection(AggregateFunction.COUNT_DISTINCT, "id", "customers"));
+  }
 }

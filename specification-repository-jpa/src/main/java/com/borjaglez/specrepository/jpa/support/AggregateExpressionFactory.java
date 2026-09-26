@@ -11,7 +11,7 @@ public final class AggregateExpressionFactory {
 
   public static Class<?> resultType(AggregateFunction function, Class<?> fieldType) {
     return switch (function) {
-      case COUNT -> Long.class;
+      case COUNT, COUNT_DISTINCT -> Long.class;
       case AVG -> Double.class;
       case SUM -> {
         if (Integer.class == fieldType
@@ -58,6 +58,7 @@ public final class AggregateExpressionFactory {
             "MAX requires a comparable field: " + path.getJavaType());
       }
       case COUNT -> builder.count(path);
+      case COUNT_DISTINCT -> builder.countDistinct(path);
     };
   }
 

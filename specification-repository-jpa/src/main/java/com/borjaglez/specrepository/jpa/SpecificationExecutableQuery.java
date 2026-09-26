@@ -214,6 +214,18 @@ public class SpecificationExecutableQuery<T> extends QueryPlanBuilder<T> {
   }
 
   @Override
+  public SpecificationExecutableQuery<T> countDistinct(String field) {
+    super.countDistinct(field);
+    return this;
+  }
+
+  @Override
+  public SpecificationExecutableQuery<T> countDistinctAs(String alias, String field) {
+    super.countDistinctAs(alias, field);
+    return this;
+  }
+
+  @Override
   public SpecificationExecutableQuery<T> aggregate(
       AggregateFunction function, String field, String alias) {
     super.aggregate(function, field, alias);

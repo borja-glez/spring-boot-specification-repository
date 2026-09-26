@@ -71,4 +71,11 @@ class AggregateExpressionFactoryTest {
     assertThat(AggregateExpressionFactory.resultType(AggregateFunction.MAX, String.class))
         .isEqualTo(String.class);
   }
+
+  @Test
+  void countDistinctShouldReturnLong() {
+    assertThat(
+            AggregateExpressionFactory.resultType(AggregateFunction.COUNT_DISTINCT, String.class))
+        .isEqualTo(Long.class);
+  }
 }
