@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -142,14 +143,14 @@ public final class HttpFilterParser {
     if (operator.isEmpty()) {
       throw new HttpFilterSyntaxException(raw, "operator must not be empty");
     }
-    validateOperator(operator);
+    String normalized = operator.toLowerCase(Locale.ROOT);
+    validateOperator(operator, normalized);
 
-    Object value = resolveValue(raw, operator, rawValue);
-    return new ParsedFilter(field, FilterOperator.of(operator), value);
+    Object value = resolveValue(raw, operator, normalized, rawValue);
+    return new ParsedFilter(field, FilterOperator.of(normalized), value);
   }
 
-  private Object resolveValue(String raw, String operator, String rawValue) {
-    String lowerOp = operator.toLowerCase();
+  private Object resolveValue(String raw, String operator, String lowerOp, String rawValue) {
     if (VALUELESS_OPERATORS.contains(lowerOp)) {
       return null;
     }
@@ -202,7 +203,7 @@ public final class HttpFilterParser {
     if (parts.length == 1) {
       return Sort.Order.asc(field);
     }
-    String direction = parts[1].trim().toLowerCase();
+    String direction = parts[1].trim().toLowerCase(Locale.ROOT);
     return switch (direction) {
       case "asc" -> Sort.Order.asc(field);
       case "desc" -> Sort.Order.desc(field);
@@ -212,9 +213,9 @@ public final class HttpFilterParser {
     };
   }
 
-  private void validateOperator(String operator) {
+  private void validateOperator(String operator, String normalized) {
     Set<String> allowed = config.allowedOperators();
-    if (allowed != null && !allowed.contains(operator.toLowerCase())) {
+    if (allowed != null && !allowed.contains(normalized)) {
       throw new HttpUnknownOperatorException(operator);
     }
   }

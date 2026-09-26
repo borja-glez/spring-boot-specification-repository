@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
@@ -392,6 +393,105 @@ class HttpFilterParserTest {
     void shouldReturnUnsortedWhenNoSortParam() {
       var result = parser.parse(Map.of());
       assertThat(result.sort().isUnsorted()).isTrue();
+    }
+  }
+
+  @Nested
+  class CaseInsensitiveOperatorTests {
+
+    @Test
+    void shouldNormalizeUpperCaseOperatorToLowerCase() {
+      var result = parser.parse(Map.of("filter", List.of("status:EQ:ACTIVE")));
+
+      assertThat(result.filters().get(0).operator()).isEqualTo(Operators.EQUALS);
+      assertThat(result.filters().get(0).value()).isEqualTo("ACTIVE");
+    }
+
+    @Test
+    void shouldNormalizeMixedCaseOperatorToLowerCase() {
+      var result = parser.parse(Map.of("filter", List.of("status:Eq:ACTIVE", "status:eq:ACTIVE")));
+
+      assertThat(result.filters().get(0).operator()).isEqualTo(Operators.EQUALS);
+      assertThat(result.filters().get(1).operator()).isEqualTo(Operators.EQUALS);
+    }
+
+    @Test
+    void shouldNormalizeOperatorsInsideOrGroups() {
+      var result = parser.parse(Map.of("orFilter", List.of("name:CONTAINS:John;price:Gt:10")));
+
+      var group = result.orGroups().get(0);
+      assertThat(group.filters().get(0).operator()).isEqualTo(Operators.CONTAINS);
+      assertThat(group.filters().get(1).operator()).isEqualTo(Operators.GREATER_THAN);
+    }
+
+    @Test
+    void shouldKeepValuelessHandlingForUpperCaseOperator() {
+      var result = parser.parse(Map.of("filter", List.of("name:ISNULL")));
+
+      assertThat(result.filters().get(0).operator()).isEqualTo(Operators.IS_NULL);
+      assertThat(result.filters().get(0).value()).isNull();
+    }
+
+    @Test
+    void shouldKeepMultiValueHandlingForUpperCaseOperator() {
+      var result = parser.parse(Map.of("filter", List.of("status:IN:A|B", "price:BETWEEN:1|2")));
+
+      assertThat(result.filters().get(0).operator()).isEqualTo(Operators.IN);
+      assertThat(result.filters().get(0).value()).isEqualTo(List.of("A", "B"));
+      assertThat(result.filters().get(1).operator()).isEqualTo(Operators.BETWEEN);
+      assertThat(result.filters().get(1).value()).isEqualTo(List.of("1", "2"));
+    }
+
+    @Test
+    void shouldKeepClientSpellingInUnknownOperatorException() {
+      var config = HttpFilterParserConfiguration.builder().allowedOperators(Set.of("eq")).build();
+      var p = new HttpFilterParser(config);
+
+      assertThatThrownBy(() -> p.parse(Map.of("filter", List.of("name:CONTAINS:John"))))
+          .isInstanceOf(HttpUnknownOperatorException.class)
+          .hasMessageContaining("'CONTAINS'")
+          .extracting(e -> ((HttpUnknownOperatorException) e).operator())
+          .isEqualTo("CONTAINS");
+    }
+
+    @Test
+    void shouldAcceptUpperCaseOperatorInAllowedSet() {
+      var config = HttpFilterParserConfiguration.builder().allowedOperators(Set.of("eq")).build();
+      var p = new HttpFilterParser(config);
+
+      var result = p.parse(Map.of("filter", List.of("name:EQ:John")));
+      assertThat(result.filters().get(0).operator()).isEqualTo(Operators.EQUALS);
+    }
+
+    @Test
+    void shouldNormalizeOperatorsIndependentlyOfDefaultLocale() {
+      Locale original = Locale.getDefault();
+      try {
+        Locale.setDefault(Locale.forLanguageTag("tr"));
+        var config =
+            HttpFilterParserConfiguration.builder().allowedOperators(Set.of("isnull")).build();
+
+        var result = new HttpFilterParser(config).parse(Map.of("filter", List.of("name:ISNULL")));
+
+        assertThat(result.filters().get(0).operator()).isEqualTo(Operators.IS_NULL);
+        assertThat(result.filters().get(0).value()).isNull();
+      } finally {
+        Locale.setDefault(original);
+      }
+    }
+
+    @Test
+    void shouldParseUpperCaseSortDirectionIndependentlyOfDefaultLocale() {
+      Locale original = Locale.getDefault();
+      try {
+        Locale.setDefault(Locale.forLanguageTag("tr"));
+
+        var result = parser.parse(Map.of("sort", List.of("name,DESC")));
+
+        assertThat(result.sort().getOrderFor("name").getDirection()).isEqualTo(Sort.Direction.DESC);
+      } finally {
+        Locale.setDefault(original);
+      }
     }
   }
 
