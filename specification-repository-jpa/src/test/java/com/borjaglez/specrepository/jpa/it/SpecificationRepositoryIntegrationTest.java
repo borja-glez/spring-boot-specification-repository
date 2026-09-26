@@ -1439,6 +1439,38 @@ class SpecificationRepositoryIntegrationTest {
   }
 
   @Test
+  void shouldGroupByAssociationPathUsingTheSameJoinAsTheFilter() {
+    List<GroupedRow> rows =
+        repository
+            .query()
+            .where("profile.city", Operators.IS_NOT_NULL, null)
+            .groupBy("profile.city")
+            .sort(Sort.by("profile.city"))
+            .select("profile.city")
+            .countAs("customers", "id")
+            .findAllGrouped();
+
+    assertThat(rows).hasSize(2);
+    assertThat(rows.get(0).get("profile.city")).isEqualTo("Barcelona");
+    assertThat(rows.get(0).get("customers")).isEqualTo(1L);
+    assertThat(rows.get(1).get("profile.city")).isEqualTo("Madrid");
+    assertThat(rows.get(1).get("customers")).isEqualTo(2L);
+  }
+
+  @Test
+  void shouldGroupByAssociationPathWithoutFilters() {
+    List<GroupedRow> rows =
+        repository
+            .query()
+            .groupBy("profile.city")
+            .select("profile.city")
+            .countAs("customers", "id")
+            .findAllGrouped();
+
+    assertThat(rows).extracting(row -> row.get("customers")).containsExactlyInAnyOrder(1L, 2L, 1L);
+  }
+
+  @Test
   void findAllGroupedShouldRequireSelections() {
     assertThatThrownBy(() -> repository.query().findAllGrouped())
         .isInstanceOf(IllegalStateException.class)

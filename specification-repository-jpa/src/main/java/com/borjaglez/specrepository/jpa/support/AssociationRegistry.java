@@ -25,9 +25,29 @@ public class AssociationRegistry {
       joins.put(path, fetchAsJoin);
       return fetchAsJoin;
     }
-    Join<?, ?> join = from.join(attributeName, toJoinType(mode));
+    JoinType joinType = toJoinType(mode);
+    Join<?, ?> join = findJoin(from, attributeName, joinType);
+    if (join == null) {
+      join = from.join(attributeName, joinType);
+    }
     joins.put(path, join);
     return join;
+  }
+
+  /**
+   * Finds a join that another registry already created on the same {@code From}. Filters,
+   * projections, grouping and sorting are resolved with different registries over the same root;
+   * without this they would each join the association again, which duplicates rows and makes
+   * databases such as PostgreSQL reject grouped queries.
+   */
+  private static Join<?, ?> findJoin(From<?, ?> from, String attributeName, JoinType joinType) {
+    for (Join<?, ?> candidate : from.getJoins()) {
+      if (candidate.getJoinType() == joinType
+          && attributeName.equals(candidate.getAttribute().getName())) {
+        return candidate;
+      }
+    }
+    return null;
   }
 
   public Fetch<?, ?> getOrCreateFetch(
