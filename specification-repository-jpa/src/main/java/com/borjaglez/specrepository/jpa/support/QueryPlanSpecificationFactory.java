@@ -44,6 +44,12 @@ public class QueryPlanSpecificationFactory {
   private static final Set<FilterOperator> WHOLE_COLLECTION_OPERATORS =
       Set.of(Operators.IS_EMPTY, Operators.IS_NOT_EMPTY);
 
+  /**
+   * Field that names the element itself in an {@code exists} / {@code notExists} over a collection
+   * of basic values, such as {@code exists("tags", sub -> sub.where("value", EQUALS, "vip"))}.
+   */
+  static final String BASIC_ELEMENT_FIELD = "value";
+
   private final PathResolver pathResolver;
 
   public QueryPlanSpecificationFactory(
@@ -363,6 +369,10 @@ public class QueryPlanSpecificationFactory {
         navigated = join;
         currentType = pathResolver.resolveAssociationTarget(currentType, segment);
       }
+      if (currentType == null) {
+        // The path ends in a collection of basic values: the subquery root is the element itself.
+        subRegistry.markBasicElement(navigated);
+      }
       return new SubRootContext(navigated, currentType, null);
     }
     @SuppressWarnings("unchecked")
@@ -445,6 +455,9 @@ public class QueryPlanSpecificationFactory {
       AssociationRegistry registry,
       String field,
       boolean joinBasicCollections) {
+    if (registry.isBasicElement(from)) {
+      return basicElement(from, field);
+    }
     if (!joinBasicCollections) {
       return pathResolver.resolve(from, fromType, registry, field, JoinMode.LEFT, false);
     }
@@ -452,6 +465,24 @@ public class QueryPlanSpecificationFactory {
       return pathResolver.resolve(rootFrom, registry, field, JoinMode.LEFT);
     }
     return pathResolver.resolve(from, fromType, registry, field, JoinMode.LEFT);
+  }
+
+  /**
+   * Resolves a field inside an {@code exists} / {@code notExists} over a collection of basic
+   * values. The subquery root is the joined element itself, which has no attributes, so the only
+   * valid field is {@value #BASIC_ELEMENT_FIELD}.
+   */
+  private Path<?> basicElement(From<?, ?> element, String field) {
+    if (!BASIC_ELEMENT_FIELD.equals(field)) {
+      throw new IllegalArgumentException(
+          "Subqueries over a collection of basic values compare the element itself: use the"
+              + " field '"
+              + BASIC_ELEMENT_FIELD
+              + "' instead of '"
+              + field
+              + "'");
+    }
+    return element;
   }
 
   @SuppressWarnings({"unchecked", "rawtypes"})

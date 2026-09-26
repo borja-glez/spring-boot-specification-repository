@@ -265,6 +265,43 @@ List<Product> electronics = productRepository.query()
 
 That same approach works for deeper paths such as `profile.city` in the integration tests.
 
+### Collections and Shared Joins
+
+A path that ends in a collection of basic values (for example an
+`@ElementCollection Set<String> tags`) compares its elements, and a path through
+a collection association (`orders.status`) compares the fields of each related
+row:
+
+```java
+List<Customer> vips = customerRepository.query()
+    .where("tags", Operators.EQUALS, "vip")
+    .findAll();
+```
+
+**Conditions on the same collection path share one join.** Every condition on
+`tags` (or on `orders.*`) tests the *same* joined element, so:
+
+- `where("tags", EQUALS, "a").where("tags", EQUALS, "b")` matches nothing: no
+  single tag is both `a` and `b`.
+- `where("tags", NOT_EQUALS, "a")` means "has some tag other than `a`", not
+  "does not have tag `a`".
+
+For per-element semantics, use one `exists` / `notExists` subquery per
+condition (see [EXISTS and Subqueries](#exists-and-subqueries)):
+
+```java
+// has tag a AND has tag b
+customerRepository.query()
+    .<String>exists("tags", sub -> sub.where("value", Operators.EQUALS, "a"))
+    .<String>exists("tags", sub -> sub.where("value", Operators.EQUALS, "b"))
+    .findAll();
+
+// does not have tag a
+customerRepository.query()
+    .<String>notExists("tags", sub -> sub.where("value", Operators.EQUALS, "a"))
+    .findAll();
+```
+
 ### Logical Groups (AND / OR)
 
 Combine conditions with nested groups:
@@ -422,6 +459,15 @@ correctly:
 ```java
 List<Customer> noCancellations = customerRepository.query()
     .<Order>notExists("orders", sub -> sub.where("status", Operators.EQUALS, "CANCELLED"))
+    .findAll();
+```
+
+**Collections of basic values** work the same way. The subquery root is the
+element itself, so the body refers to it with the field `value`:
+
+```java
+List<Customer> vips = customerRepository.query()
+    .<String>exists("tags", sub -> sub.where("value", Operators.EQUALS, "vip"))
     .findAll();
 ```
 

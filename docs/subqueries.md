@@ -24,6 +24,32 @@ cases, but it:
 
 Subqueries solve all three.
 
+### Conditions on the same collection path share one join
+
+Every `where` on the same collection path tests the *same* joined element,
+whether the path is a collection association (`orders.status`) or a collection
+of basic values (`tags`, an `@ElementCollection Set<String>`):
+
+- `where("tags", EQUALS, "a").where("tags", EQUALS, "b")` matches nothing: no
+  single tag is both `a` and `b`.
+- `where("tags", NOT_EQUALS, "a")` means "has some tag other than `a`", not
+  "does not have tag `a`".
+
+Use one `exists` / `notExists` per condition for per-element semantics:
+
+```java
+// has tag a AND has tag b
+customers.query()
+    .<String>exists("tags", sub -> sub.where("value", Operators.EQUALS, "a"))
+    .<String>exists("tags", sub -> sub.where("value", Operators.EQUALS, "b"))
+    .findAll();
+
+// does not have tag a
+customers.query()
+    .<String>notExists("tags", sub -> sub.where("value", Operators.EQUALS, "a"))
+    .findAll();
+```
+
 ## API
 
 All subquery methods live on `ConditionGroupBuilder<T>` (and therefore on
@@ -46,6 +72,24 @@ customers.query()
 ```java
 customers.query()
     .<Order>notExists("orders", sub -> sub.where("status", Operators.EQUALS, "CANCELLED"))
+    .findAll();
+```
+
+### Collections of basic values
+
+The association path can also end in a collection of basic values, such as an
+`@ElementCollection Set<String> tags`. The subquery joins the collection from
+the correlated outer root, and its root is the element itself, which has no
+attributes: the body refers to the element with the field `value`. Any other
+field is rejected with an `IllegalArgumentException`.
+
+```java
+customers.query()
+    .<String>exists("tags", sub -> sub.where("value", Operators.EQUALS, "vip"))
+    .findAll();
+
+customers.query()
+    .<String>notExists("tags", sub -> sub.where("value", Operators.STARTS_WITH, "beta"))
     .findAll();
 ```
 

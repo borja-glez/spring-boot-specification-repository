@@ -13,6 +13,7 @@ import com.borjaglez.specrepository.core.JoinMode;
 public class AssociationRegistry {
   private final Map<String, Join<?, ?>> joins = new LinkedHashMap<>();
   private final Map<String, Fetch<?, ?>> fetches = new LinkedHashMap<>();
+  private From<?, ?> basicElement;
 
   public Join<?, ?> getOrCreateJoin(
       String path, From<?, ?> from, String attributeName, JoinMode mode) {
@@ -66,6 +67,18 @@ public class AssociationRegistry {
     Fetch<?, ?> fetch = from.fetch(attributeName, toJoinType(mode));
     fetches.put(path, fetch);
     return fetch;
+  }
+
+  /**
+   * Marks the join over a collection of basic values that is the root of a subquery, so conditions
+   * on it compare the element itself.
+   */
+  void markBasicElement(From<?, ?> element) {
+    basicElement = element;
+  }
+
+  boolean isBasicElement(From<?, ?> from) {
+    return from == basicElement;
   }
 
   static JoinType toJoinType(JoinMode mode) {
