@@ -4,13 +4,40 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+Breaking changes are marked with **BREAKING:**; [docs/upgrading.md](docs/upgrading.md)
+explains how to migrate.
+## [0.4.0] - 2026-09-26
+
+### Added
+- **BREAKING:** Add pessimistic row locks to query plans (#113) (418b4a9)
+- **BREAKING:** Evaluate negated and repeated conditions on a collection path with EXISTS (#111) (09886ae)
+- **BREAKING:** Make @FilterableQuery without field lists deny by default (#109) (f9d3bc0)
+- **BREAKING:** Separate client filters from server conditions and derive plans (#106) (ec9b0ec)
+- Add caseInsensitiveFields to @FilterableQuery (#103) (4b96a17)
+- Support @FilterableQuery as a meta-annotation on composed annotations (#101) (24ba859)
+
+### Documentation
+- Prepare the 0.4.0 release (#115) (1cd6bfd)
+- Document which parts of a query plan the AllowedFieldsPolicy covers (#112) (1ad2956)
+
+### Fixed
+- **BREAKING:** Validate the Pageable sort against the plan's AllowedFieldsPolicy (#110) (9e46965)
+- **BREAKING:** Stop returning selected values as entities without selectInto (#105) (529e76d)
+- **BREAKING:** Report unconvertible filter values as InvalidFilterValueException (#104) (e6ac78a)
+- Throw InvalidFilterException for unknown operators and fields (#102) (9d6f4fb)
+
+### Testing
+- Read the unconvertible having tests with findRows (#108) (183d0ba)
+
+### Build
+- Keep the release workflow's own commits out of the changelog (#117) (2623c67)
+- Publish only the checksum files Maven Central requires (#100) (ef4f2dc)
 ## [0.3.1] - 2026-09-26
 
 ### Documentation
 - Document native image hints for selectInto projections (#88) (3b59ae0)
 - State that groupBy fields must be selected to appear in rows (#87) (5b1bb81)
 - Describe how to work on an issue (#85) (af08c3d)
-- Update README for v0.3.0 (d89a469)
 
 ### Fixed
 - Apply innerFetch when counting so Page totals match the rows (#97) (6479404)
@@ -20,9 +47,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Escape % and _ in contains, notcontains, startswith and endswith (#91) (b055eb0)
 - Register HttpFilterAutoConfiguration for the @WebMvcTest slice (#90) (afa2e16)
 - Treat filter operators case-insensitively (#89) (d1fc72d)
-
-### Miscellaneous
-- Bump version to 0.3.1-SNAPSHOT (25d993f)
 
 ### Testing
 - Run the JPA integration suites on PostgreSQL as well as H2 (#93) (1177d71)
@@ -34,9 +58,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Add COUNT_DISTINCT aggregate (#45) (5a9b792)
 
-### Documentation
-- Update README for v0.2.0 (b977913)
-
 ### Fixed
 - Return and count each root once when a filter crosses a collection (#62) (c470fd4)
 - Fetch an association that is also joined (#60) (dc9388c)
@@ -47,9 +68,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Make findOne read a single row (#49) (d263200)
 - Join basic element collections in filter paths (#47) (bd5089f)
 - Route plan-based repository methods to the implementation (#43) (fb481d1)
-
-### Miscellaneous
-- Bump version to 0.2.1-SNAPSHOT (0f0b90e)
 ## [0.2.0] - 2026-05-14
 
 ### Miscellaneous
@@ -69,7 +87,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Miscellaneous
 - Migrate Maven Central group ID to com.borjaglez.specrepository (#33) (#41) (9791be3)
 - Release workflow update readme update (74a9dd5)
-- Bump version to 0.1.1-SNAPSHOT (fc2fc41)
 ## [0.1.0-rc.1] - 2026-04-06
 
 ### Miscellaneous
