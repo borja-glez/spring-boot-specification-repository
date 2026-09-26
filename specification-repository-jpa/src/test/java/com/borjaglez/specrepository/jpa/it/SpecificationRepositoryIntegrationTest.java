@@ -254,6 +254,35 @@ class SpecificationRepositoryIntegrationTest {
     assertThat(results).extracting(TestCustomer::getName).containsExactly("Lucia", "Borja");
   }
 
+  @org.springframework.beans.factory.annotation.Autowired
+  private jakarta.persistence.EntityManager fetchEntityManager;
+
+  @Test
+  void shouldStillFetchAnAssociationThatIsAlsoJoined() {
+    fetchEntityManager.flush();
+    fetchEntityManager.clear();
+
+    List<TestCustomer> found =
+        repository
+            .query()
+            .leftJoin("orders")
+            .leftFetch("orders")
+            .where("name", Operators.EQUALS, "Borja")
+            .findAll();
+
+    assertThat(found)
+        .singleElement()
+        .satisfies(c -> assertThat(org.hibernate.Hibernate.isInitialized(c.getOrders())).isTrue());
+  }
+
+  @Test
+  void shouldKeepAnInnerJoinWhenTheSamePathIsFetchedWithALeftJoin() {
+    List<TestCustomer> found = repository.query().innerJoin("orders").leftFetch("orders").findAll();
+
+    // Nobody has orders in the fixtures: the inner join still filters every customer out.
+    assertThat(found).isEmpty();
+  }
+
   // -- findOne --
 
   @Test

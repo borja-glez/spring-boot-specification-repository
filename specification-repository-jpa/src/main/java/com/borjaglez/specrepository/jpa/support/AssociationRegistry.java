@@ -20,12 +20,14 @@ public class AssociationRegistry {
     if (existing != null) {
       return existing;
     }
+    JoinType joinType = toJoinType(mode);
     Fetch<?, ?> existingFetch = fetches.get(path);
-    if (existingFetch instanceof Join<?, ?> fetchAsJoin) {
+    // Reuse the fetch only when it joins the same way: an inner join must keep filtering out the
+    // roots without the association even if the plan also fetches it with a left join.
+    if (existingFetch instanceof Join<?, ?> fetchAsJoin && fetchAsJoin.getJoinType() == joinType) {
       joins.put(path, fetchAsJoin);
       return fetchAsJoin;
     }
-    JoinType joinType = toJoinType(mode);
     Join<?, ?> join = findJoin(from, attributeName, joinType);
     if (join == null) {
       join = from.join(attributeName, joinType);

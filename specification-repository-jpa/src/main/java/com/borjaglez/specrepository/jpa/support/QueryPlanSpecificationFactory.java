@@ -71,8 +71,11 @@ public class QueryPlanSpecificationFactory {
     validateFields(plan);
     return (root, query, criteriaBuilder) -> {
       AssociationRegistry registry = new AssociationRegistry();
-      applyJoins(root, registry, plan.joins());
+      // Fetches first: Hibernate's plain joins also implement Fetch, so a fetch requested on a
+      // path that was already joined would reuse the join and never load the association.
+      // Created in this order, the join reuses the real fetch instead.
       applyFetches(root, query, registry, plan.fetches());
+      applyJoins(root, registry, plan.joins());
       applyGrouping(root, query, registry, plan.groupBy());
       applyHaving(root, query, registry, plan.having(), criteriaBuilder);
 

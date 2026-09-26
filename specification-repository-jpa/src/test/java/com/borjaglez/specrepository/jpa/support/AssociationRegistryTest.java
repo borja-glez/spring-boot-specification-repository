@@ -164,6 +164,7 @@ class AssociationRegistryTest {
   void getOrCreateJoinShouldReuseFetchWhenFetchImplementsJoin() {
     @SuppressWarnings("unchecked")
     FetchJoin fetchJoin = mock(FetchJoin.class);
+    doReturn(JoinType.LEFT).when(fetchJoin).getJoinType();
     doReturn(fetchJoin).when(from).fetch("profile", JoinType.LEFT);
     AssociationRegistry registry = new AssociationRegistry();
 
@@ -175,6 +176,23 @@ class AssociationRegistryTest {
 
     assertThat(result).isSameAs(fetchJoin);
     verify(from, times(0)).join("profile", JoinType.LEFT);
+  }
+
+  @Test
+  void getOrCreateJoinShouldNotReuseAFetchThatJoinsDifferently() {
+    @SuppressWarnings("unchecked")
+    FetchJoin fetchJoin = mock(FetchJoin.class);
+    doReturn(JoinType.LEFT).when(fetchJoin).getJoinType();
+    doReturn(fetchJoin).when(from).fetch("profile", JoinType.LEFT);
+    @SuppressWarnings("unchecked")
+    Join<Object, Object> innerJoin = mock(Join.class);
+    doReturn(innerJoin).when(from).join("profile", JoinType.INNER);
+    AssociationRegistry registry = new AssociationRegistry();
+    registry.getOrCreateFetch("profile", from, "profile", JoinMode.LEFT);
+
+    Join<?, ?> result = registry.getOrCreateJoin("profile", from, "profile", JoinMode.INNER);
+
+    assertThat(result).isSameAs(innerJoin);
   }
 
   @Test
