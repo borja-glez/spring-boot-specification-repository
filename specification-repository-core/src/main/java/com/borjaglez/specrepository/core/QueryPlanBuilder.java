@@ -22,6 +22,7 @@ public class QueryPlanBuilder<T> {
   private Class<?> projectionType;
   private boolean distinct;
   private AllowedFieldsPolicy allowedFieldsPolicy = AllowedFieldsPolicy.allowAll();
+  private QueryLock lock = QueryLock.NONE;
 
   /** Whether this builder derives from a plan: then the conditions added are server conditions. */
   private final boolean derived;
@@ -57,6 +58,7 @@ public class QueryPlanBuilder<T> {
     this.sort = plan.sort();
     this.distinct = plan.distinct();
     this.allowedFieldsPolicy = plan.allowedFieldsPolicy();
+    this.lock = plan.lock();
   }
 
   public QueryPlanBuilder<T> where(String field, FilterOperator operator, Object value) {
@@ -239,6 +241,29 @@ public class QueryPlanBuilder<T> {
     return this;
   }
 
+  /**
+   * Locks the rows the entity query reads, waiting for rows another transaction has locked. Same as
+   * {@code lock(mode, LockWait.WAIT)}; {@code lock(LockMode.NONE)} removes the lock.
+   */
+  public QueryPlanBuilder<T> lock(LockMode mode) {
+    return lock(mode, LockWait.WAIT);
+  }
+
+  /**
+   * Locks the rows the entity query reads ({@code SELECT ... FOR UPDATE} for {@link
+   * LockMode#PESSIMISTIC_WRITE}) until the transaction ends; {@code wait} says what to do with rows
+   * another transaction has locked. The count query of a page is never locked. Running a locked
+   * query needs an active transaction, and it cannot be combined with selections, grouping, {@code
+   * distinct} or, when paginated, with the fetch of a collection.
+   *
+   * @throws IllegalArgumentException if {@code mode} is {@link LockMode#NONE} and {@code wait} is
+   *     not {@link LockWait#WAIT}
+   */
+  public QueryPlanBuilder<T> lock(LockMode mode, LockWait wait) {
+    this.lock = new QueryLock(mode, wait);
+    return this;
+  }
+
   public QueryPlanBuilder<T> distinct() {
     this.distinct = true;
     return this;
@@ -270,7 +295,8 @@ public class QueryPlanBuilder<T> {
         List.copyOf(having),
         sort,
         distinct,
-        allowedFieldsPolicy);
+        allowedFieldsPolicy,
+        lock);
   }
 
   protected final <P> QueryPlanBuilder<T> selectIntoInternal(Class<P> projectionType) {

@@ -9,6 +9,7 @@ import java.util.Objects;
 import java.util.Optional;
 
 import jakarta.persistence.EntityManager;
+import jakarta.persistence.LockModeType;
 import jakarta.persistence.Tuple;
 import jakarta.persistence.TypedQuery;
 import jakarta.persistence.criteria.CriteriaBuilder;
@@ -33,12 +34,15 @@ import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.repository.query.QueryUtils;
 import org.springframework.data.jpa.repository.support.JpaEntityInformation;
 import org.springframework.data.jpa.repository.support.SimpleJpaRepository;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import com.borjaglez.specrepository.core.AggregateSelection;
 import com.borjaglez.specrepository.core.FetchInstruction;
 import com.borjaglez.specrepository.core.FieldSelection;
 import com.borjaglez.specrepository.core.GroupedRow;
 import com.borjaglez.specrepository.core.JoinMode;
+import com.borjaglez.specrepository.core.LockWait;
+import com.borjaglez.specrepository.core.QueryLock;
 import com.borjaglez.specrepository.core.QueryPlan;
 import com.borjaglez.specrepository.jpa.support.AggregateExpressionFactory;
 import com.borjaglez.specrepository.jpa.support.AssociationRegistry;
@@ -48,6 +52,15 @@ import com.borjaglez.specrepository.jpa.support.SpecificationRepositoryConfigura
 
 public class SpecificationRepositoryImpl<T, ID extends Serializable>
     extends SimpleJpaRepository<T, ID> implements SpecificationRepository<T, ID> {
+
+  /** The JPA hint that sets how long a pessimistic lock waits, in milliseconds. */
+  static final String LOCK_TIMEOUT_HINT = "jakarta.persistence.lock.timeout";
+
+  /** The lock timeout Hibernate 6 and 7 read as {@code SKIP LOCKED}. */
+  static final int SKIP_LOCKED_TIMEOUT = -2;
+
+  /** The lock timeout read as {@code NOWAIT}. */
+  static final int NO_WAIT_TIMEOUT = 0;
 
   private final JpaEntityInformation<T, ?> entityInformation;
   private final EntityManager entityManager;
@@ -131,6 +144,9 @@ public class SpecificationRepositoryImpl<T, ID extends Serializable>
       query.orderBy(QueryUtils.toOrders(sort, root, builder));
     }
     keepDistinctWorkable(plan, query, sort);
+    if (plan.lock().isLocked()) {
+      requireLockable(plan, query, root, limit);
+    }
     if (limit > 0 && fetchesACollection(root) && hasSingleBasicId()) {
       return fetchEntitiesByIds(plan, sort, offset, limit, builder, query, root);
     }
@@ -139,7 +155,73 @@ public class SpecificationRepositoryImpl<T, ID extends Serializable>
       typedQuery.setFirstResult((int) offset);
       typedQuery.setMaxResults(limit);
     }
+    applyLock(typedQuery, plan.lock());
     return typedQuery.getResultList();
+  }
+
+  /**
+   * The combinations the databases reject with a lock, or that would lock other rows than the
+   * entities returned, fail here with a clear message instead of an SQL error.
+   *
+   * <ul>
+   *   <li>A read-only transaction, such as the one the repository opens when the caller has none:
+   *       the database rejects the lock (PostgreSQL) or it ends as soon as the method returns.
+   *   <li>{@code groupBy}: the rows are groups, not entities.
+   *   <li>A collection fetch with a limit: the window is taken over the root ids first, in a query
+   *       the lock would have to cover as well (or Hibernate paginates in memory, after locking
+   *       every row).
+   *   <li>{@code distinct}, asked by the plan or by a filter through a collection: PostgreSQL
+   *       rejects {@code FOR UPDATE} with {@code DISTINCT}.
+   * </ul>
+   */
+  private static void requireLockable(
+      QueryPlan<?> plan, CriteriaQuery<?> query, Root<?> root, int limit) {
+    if (TransactionSynchronizationManager.isCurrentTransactionReadOnly()) {
+      throw new IllegalStateException(
+          "A locked query needs a read-write transaction, and keeps the lock until it ends:"
+              + " run it inside a @Transactional method that is not read-only");
+    }
+    if (!plan.groupBy().isEmpty()) {
+      throw new IllegalStateException(
+          "A locked query cannot group rows: remove groupBy or the lock");
+    }
+    if (limit > 0 && fetchesACollection(root)) {
+      throw new IllegalStateException(
+          "A locked query cannot fetch a collection when it reads a page or a single entity:"
+              + " load the collection after locking the rows");
+    }
+    if (query.isDistinct()) {
+      throw new IllegalStateException(
+          "A locked query cannot be distinct, which databases such as PostgreSQL reject: remove"
+              + " distinct(), or filter a collection with exists(...) instead of a path through"
+              + " it");
+    }
+  }
+
+  /** A plan that selects fields or aggregates reads values, not rows it could lock. */
+  private static void requireUnlocked(QueryPlan<?> plan) {
+    if (plan.lock().isLocked()) {
+      throw new IllegalStateException(
+          "A lock applies to entity queries only: it cannot be combined with select, aggregates"
+              + " or selectInto");
+    }
+  }
+
+  /**
+   * Sets the lock mode and, for {@link LockWait#NOWAIT} and {@link LockWait#SKIP_LOCKED}, the lock
+   * timeout hint, which Hibernate 6 and 7 render as {@code NOWAIT} ({@code 0}) and {@code SKIP
+   * LOCKED} ({@code -2}) on databases that support them.
+   */
+  private static void applyLock(TypedQuery<?> query, QueryLock lock) {
+    if (!lock.isLocked()) {
+      return;
+    }
+    query.setLockMode(LockModeType.valueOf(lock.mode().name()));
+    if (lock.lockWait() == LockWait.NOWAIT) {
+      query.setHint(LOCK_TIMEOUT_HINT, NO_WAIT_TIMEOUT);
+    } else if (lock.lockWait() == LockWait.SKIP_LOCKED) {
+      query.setHint(LOCK_TIMEOUT_HINT, SKIP_LOCKED_TIMEOUT);
+    }
   }
 
   /**
@@ -219,7 +301,8 @@ public class SpecificationRepositoryImpl<T, ID extends Serializable>
         plan.having(),
         plan.sort(),
         plan.distinct(),
-        plan.allowedFieldsPolicy());
+        plan.allowedFieldsPolicy(),
+        plan.lock());
   }
 
   /**
@@ -431,6 +514,7 @@ public class SpecificationRepositoryImpl<T, ID extends Serializable>
   }
 
   private List<?> executeRowQuery(QueryPlan<T> plan, int limit) {
+    requireUnlocked(plan);
     CriteriaBuilder builder = entityManager.getCriteriaBuilder();
     CriteriaQuery<?> query =
         plan.selections().size() == 1
@@ -455,6 +539,7 @@ public class SpecificationRepositoryImpl<T, ID extends Serializable>
 
   private <P> List<P> executeProjectedQuery(
       QueryPlan<T> plan, Pageable pageable, Class<P> resultType, int extraLimit) {
+    requireUnlocked(plan);
     Sort sort = effectiveSort(plan, pageable);
     CriteriaBuilder builder = entityManager.getCriteriaBuilder();
     CriteriaQuery<P> query = builder.createQuery(resultType);

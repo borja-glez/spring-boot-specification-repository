@@ -19,8 +19,12 @@ import org.springframework.data.domain.Sort;
  *       the client part stays inside the client part.
  * </ul>
  *
- * <p>Use {@link #toBuilder()} to derive a plan with server conditions, fetches, sort or grouping
- * from an existing one.
+ * <p>{@code lock} is the pessimistic row lock the entity query takes, {@link QueryLock#NONE} by
+ * default. It is set only in code, through {@link QueryPlanBuilder#lock(LockMode, LockWait)}: a
+ * plan parsed from a request never carries one.
+ *
+ * <p>Use {@link #toBuilder()} to derive a plan with server conditions, fetches, sort, grouping or a
+ * lock from an existing one.
  */
 public record QueryPlan<T>(
     Class<T> entityType,
@@ -35,7 +39,8 @@ public record QueryPlan<T>(
     List<HavingCondition> having,
     Sort sort,
     boolean distinct,
-    AllowedFieldsPolicy allowedFieldsPolicy) {
+    AllowedFieldsPolicy allowedFieldsPolicy,
+    QueryLock lock) {
 
   private static final GroupCondition NO_SERVER_CONDITION =
       new GroupCondition(LogicalOperator.AND, List.of());
@@ -47,9 +52,42 @@ public record QueryPlan<T>(
     }
     Objects.requireNonNull(having, "having must not be null");
     Objects.requireNonNull(allowedFieldsPolicy, "allowedFieldsPolicy must not be null");
+    Objects.requireNonNull(lock, "lock must not be null");
   }
 
-  /** A plan without server conditions: every condition is a client condition. */
+  /** A plan without a lock. */
+  public QueryPlan(
+      Class<T> entityType,
+      GroupCondition rootCondition,
+      GroupCondition serverCondition,
+      List<JoinInstruction> joins,
+      List<FetchInstruction> fetches,
+      List<String> projections,
+      List<Selection> selections,
+      Class<?> projectionType,
+      List<String> groupBy,
+      List<HavingCondition> having,
+      Sort sort,
+      boolean distinct,
+      AllowedFieldsPolicy allowedFieldsPolicy) {
+    this(
+        entityType,
+        rootCondition,
+        serverCondition,
+        joins,
+        fetches,
+        projections,
+        selections,
+        projectionType,
+        groupBy,
+        having,
+        sort,
+        distinct,
+        allowedFieldsPolicy,
+        QueryLock.NONE);
+  }
+
+  /** A plan without server conditions or lock: every condition is a client condition. */
   public QueryPlan(
       Class<T> entityType,
       GroupCondition rootCondition,

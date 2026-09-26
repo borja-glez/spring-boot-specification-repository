@@ -14,6 +14,8 @@ import com.borjaglez.specrepository.core.AllowedFieldsPolicy;
 import com.borjaglez.specrepository.core.ConditionGroupBuilder;
 import com.borjaglez.specrepository.core.FilterOperator;
 import com.borjaglez.specrepository.core.GroupedRow;
+import com.borjaglez.specrepository.core.LockMode;
+import com.borjaglez.specrepository.core.LockWait;
 import com.borjaglez.specrepository.core.QueryPlan;
 import com.borjaglez.specrepository.core.QueryPlanBuilder;
 import com.borjaglez.specrepository.core.SubqueryBuilder;
@@ -263,6 +265,18 @@ public class SpecificationExecutableQuery<T> extends QueryPlanBuilder<T> {
   @Override
   public SpecificationExecutableQuery<T> allowedFields(AllowedFieldsPolicy allowedFieldsPolicy) {
     super.allowedFields(allowedFieldsPolicy);
+    return this;
+  }
+
+  @Override
+  public SpecificationExecutableQuery<T> lock(LockMode mode) {
+    super.lock(mode);
+    return this;
+  }
+
+  @Override
+  public SpecificationExecutableQuery<T> lock(LockMode mode, LockWait wait) {
+    super.lock(mode, wait);
     return this;
   }
 

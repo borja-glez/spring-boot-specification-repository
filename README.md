@@ -16,6 +16,8 @@ Extensible Spring Data JPA query library with a fluent DSL and native-friendly a
 - `SpecificationRepository` as a repository base abstraction for execution
 - Per-query field whitelisting of client input for secure API exposure (`AllowedFieldsPolicy`), plus
   server conditions added to a plan received over HTTP (`repository.query(plan)`)
+- Pessimistic row locks (`FOR UPDATE`, `FOR SHARE`, `NOWAIT`, `SKIP LOCKED`) in the plan, for
+  queue-like reads such as a transactional outbox relay (see [Pessimistic Locking](#pessimistic-locking))
 - Pluggable operators, predicate factories, converters, and dialect extensions
 - GraalVM-aware path resolution based on JPA metamodel metadata instead of reflection-heavy lookup
   (`selectInto(...)` DTOs need a reflection hint in a native image, see [GraalVM Native Image](#graalvm-native-image))
@@ -486,6 +488,60 @@ long total = productRepository.query()
     .count();
 ```
 
+### Pessimistic Locking
+
+`lock(LockMode[, LockWait])` makes the entity query lock the rows it reads until the transaction
+ends. It is part of the plan, so a plan derived with `toBuilder()` or `repository.query(plan)` keeps
+it, and `lock(LockMode.NONE)` removes it.
+
+```java
+@Transactional
+public void relayBatch() {
+    // Several instances can run this at once: each one gets rows no other instance holds.
+    List<OutboxEvent> batch = outbox.query()
+        .where("publishedAt", Operators.IS_NULL, null)
+        .sort(Sort.by("id"))
+        .lock(LockMode.PESSIMISTIC_WRITE, LockWait.SKIP_LOCKED)
+        .findAll(PageRequest.of(0, 100))
+        .getContent();
+    batch.forEach(this::publish);
+}
+```
+
+| `LockMode` | PostgreSQL (Hibernate 6.6 / 7) |
+|------------|--------------------------------|
+| `NONE` (default) | no lock |
+| `PESSIMISTIC_READ` | `FOR SHARE`: others can read and share-lock the rows, not change them |
+| `PESSIMISTIC_WRITE` | `FOR NO KEY UPDATE` (Hibernate's rendering of an exclusive row lock) |
+
+| `LockWait` | Rows locked by another transaction |
+|------------|------------------------------------|
+| `WAIT` (default) | waits for them (up to the database lock timeout) |
+| `NOWAIT` | fails at once: `jakarta.persistence.LockTimeoutException` (a Spring `PessimisticLockingFailureException` through a repository method) |
+| `SKIP_LOCKED` | leaves them out of the result |
+
+`NOWAIT` and `SKIP_LOCKED` are sent as the `jakarta.persistence.lock.timeout` hint (`0` and `-2`),
+which Hibernate 6.6 and 7 render as `NOWAIT` and `SKIP LOCKED` where the dialect supports them
+(verified on PostgreSQL). Hibernate's H2 dialect ignores them and renders every lock, read locks included, as a plain
+`FOR UPDATE`.
+
+Rules:
+
+- **It needs a read-write transaction**, and the lock lasts until that transaction ends, so run the
+  query inside your own `@Transactional` method. Without a transaction the fluent terminals fail with
+  `jakarta.persistence.TransactionRequiredException`; the plan methods (`repository.findAll(plan)`)
+  would run in the repository's own read-only transaction, so they fail with an
+  `IllegalStateException` instead.
+- The lock applies to `findAll()`, `findAll(Pageable)`, `findSlice(Pageable)` and `findOne()`, and
+  the plan methods behind them. The count query of a page, and `count()`, never lock.
+- Combinations the databases reject fail with an `IllegalStateException` before any query is sent:
+  `select`, aggregates or `selectInto` (`findRows()`, projections), `groupBy`, `distinct()` and a
+  filter through a collection (both make the query `DISTINCT`, which PostgreSQL does not lock: filter
+  the collection with `exists(...)` instead), and a collection fetch with `findAll(Pageable)`,
+  `findSlice(Pageable)` or `findOne()`. `findAll()` can lock and fetch a collection.
+- A plan parsed from an HTTP request (`@FilterableQuery`, `HttpFilterParser`) never carries a lock:
+  only server code sets one.
+
 ### EXISTS and Subqueries
 
 For collection associations and cross-entity filters, the DSL supports correlated
@@ -655,6 +711,7 @@ can define are not checked:
 | server conditions (`where`, `and`, `or`, `exists`, ... on a derived builder), including their subqueries | server | not checked |
 | `select`, `selectInto`, aggregates (`sum`, `countAs`, ...), `groupBy` | server | not checked |
 | joins and fetches (`leftJoin`, `leftFetch`, ...) | server | not checked |
+| row lock (`lock(...)`) | server (the HTTP syntax has none) | not checked |
 | fields inside a subquery body (the sub-entity's conditions and selected field) | server | not checked |
 
 The HTTP syntax cannot express selections, grouping, aggregates, joins, fetches or `having`, so an

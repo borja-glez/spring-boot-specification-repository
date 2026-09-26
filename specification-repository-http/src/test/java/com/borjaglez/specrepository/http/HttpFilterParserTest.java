@@ -18,6 +18,7 @@ import com.borjaglez.specrepository.core.GroupCondition;
 import com.borjaglez.specrepository.core.LogicalOperator;
 import com.borjaglez.specrepository.core.Operators;
 import com.borjaglez.specrepository.core.PredicateCondition;
+import com.borjaglez.specrepository.core.QueryLock;
 import com.borjaglez.specrepository.core.QueryPlan;
 import com.borjaglez.specrepository.core.QueryPlanBuilder;
 import com.borjaglez.specrepository.core.SpecificationQueryBuilder;
@@ -668,6 +669,20 @@ class HttpFilterParserTest {
       assertThat(plan.entityType()).isEqualTo(TestEntity.class);
       assertThat(plan.rootCondition().conditions()).isEmpty();
       assertThat(plan.sort().isUnsorted()).isTrue();
+    }
+
+    @Test
+    void shouldNeverLockAParsedPlan() {
+      QueryPlan<TestEntity> plan =
+          parser.toQueryPlan(
+              TestEntity.class,
+              Map.of(
+                  "filter", List.of("name:eq:John"),
+                  "lock", List.of("PESSIMISTIC_WRITE"),
+                  "lockMode", List.of("PESSIMISTIC_WRITE")),
+              AllowedFieldsPolicy.allowAll());
+
+      assertThat(plan.lock()).isEqualTo(QueryLock.NONE);
     }
   }
 
