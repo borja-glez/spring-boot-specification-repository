@@ -77,6 +77,12 @@ implementation("com.borjaglez.specrepository:specification-repository-boot4-star
 </dependency>
 ```
 
+### Upgrading
+
+Upgrading from an earlier version? [docs/upgrading.md](docs/upgrading.md) lists the breaking
+changes of each release with before/after code and migration steps, and
+[CHANGELOG.md](CHANGELOG.md) marks them with **BREAKING:**.
+
 ## Setup
 
 ### 1. Enable Specification Repositories
