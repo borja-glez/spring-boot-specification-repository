@@ -174,7 +174,9 @@ public class SpecificationRepositoryImpl<T, ID extends Serializable>
     } else if (plan.hasSelections()) {
       results = (List<T>) executeProjectedQuery(plan, null, 1);
     } else {
-      results = fetchEntities(plan, 1);
+      // A limit over a fetched collection makes Hibernate paginate in memory (or fail, with
+      // fail_on_pagination_over_collection_fetch): plans with fetches keep reading every row.
+      results = fetchEntities(plan, plan.fetches().isEmpty() ? 1 : 0);
     }
     return results.stream().findFirst();
   }

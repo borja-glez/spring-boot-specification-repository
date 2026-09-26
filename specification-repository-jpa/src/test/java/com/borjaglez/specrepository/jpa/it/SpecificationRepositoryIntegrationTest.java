@@ -287,6 +287,14 @@ class SpecificationRepositoryIntegrationTest {
   }
 
   @Test
+  void shouldFindOneWithAFetchedCollection() {
+    Optional<TestCustomer> result =
+        repository.query().leftFetch("orders").where("name", Operators.EQUALS, "Borja").findOne();
+
+    assertThat(result).get().extracting(TestCustomer::getName).isEqualTo("Borja");
+  }
+
+  @Test
   void shouldReturnEmptyOptionalWhenNoMatch() {
     Optional<TestCustomer> result =
         repository.query().where("name", Operators.EQUALS, "NonExistent").findOne();
