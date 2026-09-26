@@ -132,10 +132,26 @@ public class QueryPlanSpecificationFactory {
       AssociationRegistry registry,
       List<FetchInstruction> instructions) {
     if (Long.class.equals(query.getResultType()) || long.class.equals(query.getResultType())) {
+      applyInnerFetchesAsJoins(root, registry, instructions);
       return;
     }
     instructions.forEach(
         instruction -> pathResolver.fetch(root, registry, instruction.path(), instruction.mode()));
+  }
+
+  /**
+   * A count cannot fetch, but an inner fetch still drops the roots without the association: it
+   * becomes an inner join, so the count matches the rows. When it crosses a collection the query is
+   * then counted with {@code count(distinct root)}. Left fetches never change the number of roots
+   * and are left out.
+   */
+  private void applyInnerFetchesAsJoins(
+      Root<?> root, AssociationRegistry registry, List<FetchInstruction> instructions) {
+    for (FetchInstruction instruction : instructions) {
+      if (instruction.mode() == JoinMode.INNER) {
+        pathResolver.join(root, registry, instruction.path(), JoinMode.INNER);
+      }
+    }
   }
 
   private void applyGrouping(
