@@ -144,6 +144,26 @@ public class PathResolver {
   }
 
   /**
+   * Whether resolving {@code path} joins a collection, so that a condition on it tests one element
+   * of the collection: an association collection followed by more segments, or a collection of
+   * basic values that ends the path.
+   */
+  public boolean crossesCollection(ManagedType<?> fromType, String path) {
+    String[] segments = path.split("\\.");
+    ManagedType<?> currentType = fromType;
+    for (int index = 0; index < segments.length - 1; index++) {
+      Attribute<?, ?> attribute = attribute(currentType, path, segments, index);
+      if (attribute instanceof PluralAttribute<?, ?, ?>) {
+        return true;
+      }
+      if (attribute.isAssociation() || isEmbeddable(attribute)) {
+        currentType = managedType(attribute);
+      }
+    }
+    return isBasicCollection(attribute(currentType, path, segments, segments.length - 1));
+  }
+
+  /**
    * Resolves the type reached by an association path, or {@code null} when the path ends in a
    * collection of basic values (for example an {@code @ElementCollection} of strings), whose
    * elements have no attributes to navigate.

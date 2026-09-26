@@ -399,6 +399,83 @@ class PathResolverTest {
     assertThat(result).isSameAs(profilePath);
   }
 
+  // -- Whether a path crosses a collection --
+
+  @Test
+  void shouldCrossACollectionWhenABasicCollectionEndsThePath() {
+    PluralAttribute<?, ?, ?> tagsAttr = basicCollection();
+    doReturn(tagsAttr).when(entityType).getAttribute("tags");
+
+    assertThat(pathResolver.crossesCollection(entityType, "tags")).isTrue();
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  void shouldCrossACollectionWhenAnEntityCollectionIsFollowedByMoreSegments() {
+    PluralAttribute<?, ?, ?> ordersAttr = mock(PluralAttribute.class);
+    doReturn(ordersAttr).when(entityType).getAttribute("orders");
+
+    assertThat(pathResolver.crossesCollection(entityType, "orders.status")).isTrue();
+  }
+
+  @Test
+  void shouldCrossACollectionReachedThroughASingularAssociation() {
+    ManagedType<?> profileType = profileAssociation();
+    PluralAttribute<?, ?, ?> tagsAttr = basicCollection();
+    doReturn(tagsAttr).when(profileType).getAttribute("tags");
+
+    assertThat(pathResolver.crossesCollection(entityType, "profile.tags")).isTrue();
+  }
+
+  @Test
+  void shouldNotCrossACollectionThroughAnEmbeddable() {
+    SingularAttribute<?, ?> addressAttr = mock(SingularAttribute.class);
+    doReturn(Attribute.PersistentAttributeType.EMBEDDED)
+        .when(addressAttr)
+        .getPersistentAttributeType();
+    ManagedType<?> addressType = mock(ManagedType.class);
+    doReturn(addressType).when(addressAttr).getType();
+    doReturn(addressAttr).when(entityType).getAttribute("address");
+    SingularAttribute<?, ?> streetAttr = mock(SingularAttribute.class);
+    doReturn(streetAttr).when(addressType).getAttribute("street");
+
+    assertThat(pathResolver.crossesCollection(entityType, "address.street")).isFalse();
+  }
+
+  @Test
+  void shouldNotCrossACollectionThroughABasicMiddleSegment() {
+    SingularAttribute<?, ?> aAttr = mock(SingularAttribute.class);
+    doReturn(Attribute.PersistentAttributeType.BASIC).when(aAttr).getPersistentAttributeType();
+    doReturn(aAttr).when(entityType).getAttribute("a");
+    SingularAttribute<?, ?> bAttr = mock(SingularAttribute.class);
+    doReturn(bAttr).when(entityType).getAttribute("b");
+
+    assertThat(pathResolver.crossesCollection(entityType, "a.b")).isFalse();
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  void shouldNotCrossAnEntityCollectionThatEndsThePath() {
+    PluralAttribute<?, ?, ?> ordersAttr = mock(PluralAttribute.class);
+    jakarta.persistence.metamodel.Type<?> elementType =
+        mock(jakarta.persistence.metamodel.Type.class);
+    doReturn(jakarta.persistence.metamodel.Type.PersistenceType.ENTITY)
+        .when(elementType)
+        .getPersistenceType();
+    doReturn(elementType).when(ordersAttr).getElementType();
+    doReturn(ordersAttr).when(entityType).getAttribute("orders");
+
+    assertThat(pathResolver.crossesCollection(entityType, "orders")).isFalse();
+  }
+
+  @Test
+  void shouldRejectAnUnknownFieldWhenCheckingForACollection() {
+    unknownAttribute(entityType, "nope");
+
+    assertThatThrownBy(() -> pathResolver.crossesCollection(entityType, "nope"))
+        .isInstanceOf(InvalidFilterException.class);
+  }
+
   // -- Unknown fields --
 
   @Test
