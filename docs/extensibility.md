@@ -56,6 +56,25 @@ List<Order> mine = orderRepository.query(planFromClient)
 `AllowedFieldsPolicy.validate(plan)` runs the same check on demand; the HTTP argument resolver
 calls it so that a disallowed client field fails before the controller runs.
 
+### `@FilterableQuery` denies by default
+
+For HTTP endpoints, `@FilterableQuery` builds the policy from its `filterableFields` and
+`sortableFields`. An empty list allows nothing for its usage:
+
+- no lists: no filtering and no sorting;
+- only one list: the other usage stays denied;
+- `allowAllFields = true`: every field, as `AllowedFieldsPolicy.allowAll()` (cannot be combined
+  with the lists).
+
+A request that uses an undeclared usage is rejected before the controller runs with
+`UndeclaredFieldListException` (a `DisallowedFieldException` annotated with
+`@ResponseStatus(BAD_REQUEST)`), whose message names the missing attribute, for example
+`Field 'name' is not allowed for filtering: @FilterableQuery declares no filterableFields. Declare
+filterableFields, or set allowAllFields = true to allow every field.`
+
+Up to 0.3.x a parameter without lists allowed every field. To migrate, declare the lists (preferred)
+or add `allowAllFields = true`.
+
 ### Security example: REST controller
 
 ```java

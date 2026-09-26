@@ -572,7 +572,9 @@ userRepository.query()
 ```
 
 The policy is per-query, so each endpoint can define its own restrictions. Without
-`allowedFields()`, all fields are permitted (backward-compatible default).
+`allowedFields()`, all fields are permitted (backward-compatible default) for plans built in
+code. HTTP endpoints resolved with `@FilterableQuery` are the opposite: they deny every field that
+is not declared (see [Deny by default](#deny-by-default)).
 
 The policy guards **client input**, not the whole query. A plan keeps its conditions in two parts,
 combined with AND when the query runs:
@@ -878,6 +880,49 @@ The resolver checks the request's filters and sort while it resolves the argumen
 handler runs, so the exception reaches your `@ExceptionHandler` unwrapped. The plan keeps the policy
 and is checked again when it runs.
 
+#### Deny by default
+
+`@FilterableQuery` only accepts the fields it declares:
+
+| Declaration | Filtering | Sorting |
+|---|---|---|
+| no lists: `@FilterableQuery(Product.class)` | denied | denied |
+| only `filterableFields` | declared fields | denied |
+| only `sortableFields` | denied | declared fields |
+| both lists | declared fields | declared fields |
+| `allowAllFields = true` | any field | any field |
+
+A request that filters or sorts through a usage without a declared list is rejected with
+`UndeclaredFieldListException`, a `DisallowedFieldException` whose message names the missing
+attribute:
+
+```text
+Field 'name' is not allowed for filtering: @FilterableQuery declares no filterableFields. Declare filterableFields, or set allowAllFields = true to allow every field.
+```
+
+The exception is annotated with `@ResponseStatus(BAD_REQUEST)`, so Spring MVC answers 400 even
+without an exception handler; a handler for `DisallowedFieldException` catches it as well. A request
+without `filter`, `orFilter` or `sort` parameters is still accepted. The annotation is not checked
+at startup.
+
+To accept every field, opt in explicitly. `allowAllFields = true` cannot be combined with
+`filterableFields` or `sortableFields` (resolving such a parameter throws `IllegalStateException`),
+and it is honoured through composed annotations and `@AliasFor` like the other attributes:
+
+```java
+@GetMapping("/internal/products")
+public Page<Product> internalSearch(
+        @FilterableQuery(value = Product.class, allowAllFields = true) QueryPlan<Product> query,
+        Pageable pageable) {
+    return productRepository.findAll(query, pageable);
+}
+```
+
+> **Migrating from 0.3.x:** `@FilterableQuery` without field lists used to allow every field; it now
+> allows none. Declare `filterableFields` and `sortableFields` for each such endpoint (recommended),
+> or add `allowAllFields = true` to keep the old behaviour. An endpoint that declared only one list
+> behaves as before: the other usage was already denied.
+
 To add conditions the client must not control (the current user, a tenant, "on sale only"), derive
 the plan with `repository.query(plan)` or `plan.toBuilder()`: see
 [Extending a plan received over HTTP](#extending-a-plan-received-over-http).
@@ -929,6 +974,8 @@ public Page<Product> search(
 - Other operators on those fields (`gt`, `gte`, `lt`, `lte`, `between`, `in`, `notin`, the null and
   empty checks, and custom operators) are not affected: they keep the default matching and are not
   rejected.
+- The attribute does not make a field filterable: list it in `filterableFields` as well (or set
+  `allowAllFields = true`).
 - The attribute is honoured through composed annotations and `@AliasFor` overrides like the other
   attributes.
 - With the default operator handlers, `ignoreCase` compares `unaccent(UPPER(path))` with
@@ -982,12 +1029,17 @@ HttpFilterParser parser = new HttpFilterParser(config);
 
 - `HttpFilterSyntaxException` — thrown for malformed filter/sort expressions, invalid field
   names, and filter/sort count limits exceeded.
+- `UndeclaredFieldListException` — thrown by the argument resolver when a request filters or sorts
+  through a `@FilterableQuery` parameter that declares no list for that usage (see
+  [Deny by default](#deny-by-default)). It extends `DisallowedFieldException` and is annotated with
+  `@ResponseStatus(BAD_REQUEST)`.
 - `HttpUnknownOperatorException` — thrown when the operator is not in the configured
   `allowedOperators` set.
 
-Both extend `IllegalArgumentException` and propagate to the caller so applications can map them
+All of them extend `IllegalArgumentException` and propagate to the caller so applications can map them
 to HTTP 400 responses via their preferred error handling strategy (`@ControllerAdvice`,
-`ProblemDetail`, etc.). The module does not register its own exception handler.
+`ProblemDetail`, etc.). The module does not register its own exception handler; only
+`UndeclaredFieldListException` carries a `@ResponseStatus`.
 
 Filters that pass the parser can still be invalid for the entity. When the query runs, the JPA
 module throws `InvalidFilterException` (in `specification-repository-core`, also an

@@ -88,6 +88,64 @@ class QueryPlanArgumentResolverTest {
           QueryPlan<TestEntity> query) {}
 
   @SuppressWarnings("unused")
+  void filterableOnlyMethod(
+      @FilterableQuery(
+              value = TestEntity.class,
+              filterableFields = {"name"})
+          QueryPlan<TestEntity> query) {}
+
+  @SuppressWarnings("unused")
+  void allowAllFieldsMethod(
+      @FilterableQuery(value = TestEntity.class, allowAllFields = true)
+          QueryPlan<TestEntity> query) {}
+
+  @SuppressWarnings("unused")
+  void allowAllFieldsWithFilterableFieldsMethod(
+      @FilterableQuery(
+              value = TestEntity.class,
+              allowAllFields = true,
+              filterableFields = {"name"})
+          QueryPlan<TestEntity> query) {}
+
+  @SuppressWarnings("unused")
+  void allowAllFieldsWithSortableFieldsMethod(
+      @FilterableQuery(
+              value = TestEntity.class,
+              allowAllFields = true,
+              sortableFields = {"name"})
+          QueryPlan<TestEntity> query) {}
+
+  @Target({ElementType.PARAMETER, ElementType.ANNOTATION_TYPE})
+  @Retention(RetentionPolicy.RUNTIME)
+  @FilterableQuery(value = TestEntity.class, allowAllFields = true)
+  @interface OpenTestEntitySearch {}
+
+  @Target(ElementType.PARAMETER)
+  @Retention(RetentionPolicy.RUNTIME)
+  @OpenTestEntitySearch
+  @interface NestedOpenTestEntitySearch {}
+
+  @Target(ElementType.PARAMETER)
+  @Retention(RetentionPolicy.RUNTIME)
+  @FilterableQuery(TestEntity.class)
+  @interface ToggleableSearch {
+    @AliasFor(annotation = FilterableQuery.class, attribute = "allowAllFields")
+    boolean value() default false;
+  }
+
+  @SuppressWarnings("unused")
+  void composedAllowAllFieldsMethod(@OpenTestEntitySearch QueryPlan<TestEntity> query) {}
+
+  @SuppressWarnings("unused")
+  void nestedAllowAllFieldsMethod(@NestedOpenTestEntitySearch QueryPlan<TestEntity> query) {}
+
+  @SuppressWarnings("unused")
+  void aliasAllowAllFieldsMethod(@ToggleableSearch(true) QueryPlan<TestEntity> query) {}
+
+  @SuppressWarnings("unused")
+  void aliasDefaultAllowAllFieldsMethod(@ToggleableSearch QueryPlan<TestEntity> query) {}
+
+  @SuppressWarnings("unused")
   void nonAnnotatedMethod(QueryPlan<TestEntity> query) {}
 
   @SuppressWarnings("unused")
@@ -129,7 +187,7 @@ class QueryPlanArgumentResolverTest {
 
   @Target(ElementType.PARAMETER)
   @Retention(RetentionPolicy.RUNTIME)
-  @FilterableQuery(TestEntity.class)
+  @FilterableQuery(value = TestEntity.class, allowAllFields = true)
   @interface OverridableCaseInsensitiveSearch {
     @AliasFor(annotation = FilterableQuery.class, attribute = "caseInsensitiveFields")
     String[] value();
@@ -139,6 +197,7 @@ class QueryPlanArgumentResolverTest {
   void caseInsensitiveMethod(
       @FilterableQuery(
               value = TestEntity.class,
+              allowAllFields = true,
               caseInsensitiveFields = {"name"})
           QueryPlan<TestEntity> query) {}
 
@@ -271,16 +330,149 @@ class QueryPlanArgumentResolverTest {
   }
 
   @Test
-  void shouldUseAllowAllWhenNoFieldsSpecified() throws Exception {
+  void shouldDenyFilteringWhenNoFieldListsAreDeclared() throws Exception {
     MethodParameter param = getParam("defaultAnnotatedMethod", QueryPlan.class);
-    NativeWebRequest webRequest = mock(NativeWebRequest.class);
-    when(webRequest.getParameterMap()).thenReturn(Map.of());
+    Map<String, String[]> params = Map.of("filter", new String[] {"name:eq:John"});
 
-    @SuppressWarnings("unchecked")
-    QueryPlan<TestEntity> plan =
-        (QueryPlan<TestEntity>) resolver.resolveArgument(param, null, webRequest, null);
+    assertThatThrownBy(() -> resolve(param, params))
+        .isInstanceOfSatisfying(
+            UndeclaredFieldListException.class,
+            exception -> {
+              assertThat(exception).isInstanceOf(DisallowedFieldException.class);
+              assertThat(exception.field()).isEqualTo("name");
+              assertThat(exception.usage()).isEqualTo("filtering");
+              assertThat(exception.attribute()).isEqualTo("filterableFields");
+            })
+        .hasMessage(
+            "Field 'name' is not allowed for filtering: @FilterableQuery declares no"
+                + " filterableFields. Declare filterableFields, or set allowAllFields = true to"
+                + " allow every field.");
+  }
 
+  @Test
+  void shouldDenyOrFiltersWhenNoFieldListsAreDeclared() throws Exception {
+    MethodParameter param = getParam("defaultAnnotatedMethod", QueryPlan.class);
+    Map<String, String[]> params = Map.of("orFilter", new String[] {"name:eq:a;status:eq:b"});
+
+    assertThatThrownBy(() -> resolve(param, params))
+        .isInstanceOf(UndeclaredFieldListException.class)
+        .hasMessageContaining("declares no filterableFields");
+  }
+
+  @Test
+  void shouldDenySortingWhenNoFieldListsAreDeclared() throws Exception {
+    MethodParameter param = getParam("defaultAnnotatedMethod", QueryPlan.class);
+    Map<String, String[]> params = Map.of("sort", new String[] {"name,asc"});
+
+    assertThatThrownBy(() -> resolve(param, params))
+        .isInstanceOfSatisfying(
+            UndeclaredFieldListException.class,
+            exception -> {
+              assertThat(exception.field()).isEqualTo("name");
+              assertThat(exception.usage()).isEqualTo("sorting");
+              assertThat(exception.attribute()).isEqualTo("sortableFields");
+            })
+        .hasMessage(
+            "Field 'name' is not allowed for sorting: @FilterableQuery declares no"
+                + " sortableFields. Declare sortableFields, or set allowAllFields = true to"
+                + " allow every field.");
+  }
+
+  @Test
+  void shouldResolveAPlanThatDeniesEveryFieldWhenNoFieldListsAreDeclared() throws Exception {
+    QueryPlan<?> plan = resolve(getParam("defaultAnnotatedMethod", QueryPlan.class));
+
+    AllowedFieldsPolicy policy = plan.allowedFieldsPolicy();
+    assertThat(policy.isAllowAll()).isFalse();
+    assertThatThrownBy(() -> policy.validateFilter("name"))
+        .isInstanceOf(DisallowedFieldException.class);
+    assertThatThrownBy(() -> policy.validateSort("name"))
+        .isInstanceOf(DisallowedFieldException.class);
+  }
+
+  @Test
+  void shouldAllowEveryFieldWhenAllowAllFieldsIsSet() throws Exception {
+    QueryPlan<?> plan =
+        resolve(
+            getParam("allowAllFieldsMethod", QueryPlan.class),
+            Map.of(
+                "filter", new String[] {"anything:eq:x"}, "sort", new String[] {"whatever,desc"}));
+
+    assertThat(plan.rootCondition().conditions()).hasSize(1);
     assertThat(plan.allowedFieldsPolicy()).isSameAs(AllowedFieldsPolicy.allowAll());
+  }
+
+  @Test
+  void shouldAllowEveryFieldWhenAllowAllFieldsIsSetThroughComposedAnnotations() throws Exception {
+    for (String method :
+        List.of(
+            "composedAllowAllFieldsMethod",
+            "nestedAllowAllFieldsMethod",
+            "aliasAllowAllFieldsMethod")) {
+      MethodParameter param = getParam(method, QueryPlan.class);
+      assertThat(resolver.supportsParameter(param)).isTrue();
+
+      QueryPlan<?> plan = resolve(param, Map.of("filter", new String[] {"anything:eq:x"}));
+
+      assertThat(plan.entityType()).isEqualTo(TestEntity.class);
+      assertThat(plan.allowedFieldsPolicy()).isSameAs(AllowedFieldsPolicy.allowAll());
+    }
+  }
+
+  @Test
+  void shouldDenyByDefaultThroughAComposedAnnotationWithoutAllowAllFields() throws Exception {
+    MethodParameter param = getParam("aliasDefaultAllowAllFieldsMethod", QueryPlan.class);
+
+    assertThatThrownBy(() -> resolve(param, Map.of("filter", new String[] {"name:eq:x"})))
+        .isInstanceOf(UndeclaredFieldListException.class);
+  }
+
+  @Test
+  void shouldRejectAllowAllFieldsCombinedWithFieldLists() throws Exception {
+    for (String method :
+        List.of(
+            "allowAllFieldsWithFilterableFieldsMethod", "allowAllFieldsWithSortableFieldsMethod")) {
+      MethodParameter param = getParam(method, QueryPlan.class);
+
+      assertThatThrownBy(() -> resolve(param))
+          .isInstanceOf(IllegalStateException.class)
+          .hasMessage(
+              "@FilterableQuery allowAllFields = true cannot be combined with filterableFields"
+                  + " or sortableFields");
+    }
+  }
+
+  @Test
+  void shouldKeepDenyingSortingWhenOnlyFilterableFieldsAreDeclared() throws Exception {
+    MethodParameter param = getParam("filterableOnlyMethod", QueryPlan.class);
+
+    QueryPlan<?> plan = resolve(param, Map.of("filter", new String[] {"name:eq:x"}));
+    assertThat(plan.rootCondition().conditions()).hasSize(1);
+
+    assertThatThrownBy(() -> resolve(param, Map.of("sort", new String[] {"name,asc"})))
+        .isInstanceOf(UndeclaredFieldListException.class)
+        .hasMessageContaining("declares no sortableFields");
+  }
+
+  @Test
+  void shouldKeepDenyingFilteringWhenOnlySortableFieldsAreDeclared() throws Exception {
+    MethodParameter param = getParam("sortableOnlyMethod", QueryPlan.class);
+
+    QueryPlan<?> plan = resolve(param, Map.of("sort", new String[] {"name,asc"}));
+    assertThat(plan.sort().isSorted()).isTrue();
+
+    assertThatThrownBy(() -> resolve(param, Map.of("filter", new String[] {"name:eq:x"})))
+        .isInstanceOf(UndeclaredFieldListException.class)
+        .hasMessageContaining("declares no filterableFields");
+  }
+
+  @Test
+  void shouldKeepThePlainExceptionForAFieldMissingFromADeclaredList() throws Exception {
+    MethodParameter param = getParam("annotatedMethod", QueryPlan.class);
+
+    assertThatThrownBy(() -> resolve(param, Map.of("sort", new String[] {"status,asc"})))
+        .isExactlyInstanceOf(DisallowedFieldException.class)
+        .hasMessage("Field 'status' is not allowed for sorting");
   }
 
   @Test
@@ -403,7 +595,7 @@ class QueryPlanArgumentResolverTest {
   void shouldKeepCaseSensitiveMatchingByDefault() throws Exception {
     QueryPlan<?> plan =
         resolve(
-            getParam("defaultAnnotatedMethod", QueryPlan.class),
+            getParam("allowAllFieldsMethod", QueryPlan.class),
             Map.of("filter", new String[] {"name:contains:cafe"}));
 
     assertThat(((PredicateCondition) plan.rootCondition().conditions().get(0)).ignoreCase())

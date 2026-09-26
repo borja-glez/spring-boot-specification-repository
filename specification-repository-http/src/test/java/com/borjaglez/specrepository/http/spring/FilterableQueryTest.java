@@ -38,7 +38,7 @@ class FilterableQueryTest {
   }
 
   @Test
-  void shouldHaveEmptyDefaultsForFieldLists() throws Exception {
+  void shouldHaveEmptyDefaultsForFieldListsAndDenyByDefault() throws Exception {
     Method method = getClass().getDeclaredMethod("defaultsMethod", QueryPlan.class);
     Annotation[][] annotations = method.getParameterAnnotations();
     FilterableQuery fq = (FilterableQuery) annotations[0][0];
@@ -46,5 +46,6 @@ class FilterableQueryTest {
     assertThat(fq.filterableFields()).isEmpty();
     assertThat(fq.sortableFields()).isEmpty();
     assertThat(fq.caseInsensitiveFields()).isEmpty();
+    assertThat(fq.allowAllFields()).isFalse();
   }
 }

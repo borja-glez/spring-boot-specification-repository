@@ -16,10 +16,13 @@ import org.springframework.web.method.support.HandlerMethodArgumentResolver;
 import org.springframework.web.method.support.ModelAndViewContainer;
 
 import com.borjaglez.specrepository.core.AllowedFieldsPolicy;
+import com.borjaglez.specrepository.core.DisallowedFieldException;
 import com.borjaglez.specrepository.core.QueryPlan;
 import com.borjaglez.specrepository.http.HttpFilterParser;
 
 public class QueryPlanArgumentResolver implements HandlerMethodArgumentResolver {
+
+  private static final String SORTING = "sorting";
 
   private final HttpFilterParser parser;
 
@@ -48,8 +51,26 @@ public class QueryPlanArgumentResolver implements HandlerMethodArgumentResolver 
         parser.toQueryPlan(annotation.value(), params, policy, caseInsensitiveFields);
     // Checked here so a disallowed client field fails before the handler runs, without the
     // wrapping of the repository proxy. The plan keeps the policy for later client input.
-    policy.validate(plan);
+    validate(annotation, policy, plan);
     return plan;
+  }
+
+  /**
+   * Validates the client input of {@code plan}. A field rejected because its usage has no declared
+   * list is reported with an {@link UndeclaredFieldListException} that names the missing attribute.
+   */
+  private void validate(FilterableQuery annotation, AllowedFieldsPolicy policy, QueryPlan<?> plan) {
+    try {
+      policy.validate(plan);
+    } catch (DisallowedFieldException ex) {
+      boolean sorting = SORTING.equals(ex.usage());
+      String[] declared = sorting ? annotation.sortableFields() : annotation.filterableFields();
+      if (declared.length == 0) {
+        throw new UndeclaredFieldListException(
+            ex.field(), ex.usage(), sorting ? "sortableFields" : "filterableFields");
+      }
+      throw ex;
+    }
   }
 
   /**
@@ -74,7 +95,12 @@ public class QueryPlanArgumentResolver implements HandlerMethodArgumentResolver 
   private AllowedFieldsPolicy buildPolicy(FilterableQuery annotation) {
     String[] filterable = annotation.filterableFields();
     String[] sortable = annotation.sortableFields();
-    if (filterable.length == 0 && sortable.length == 0) {
+    if (annotation.allowAllFields()) {
+      if (filterable.length > 0 || sortable.length > 0) {
+        throw new IllegalStateException(
+            "@FilterableQuery allowAllFields = true cannot be combined with filterableFields"
+                + " or sortableFields");
+      }
       return AllowedFieldsPolicy.allowAll();
     }
     Set<String> filterableFields = Arrays.stream(filterable).collect(Collectors.toSet());

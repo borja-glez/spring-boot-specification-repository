@@ -42,6 +42,17 @@ class HttpFilterWebMvcTestSliceTest {
         .andExpect(content().string("1"));
   }
 
+  @Test
+  void shouldAnswerBadRequestWhenTheParameterDeclaresNoFieldLists() throws Exception {
+    mvc.perform(get("/undeclared").param("filter", "name:eq:x"))
+        .andExpect(status().isBadRequest())
+        .andExpect(
+            result ->
+                assertThat(result.getResolvedException())
+                    .isInstanceOf(UndeclaredFieldListException.class)
+                    .hasMessageContaining("declares no filterableFields"));
+  }
+
   static class Demo {}
 
   @RestController
@@ -53,6 +64,11 @@ class HttpFilterWebMvcTestSliceTest {
                 value = Demo.class,
                 filterableFields = {"name"})
             QueryPlan<Demo> plan) {
+      return String.valueOf(plan.rootCondition().conditions().size());
+    }
+
+    @GetMapping("/undeclared")
+    String undeclared(@FilterableQuery(Demo.class) QueryPlan<Demo> plan) {
       return String.valueOf(plan.rootCondition().conditions().size());
     }
   }
