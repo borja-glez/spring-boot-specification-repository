@@ -1811,6 +1811,62 @@ abstract class AbstractSpecificationRepositoryIntegrationTest {
         .containsExactly("C:\\algodón");
   }
 
+  // -- Pagination with a collection fetch on entities with a composite id --
+
+  @org.springframework.beans.factory.annotation.Autowired
+  private TestIdClassCustomerRepository idClassCustomers;
+
+  @org.springframework.beans.factory.annotation.Autowired
+  private TestEmbeddedIdCustomerRepository embeddedIdCustomers;
+
+  @Test
+  void shouldPageAnIdClassEntityThatFetchesACollectionInOneQuery() {
+    idClassCustomers.save(new TestIdClassCustomer("north", 1, "Carla", "Vigo"));
+    idClassCustomers.save(new TestIdClassCustomer("north", 2, "Anna", "Madrid", "Toledo"));
+    idClassCustomers.save(new TestIdClassCustomer("south", 1, "Borja"));
+    entityManager.flush();
+    entityManager.clear();
+
+    Page<TestIdClassCustomer> page =
+        idClassCustomers
+            .query()
+            .leftFetch("addresses")
+            .sort(Sort.by("name"))
+            .findAll(PageRequest.of(0, 2));
+
+    assertThat(page.getContent())
+        .extracting(TestIdClassCustomer::getName)
+        .containsExactly("Anna", "Borja");
+    assertThat(page.getContent().getFirst().getAddresses())
+        .extracting(TestProfile::getCity)
+        .containsExactlyInAnyOrder("Madrid", "Toledo");
+    assertThat(page.getTotalElements()).isEqualTo(3);
+  }
+
+  @Test
+  void shouldPageAnEmbeddedIdEntityThatFetchesACollectionInOneQuery() {
+    embeddedIdCustomers.save(new TestEmbeddedIdCustomer("north", 1, "Carla", "Vigo"));
+    embeddedIdCustomers.save(new TestEmbeddedIdCustomer("north", 2, "Anna", "Madrid", "Toledo"));
+    embeddedIdCustomers.save(new TestEmbeddedIdCustomer("south", 1, "Borja"));
+    entityManager.flush();
+    entityManager.clear();
+
+    Slice<TestEmbeddedIdCustomer> slice =
+        embeddedIdCustomers
+            .query()
+            .leftFetch("addresses")
+            .sort(Sort.by("name"))
+            .findSlice(PageRequest.of(1, 2));
+
+    assertThat(slice.getContent())
+        .extracting(TestEmbeddedIdCustomer::getName)
+        .containsExactly("Carla");
+    assertThat(slice.getContent().getFirst().getAddresses())
+        .extracting(TestProfile::getCity)
+        .containsExactly("Vigo");
+    assertThat(slice.hasNext()).isFalse();
+  }
+
   private record NameOnlyRecord(String name) {}
 
   private record CustomerStatusSummary(String status, Long customerCount, Integer totalAge) {}
