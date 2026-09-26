@@ -11,6 +11,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 
 import jakarta.persistence.criteria.CriteriaBuilder;
@@ -34,6 +35,7 @@ import com.borjaglez.specrepository.core.CorrelationPair;
 import com.borjaglez.specrepository.core.DisallowedFieldException;
 import com.borjaglez.specrepository.core.FetchInstruction;
 import com.borjaglez.specrepository.core.GroupCondition;
+import com.borjaglez.specrepository.core.InvalidFilterException;
 import com.borjaglez.specrepository.core.JoinInstruction;
 import com.borjaglez.specrepository.core.JoinMode;
 import com.borjaglez.specrepository.core.LogicalOperator;
@@ -282,7 +284,7 @@ class QueryPlanSpecificationFactoryTest {
     Predicate combined = mock(Predicate.class);
 
     OperatorHandler eqHandler = mock(OperatorHandler.class);
-    when(operatorRegistry.get(Operators.EQUALS)).thenReturn(eqHandler);
+    when(operatorRegistry.find(Operators.EQUALS)).thenReturn(Optional.of(eqHandler));
     when(eqHandler.create(any(OperatorContext.class))).thenReturn(p1, p2);
     when(cb.and(any(Predicate[].class))).thenReturn(combined);
 
@@ -312,7 +314,7 @@ class QueryPlanSpecificationFactoryTest {
     Predicate combined = mock(Predicate.class);
 
     OperatorHandler eqHandler = mock(OperatorHandler.class);
-    when(operatorRegistry.get(Operators.EQUALS)).thenReturn(eqHandler);
+    when(operatorRegistry.find(Operators.EQUALS)).thenReturn(Optional.of(eqHandler));
     when(eqHandler.create(any(OperatorContext.class))).thenReturn(p1);
     when(cb.or(any(Predicate[].class))).thenReturn(combined);
 
@@ -341,7 +343,7 @@ class QueryPlanSpecificationFactoryTest {
     Predicate outerCombined = mock(Predicate.class);
 
     OperatorHandler eqHandler = mock(OperatorHandler.class);
-    when(operatorRegistry.get(Operators.EQUALS)).thenReturn(eqHandler);
+    when(operatorRegistry.find(Operators.EQUALS)).thenReturn(Optional.of(eqHandler));
     when(eqHandler.create(any(OperatorContext.class))).thenReturn(p1);
     when(cb.or(any(Predicate[].class))).thenReturn(innerCombined);
     when(cb.and(any(Predicate[].class))).thenReturn(outerCombined);
@@ -386,7 +388,7 @@ class QueryPlanSpecificationFactoryTest {
     Predicate combined = mock(Predicate.class);
 
     OperatorHandler eqHandler = mock(OperatorHandler.class);
-    when(operatorRegistry.get(Operators.EQUALS)).thenReturn(eqHandler);
+    when(operatorRegistry.find(Operators.EQUALS)).thenReturn(Optional.of(eqHandler));
     when(eqHandler.create(any(OperatorContext.class))).thenReturn(eqPredicate);
     when(cb.isNull(namePath)).thenReturn(isNullPredicate);
     when(cb.or(eqPredicate, isNullPredicate)).thenReturn(orPredicate);
@@ -415,7 +417,7 @@ class QueryPlanSpecificationFactoryTest {
     Predicate combined = mock(Predicate.class);
 
     OperatorHandler eqHandler = mock(OperatorHandler.class);
-    when(operatorRegistry.get(Operators.EQUALS)).thenReturn(eqHandler);
+    when(operatorRegistry.find(Operators.EQUALS)).thenReturn(Optional.of(eqHandler));
     when(eqHandler.create(any(OperatorContext.class))).thenReturn(p1);
     when(cb.and(any(Predicate[].class))).thenReturn(combined);
 
@@ -466,7 +468,7 @@ class QueryPlanSpecificationFactoryTest {
     Predicate p1 = mock(Predicate.class);
     Predicate combined = mock(Predicate.class);
     OperatorHandler eqHandler = mock(OperatorHandler.class);
-    when(operatorRegistry.get(Operators.EQUALS)).thenReturn(eqHandler);
+    when(operatorRegistry.find(Operators.EQUALS)).thenReturn(Optional.of(eqHandler));
     when(eqHandler.create(any(OperatorContext.class))).thenReturn(p1);
     when(cb.and(any(Predicate[].class))).thenReturn(combined);
 
@@ -494,7 +496,7 @@ class QueryPlanSpecificationFactoryTest {
     Predicate innerCombined = mock(Predicate.class);
     Predicate outerCombined = mock(Predicate.class);
     OperatorHandler eqHandler = mock(OperatorHandler.class);
-    when(operatorRegistry.get(Operators.EQUALS)).thenReturn(eqHandler);
+    when(operatorRegistry.find(Operators.EQUALS)).thenReturn(Optional.of(eqHandler));
     when(eqHandler.create(any(OperatorContext.class))).thenReturn(p1);
     when(cb.or(any(Predicate[].class))).thenReturn(innerCombined);
     when(cb.and(any(Predicate[].class))).thenReturn(outerCombined);
@@ -733,7 +735,7 @@ class QueryPlanSpecificationFactoryTest {
     when(cb.equal(innerPath, outerIdPath)).thenReturn(eqPair);
     Predicate innerEqPredicate = mock(Predicate.class);
     OperatorHandler eqHandler = mock(OperatorHandler.class);
-    when(operatorRegistry.get(Operators.EQUALS)).thenReturn(eqHandler);
+    when(operatorRegistry.find(Operators.EQUALS)).thenReturn(Optional.of(eqHandler));
     when(eqHandler.create(any(OperatorContext.class))).thenReturn(innerEqPredicate);
     Predicate correlationPredicate = mock(Predicate.class);
     Predicate bodyPredicate = mock(Predicate.class);
@@ -924,6 +926,83 @@ class QueryPlanSpecificationFactoryTest {
     Predicate result = spec.toPredicate(root, query, cb);
 
     assertThat(result).isNull();
+  }
+
+  // -- Unknown operators --
+
+  @Test
+  void shouldRejectAnUnknownOperatorAtTheTopLevel() {
+    PredicateCondition condition =
+        new PredicateCondition("name", Operators.custom("like"), "x", false, false);
+    QueryPlan<Object> plan =
+        plan(new GroupCondition(LogicalOperator.AND, List.of((QueryCondition) condition)));
+
+    Specification<Object> spec = factory.create(plan);
+
+    assertUnknownOperator(() -> spec.toPredicate(root, query, cb), "name", "like");
+    verify(valueConversionService, never()).convert(any(), any(), any());
+  }
+
+  @Test
+  void shouldRejectAnUnknownOperatorInsideAnOrGroup() {
+    PredicateCondition condition =
+        new PredicateCondition("profile.city", Operators.custom("like"), "x", false, false);
+    GroupCondition orGroup =
+        new GroupCondition(LogicalOperator.OR, List.of((QueryCondition) condition));
+    QueryPlan<Object> plan =
+        plan(new GroupCondition(LogicalOperator.AND, List.of((QueryCondition) orGroup)));
+
+    Specification<Object> spec = factory.create(plan);
+
+    assertUnknownOperator(() -> spec.toPredicate(root, query, cb), "profile.city", "like");
+  }
+
+  @Test
+  @SuppressWarnings("rawtypes")
+  void shouldRejectAnUnknownOperatorInsideASubqueryBody() {
+    Subquery<Integer> subqueryMock = mock(Subquery.class);
+    when(query.subquery(Integer.class)).thenReturn(subqueryMock);
+    EntityType<Object> entityType = mock(EntityType.class);
+    doReturn(entityType).when(root).getModel();
+    Root<Object> correlatedRoot = mock(Root.class);
+    doReturn(correlatedRoot).when(subqueryMock).correlate(any(Root.class));
+    Join innerJoin = mock(Join.class);
+    doReturn(innerJoin).when(correlatedRoot).join(eq("orders"), any());
+    doReturn(entityType).when(pathResolver).resolveAssociationTarget(any(), eq("orders"));
+
+    SubqueryCondition subquery =
+        new SubqueryCondition(
+            SubqueryKind.EXISTS,
+            CorrelationMode.ASSOCIATION,
+            "orders",
+            null,
+            List.of(),
+            null,
+            null,
+            new GroupCondition(
+                LogicalOperator.AND,
+                List.of(
+                    new PredicateCondition(
+                        "status", Operators.custom("jsonb_eq"), "PAID", false, false))));
+    QueryPlan<Object> plan =
+        plan(new GroupCondition(LogicalOperator.AND, List.of((QueryCondition) subquery)));
+
+    Specification<Object> spec = factory.create(plan);
+
+    assertUnknownOperator(() -> spec.toPredicate(root, query, cb), "status", "jsonb_eq");
+  }
+
+  private void assertUnknownOperator(
+      org.assertj.core.api.ThrowableAssert.ThrowingCallable call, String field, String operator) {
+    assertThatExceptionOfType(InvalidFilterException.class)
+        .isThrownBy(call)
+        .satisfies(
+            ex -> {
+              assertThat(ex.field()).isEqualTo(field);
+              assertThat(ex.reason()).isEqualTo("unknown operator '" + operator + "'");
+            })
+        .withMessage(
+            "Invalid filter on field '" + field + "': unknown operator '" + operator + "'");
   }
 
   private QueryPlan<Object> plan(GroupCondition rootCondition) {

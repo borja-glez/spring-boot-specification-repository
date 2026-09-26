@@ -10,6 +10,7 @@ import jakarta.persistence.metamodel.PluralAttribute;
 import jakarta.persistence.metamodel.SingularAttribute;
 import jakarta.persistence.metamodel.Type;
 
+import com.borjaglez.specrepository.core.InvalidFilterException;
 import com.borjaglez.specrepository.core.JoinMode;
 
 public class PathResolver {
@@ -50,7 +51,7 @@ public class PathResolver {
 
     for (int index = 0; index < segments.length; index++) {
       String segment = segments[index];
-      Attribute<?, ?> attribute = currentType.getAttribute(segment);
+      Attribute<?, ?> attribute = attribute(currentType, path, segments, index);
       boolean last = index == segments.length - 1;
 
       // Associations are joined to keep navigating. A collection of basic values (for example an
@@ -96,8 +97,9 @@ public class PathResolver {
     ManagedType<?> currentType = fromType;
     StringBuilder associationPath = new StringBuilder();
 
-    for (String segment : segments) {
-      Attribute<?, ?> attribute = currentType.getAttribute(segment);
+    for (int index = 0; index < segments.length; index++) {
+      String segment = segments[index];
+      Attribute<?, ?> attribute = attribute(currentType, path, segments, index);
       if (!associationPath.isEmpty()) {
         associationPath.append('.');
       }
@@ -116,7 +118,7 @@ public class PathResolver {
 
     for (int index = 0; index < segments.length; index++) {
       String segment = segments[index];
-      Attribute<?, ?> attribute = currentType.getAttribute(segment);
+      Attribute<?, ?> attribute = attribute(currentType, path, segments, index);
       boolean last = index == segments.length - 1;
       // A collection of basic values (for example an @ElementCollection of strings) is fetched as
       // a whole: its elements have no attributes, so it can only end the path.
@@ -149,14 +151,31 @@ public class PathResolver {
   ManagedType<?> resolveAssociationTarget(ManagedType<?> fromType, String associationPath) {
     String[] segments = associationPath.split("\\.");
     ManagedType<?> currentType = fromType;
-    for (String segment : segments) {
-      Attribute<?, ?> attribute = currentType.getAttribute(segment);
+    for (int index = 0; index < segments.length; index++) {
+      Attribute<?, ?> attribute = attribute(currentType, associationPath, segments, index);
       if (isBasicCollection(attribute)) {
         return null;
       }
       currentType = managedType(attribute);
     }
     return currentType;
+  }
+
+  /**
+   * Looks up one segment of {@code path}. The JPA provider rejects an unknown name with a generic
+   * {@link IllegalArgumentException}; it is reported as an {@link InvalidFilterException} on the
+   * full path.
+   */
+  private Attribute<?, ?> attribute(
+      ManagedType<?> type, String path, String[] segments, int index) {
+    String segment = segments[index];
+    try {
+      return type.getAttribute(segment);
+    } catch (IllegalArgumentException ex) {
+      String reason =
+          index == segments.length - 1 ? "unknown field" : "unknown field '" + segment + "'";
+      throw new InvalidFilterException(path, reason, ex);
+    }
   }
 
   private boolean isAssociation(Attribute<?, ?> attribute) {

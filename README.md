@@ -869,6 +869,39 @@ Both extend `IllegalArgumentException` and propagate to the caller so applicatio
 to HTTP 400 responses via their preferred error handling strategy (`@ControllerAdvice`,
 `ProblemDetail`, etc.). The module does not register its own exception handler.
 
+Filters that pass the parser can still be invalid for the entity. When the query runs, the JPA
+module throws `InvalidFilterException` (in `specification-repository-core`, also an
+`IllegalArgumentException`) before any SQL is executed:
+
+- unknown operator: an operator with no registered `OperatorHandler`, at any nesting level
+  (`or`/`and` groups and subquery bodies). `field()` is the condition's field and `reason()` is
+  `unknown operator '<op>'`;
+- unknown field: a path segment the entity does not have, in a filter, join, fetch, subquery,
+  `groupBy` or selection. `field()` is the full dotted path, `reason()` is `unknown field` (or `unknown field '<segment>'` when the
+  unknown segment is not the last one), and the JPA provider's exception is the cause.
+
+The message is `Invalid filter on field '<field>': <reason>`.
+
+Calls through the DSL (`repository.query()...findAll()`, `count()`, ...) throw the exception
+itself. Calls through the Spring Data repository proxy, such as `repository.findAll(plan)`, go
+through persistence exception translation and throw `InvalidDataAccessApiUsageException` with the
+`InvalidFilterException` as its cause. Spring MVC `@ExceptionHandler` methods also match an
+exception's causes, so one handler covers both cases, as long as no handler in the same advice
+matches the wrapper itself (for example an `@ExceptionHandler(Exception.class)`):
+
+```java
+@RestControllerAdvice
+class FilterErrors {
+  @ExceptionHandler(InvalidFilterException.class)
+  ProblemDetail invalidFilter(InvalidFilterException ex) {
+    return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, ex.getMessage());
+  }
+}
+```
+
+`OperatorRegistry.get` still throws `IllegalStateException` for an unknown operator; use
+`OperatorRegistry.find` to look a handler up without an exception.
+
 ## Demo Applications
 
 The repository includes four demo applications:

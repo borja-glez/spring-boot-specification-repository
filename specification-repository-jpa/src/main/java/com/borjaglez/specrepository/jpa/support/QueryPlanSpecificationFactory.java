@@ -25,6 +25,7 @@ import com.borjaglez.specrepository.core.FetchInstruction;
 import com.borjaglez.specrepository.core.FilterOperator;
 import com.borjaglez.specrepository.core.GroupCondition;
 import com.borjaglez.specrepository.core.HavingCondition;
+import com.borjaglez.specrepository.core.InvalidFilterException;
 import com.borjaglez.specrepository.core.JoinInstruction;
 import com.borjaglez.specrepository.core.JoinMode;
 import com.borjaglez.specrepository.core.LogicalOperator;
@@ -35,6 +36,7 @@ import com.borjaglez.specrepository.core.QueryPlan;
 import com.borjaglez.specrepository.core.SubqueryCondition;
 import com.borjaglez.specrepository.core.SubqueryKind;
 import com.borjaglez.specrepository.jpa.spi.OperatorContext;
+import com.borjaglez.specrepository.jpa.spi.OperatorHandler;
 
 public class QueryPlanSpecificationFactory {
   private final OperatorRegistry operatorRegistry;
@@ -277,6 +279,7 @@ public class QueryPlanSpecificationFactory {
         continue;
       }
       PredicateCondition predicateCondition = (PredicateCondition) queryCondition;
+      OperatorHandler handler = handlerFor(predicateCondition);
       Path<?> path =
           resolvePath(
               from,
@@ -288,11 +291,9 @@ public class QueryPlanSpecificationFactory {
           valueConversionService.convert(
               predicateCondition.value(), path.getJavaType(), predicateCondition.operator());
       Predicate predicate =
-          operatorRegistry
-              .get(predicateCondition.operator())
-              .create(
-                  new OperatorContext(
-                      criteriaBuilder, path, convertedValue, predicateCondition.ignoreCase()));
+          handler.create(
+              new OperatorContext(
+                  criteriaBuilder, path, convertedValue, predicateCondition.ignoreCase()));
       predicates.add(
           predicateCondition.includeNulls()
               ? criteriaBuilder.or(predicate, criteriaBuilder.isNull(path))
@@ -458,6 +459,15 @@ public class QueryPlanSpecificationFactory {
         validateSubqueryOuterFields(policy, subquery);
       }
     }
+  }
+
+  private OperatorHandler handlerFor(PredicateCondition condition) {
+    return operatorRegistry
+        .find(condition.operator())
+        .orElseThrow(
+            () ->
+                new InvalidFilterException(
+                    condition.field(), "unknown operator '" + condition.operator().value() + "'"));
   }
 
   private Path<?> resolvePath(

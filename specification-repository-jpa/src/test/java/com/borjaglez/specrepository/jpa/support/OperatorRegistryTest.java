@@ -24,4 +24,18 @@ class OperatorRegistryTest {
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("jsonb_eq");
   }
+
+  @Test
+  void findShouldReturnTheRegisteredHandler() {
+    OperatorRegistry registry = new OperatorRegistry(DefaultOperatorHandlers.defaults());
+
+    assertThat(registry.find(Operators.EQUALS)).containsSame(registry.get(Operators.EQUALS));
+  }
+
+  @Test
+  void findShouldReturnEmptyForUnknownOperator() {
+    OperatorRegistry registry = new OperatorRegistry(DefaultOperatorHandlers.defaults());
+
+    assertThat(registry.find(Operators.custom("jsonb_eq"))).isEmpty();
+  }
 }
