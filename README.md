@@ -702,7 +702,10 @@ GET /api/products?filter=name:contains:Laptop&filter=status:eq:ACTIVE
 - **Filters**: `filter=field:operator:value` (repeatable, AND-combined at the root level). Operator
   names reuse the existing `Operators` string values (`eq`, `neq`, `contains`, `startswith`,
   `endswith`, `gt`, `gte`, `lt`, `lte`, `between`, `in`, `notin`, `isnull`, `isnotnull`, `isempty`,
-  `isnotempty`, `notcontains`).
+  `isnotempty`, `notcontains`). Operator names are case-insensitive: `status:EQ:ACTIVE`,
+  `status:Eq:ACTIVE` and `status:eq:ACTIVE` are equivalent, because the parser lower-cases them
+  (with `Locale.ROOT`). Custom operators used over HTTP must therefore be registered in lower case
+  (`Operators.custom("jsonb_eq")`).
 - **Multi-value operators** (`in`, `notin`, `between`): pipe-separated values — `status:in:ACTIVE|PENDING`,
   `price:between:10|100`.
 - **Valueless operators** (`isnull`, `isnotnull`, `isempty`, `isnotempty`): value omitted —

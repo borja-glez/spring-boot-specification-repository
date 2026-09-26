@@ -87,6 +87,21 @@ class QueryPlanArgumentResolverTest {
   }
 
   @Test
+  void shouldResolveUpperCaseOperatorIntoLowerCaseOperator() throws Exception {
+    MethodParameter param = getParam("annotatedMethod", QueryPlan.class);
+    NativeWebRequest webRequest = mock(NativeWebRequest.class);
+    when(webRequest.getParameterMap()).thenReturn(Map.of("filter", new String[] {"name:EQ:x"}));
+
+    @SuppressWarnings("unchecked")
+    QueryPlan<TestEntity> plan =
+        (QueryPlan<TestEntity>) resolver.resolveArgument(param, null, webRequest, null);
+
+    var cond = (PredicateCondition) plan.rootCondition().conditions().get(0);
+    assertThat(cond.operator()).isEqualTo(Operators.EQUALS);
+    assertThat(cond.value()).isEqualTo("x");
+  }
+
+  @Test
   void shouldApplyFieldRestrictions() throws Exception {
     MethodParameter param = getParam("annotatedMethod", QueryPlan.class);
     NativeWebRequest webRequest = mock(NativeWebRequest.class);
