@@ -18,7 +18,8 @@ class FilterableQueryTest {
       @FilterableQuery(
               value = TestEntity.class,
               filterableFields = {"name", "status"},
-              sortableFields = {"name"})
+              sortableFields = {"name"},
+              caseInsensitiveFields = {"name"})
           QueryPlan<TestEntity> query) {}
 
   @SuppressWarnings("unused")
@@ -33,6 +34,7 @@ class FilterableQueryTest {
     assertThat(fq.value()).isEqualTo(TestEntity.class);
     assertThat(fq.filterableFields()).containsExactly("name", "status");
     assertThat(fq.sortableFields()).containsExactly("name");
+    assertThat(fq.caseInsensitiveFields()).containsExactly("name");
   }
 
   @Test
@@ -43,5 +45,6 @@ class FilterableQueryTest {
 
     assertThat(fq.filterableFields()).isEmpty();
     assertThat(fq.sortableFields()).isEmpty();
+    assertThat(fq.caseInsensitiveFields()).isEmpty();
   }
 }

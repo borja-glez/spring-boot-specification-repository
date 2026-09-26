@@ -14,6 +14,7 @@ import org.springframework.data.domain.Sort;
 
 import com.borjaglez.specrepository.core.AllowedFieldsPolicy;
 import com.borjaglez.specrepository.core.FilterOperator;
+import com.borjaglez.specrepository.core.GroupCondition;
 import com.borjaglez.specrepository.core.LogicalOperator;
 import com.borjaglez.specrepository.core.Operators;
 import com.borjaglez.specrepository.core.PredicateCondition;
@@ -667,6 +668,111 @@ class HttpFilterParserTest {
       assertThat(plan.entityType()).isEqualTo(TestEntity.class);
       assertThat(plan.rootCondition().conditions()).isEmpty();
       assertThat(plan.sort().isUnsorted()).isTrue();
+    }
+  }
+
+  @Nested
+  class CaseInsensitiveFieldsTests {
+
+    private final AllowedFieldsPolicy policy = AllowedFieldsPolicy.allowAll();
+
+    private PredicateCondition rootPredicate(QueryPlan<TestEntity> plan, int index) {
+      return (PredicateCondition) plan.rootCondition().conditions().get(index);
+    }
+
+    @Test
+    void shouldIgnoreCaseForEligibleOperatorsOnDeclaredFields() {
+      QueryPlan<TestEntity> plan =
+          parser.toQueryPlan(
+              TestEntity.class,
+              Map.of(
+                  "filter",
+                  List.of(
+                      "name:eq:cafe",
+                      "name:neq:cafe",
+                      "name:contains:cafe",
+                      "name:notcontains:cafe",
+                      "name:startswith:cafe",
+                      "name:endswith:cafe")),
+              policy,
+              Set.of("name"));
+
+      assertThat(plan.rootCondition().conditions())
+          .hasSize(6)
+          .allSatisfy(c -> assertThat(((PredicateCondition) c).ignoreCase()).isTrue())
+          .allSatisfy(c -> assertThat(((PredicateCondition) c).includeNulls()).isFalse());
+    }
+
+    @Test
+    void shouldKeepCaseSensitiveMatchingForUndeclaredFields() {
+      QueryPlan<TestEntity> plan =
+          parser.toQueryPlan(
+              TestEntity.class,
+              Map.of("filter", List.of("name:contains:cafe", "code:contains:cafe")),
+              policy,
+              Set.of("name"));
+
+      assertThat(rootPredicate(plan, 0).ignoreCase()).isTrue();
+      assertThat(rootPredicate(plan, 1).field()).isEqualTo("code");
+      assertThat(rootPredicate(plan, 1).ignoreCase()).isFalse();
+    }
+
+    @Test
+    void shouldIgnoreFlagForIneligibleOperators() {
+      QueryPlan<TestEntity> plan =
+          parser.toQueryPlan(
+              TestEntity.class,
+              Map.of(
+                  "filter",
+                  List.of(
+                      "name:gt:a",
+                      "name:in:a|b",
+                      "name:between:a|b",
+                      "name:isnull",
+                      "name:isempty",
+                      "name:custom:x")),
+              policy,
+              Set.of("name"));
+
+      assertThat(plan.rootCondition().conditions())
+          .hasSize(6)
+          .allSatisfy(c -> assertThat(((PredicateCondition) c).ignoreCase()).isFalse());
+    }
+
+    @Test
+    void shouldIgnoreCaseInsideOrGroups() {
+      QueryPlan<TestEntity> plan =
+          parser.toQueryPlan(
+              TestEntity.class,
+              Map.of("orFilter", List.of("name:contains:cafe;code:eq:cafe;name:gt:a")),
+              policy,
+              Set.of("name"));
+
+      var orGroup = (GroupCondition) plan.rootCondition().conditions().get(0);
+      assertThat(orGroup.logicalOperator()).isEqualTo(LogicalOperator.OR);
+      assertThat(orGroup.conditions())
+          .map(c -> ((PredicateCondition) c).ignoreCase())
+          .containsExactly(true, false, false);
+    }
+
+    @Test
+    void shouldBehaveLikePolicyOverloadWhenNoFieldsDeclared() {
+      QueryPlan<TestEntity> plan =
+          parser.toQueryPlan(
+              TestEntity.class, Map.of("filter", List.of("name:contains:cafe")), policy, Set.of());
+
+      assertThat(rootPredicate(plan, 0).ignoreCase()).isFalse();
+      assertThat(plan.allowedFieldsPolicy()).isSameAs(policy);
+    }
+
+    @Test
+    void shouldRejectNullArguments() {
+      assertThatThrownBy(() -> parser.toQueryPlan(null, Map.of(), policy, Set.of()))
+          .isInstanceOf(NullPointerException.class);
+      assertThatThrownBy(() -> parser.toQueryPlan(TestEntity.class, Map.of(), null, Set.of()))
+          .isInstanceOf(NullPointerException.class);
+      assertThatThrownBy(() -> parser.toQueryPlan(TestEntity.class, Map.of(), policy, null))
+          .isInstanceOf(NullPointerException.class);
     }
   }
 
