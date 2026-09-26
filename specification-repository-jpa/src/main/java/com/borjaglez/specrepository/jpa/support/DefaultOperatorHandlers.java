@@ -15,6 +15,7 @@ import com.borjaglez.specrepository.jpa.spi.OperatorHandler;
 
 public final class DefaultOperatorHandlers {
   private static final String UNACCENT = "unaccent";
+  private static final char LIKE_ESCAPE = '\\';
 
   private DefaultOperatorHandlers() {}
 
@@ -39,13 +40,17 @@ public final class DefaultOperatorHandlers {
                     .criteriaBuilder()
                     .isNotEmpty((Expression<java.util.Collection<?>>) context.path())),
         handler(
-            Operators.CONTAINS, context -> stringLike(context, "%" + context.value() + "%", false)),
+            Operators.CONTAINS,
+            context -> stringLike(context, "%" + escapeLike(context.value()) + "%", false)),
         handler(
             Operators.NOT_CONTAINS,
-            context -> stringLike(context, "%" + context.value() + "%", true)),
+            context -> stringLike(context, "%" + escapeLike(context.value()) + "%", true)),
         handler(
-            Operators.STARTS_WITH, context -> stringLike(context, context.value() + "%", false)),
-        handler(Operators.ENDS_WITH, context -> stringLike(context, "%" + context.value(), false)),
+            Operators.STARTS_WITH,
+            context -> stringLike(context, escapeLike(context.value()) + "%", false)),
+        handler(
+            Operators.ENDS_WITH,
+            context -> stringLike(context, "%" + escapeLike(context.value()), false)),
         handler(Operators.GREATER_THAN, context -> comparable(context, ComparisonMode.GT)),
         handler(
             Operators.GREATER_THAN_OR_EQUAL, context -> comparable(context, ComparisonMode.GTE)),
@@ -90,9 +95,19 @@ public final class DefaultOperatorHandlers {
     CriteriaBuilder cb = context.criteriaBuilder();
     Predicate predicate =
         context.ignoreCase()
-            ? cb.like(normalized(cb, context.path()), normalizedValue(cb, pattern))
-            : cb.like(context.path().as(String.class), pattern);
+            ? cb.like(normalized(cb, context.path()), normalizedValue(cb, pattern), LIKE_ESCAPE)
+            : cb.like(context.path().as(String.class), pattern, LIKE_ESCAPE);
     return negate ? predicate.not() : predicate;
+  }
+
+  /**
+   * Makes the search term a literal inside a {@code LIKE} pattern: the escape character, {@code %}
+   * and {@code _} are prefixed with {@link #LIKE_ESCAPE}. The escape character goes first so the
+   * escapes added for {@code %} and {@code _} are not escaped again. {@code upper} and {@code
+   * unaccent} leave these characters unchanged, so the escaped term can be normalized afterwards.
+   */
+  private static String escapeLike(Object value) {
+    return String.valueOf(value).replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_");
   }
 
   @SuppressWarnings({"rawtypes", "unchecked"})

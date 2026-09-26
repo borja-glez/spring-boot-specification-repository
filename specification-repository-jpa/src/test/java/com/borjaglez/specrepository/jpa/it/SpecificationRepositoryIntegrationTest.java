@@ -131,6 +131,41 @@ class SpecificationRepositoryIntegrationTest {
     assertThat(results).hasSize(1).first().extracting(TestCustomer::getName).isEqualTo("John");
   }
 
+  // -- LIKE wildcards in the search term are literals --
+
+  @Test
+  void shouldMatchPercentAndUnderscoreInTheSearchTermLiterally() {
+    saveCustomersWithLikeWildcards();
+
+    assertThat(names(Operators.CONTAINS, "%")).containsExactlyInAnyOrder("100% cotton", "save 50%");
+    assertThat(names(Operators.CONTAINS, "_")).containsExactly("pack_saver");
+    assertThat(names(Operators.STARTS_WITH, "_")).isEmpty();
+    assertThat(names(Operators.ENDS_WITH, "%")).containsExactly("save 50%");
+    assertThat(names(Operators.NOT_CONTAINS, "%"))
+        .containsExactlyInAnyOrder("Borja", "Lucia", "John", "Anna", "pack_saver", "C:\\data");
+  }
+
+  @Test
+  void shouldMatchTheEscapeCharacterInTheSearchTermLiterally() {
+    saveCustomersWithLikeWildcards();
+
+    assertThat(names(Operators.CONTAINS, "\\")).containsExactly("C:\\data");
+    assertThat(names(Operators.CONTAINS, ":\\d")).containsExactly("C:\\data");
+  }
+
+  private void saveCustomersWithLikeWildcards() {
+    repository.save(new TestCustomer("100% cotton", "ACTIVE", null));
+    repository.save(new TestCustomer("save 50%", "ACTIVE", null));
+    repository.save(new TestCustomer("pack_saver", "ACTIVE", null));
+    repository.save(new TestCustomer("C:\\data", "ACTIVE", null));
+  }
+
+  private List<String> names(FilterOperator operator, String term) {
+    return repository.query().where("name", operator, term).findAll().stream()
+        .map(TestCustomer::getName)
+        .toList();
+  }
+
   // -- BETWEEN --
 
   @Test
