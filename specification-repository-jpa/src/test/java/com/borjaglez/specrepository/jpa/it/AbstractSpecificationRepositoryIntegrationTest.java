@@ -1287,9 +1287,12 @@ abstract class AbstractSpecificationRepositoryIntegrationTest {
             .query()
             .<String>notExists("tags", sub -> sub.where("value", Operators.EQUALS, "vip"))
             .findAll();
-    // With the shared join, NOT_EQUALS means "has some tag other than vip".
+    // Inside the subquery the element is compared on its own: "has some tag other than vip".
     List<TestCustomer> someOtherTag =
-        repository.query().where("tags", Operators.NOT_EQUALS, "vip").distinct().findAll();
+        repository
+            .query()
+            .<String>exists("tags", sub -> sub.where("value", Operators.NOT_EQUALS, "vip"))
+            .findAll();
 
     assertThat(results)
         .extracting(TestCustomer::getName)
@@ -1304,8 +1307,8 @@ abstract class AbstractSpecificationRepositoryIntegrationTest {
     repository.save(new TestCustomer("Both", "ACTIVE", null).tagged("vip", "beta"));
     repository.save(new TestCustomer("VipOnly", "ACTIVE", null).tagged("vip"));
 
-    // A shared join matches nothing here; one subquery per element keeps the conditions apart.
-    long sharedJoin =
+    // Repeated conditions on the same path are tested one element each, like explicit subqueries.
+    long repeated =
         repository
             .query()
             .where("tags", Operators.EQUALS, "vip")
@@ -1318,7 +1321,7 @@ abstract class AbstractSpecificationRepositoryIntegrationTest {
             .<String>exists("tags", sub -> sub.where("value", Operators.EQUALS, "beta"))
             .findAll();
 
-    assertThat(sharedJoin).isZero();
+    assertThat(repeated).isEqualTo(1);
     assertThat(both).extracting(TestCustomer::getName).containsExactly("Both");
   }
 
@@ -1358,6 +1361,298 @@ abstract class AbstractSpecificationRepositoryIntegrationTest {
                     .findAll())
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("value");
+  }
+
+  // -- Several conditions on the same collection path --
+
+  private void tagCustomers() {
+    repository.save(new TestCustomer("Both", "ACTIVE", null).tagged("vip", "beta"));
+    repository.save(new TestCustomer("VipOnly", "ACTIVE", null).tagged("vip"));
+    repository.save(new TestCustomer("Other", "ACTIVE", null).tagged("newsletter"));
+    fetchEntityManager.flush();
+    fetchEntityManager.clear();
+  }
+
+  private static final List<String> WITHOUT_VIP =
+      List.of("Anna", "Borja", "John", "Lucia", "Other");
+
+  @Test
+  void shouldMatchRootsHavingEveryElementWhenTheSameBasicCollectionPathRepeats() {
+    tagCustomers();
+
+    var query =
+        repository
+            .query()
+            .where("tags", Operators.EQUALS, "vip")
+            .where("tags", Operators.EQUALS, "beta");
+
+    assertThat(query.findAll()).extracting(TestCustomer::getName).containsExactly("Both");
+    assertThat(query.count()).isEqualTo(1);
+    Page<TestCustomer> page = query.findAll(PageRequest.of(0, 10, Sort.by("name")));
+    assertThat(page.getContent()).extracting(TestCustomer::getName).containsExactly("Both");
+    assertThat(page.getTotalElements()).isEqualTo(1);
+  }
+
+  @Test
+  void shouldTreatNotEqualsOnABasicCollectionAsNoElementMatching() {
+    tagCustomers();
+
+    var query = repository.query().where("tags", Operators.NOT_EQUALS, "vip");
+
+    assertThat(query.findAll()).extracting(TestCustomer::getName).hasSameElementsAs(WITHOUT_VIP);
+    assertThat(query.count()).isEqualTo(5);
+    Page<TestCustomer> page = query.findAll(PageRequest.of(0, 2, Sort.by("name")));
+    assertThat(page.getContent())
+        .extracting(TestCustomer::getName)
+        .containsExactly("Anna", "Borja");
+    assertThat(page.getTotalElements()).isEqualTo(5);
+  }
+
+  @Test
+  void shouldTreatNotInOnABasicCollectionAsNoElementMatching() {
+    tagCustomers();
+
+    var query = repository.query().where("tags", Operators.NOT_IN, List.of("vip", "beta"));
+
+    assertThat(query.findAll()).extracting(TestCustomer::getName).hasSameElementsAs(WITHOUT_VIP);
+    assertThat(query.count()).isEqualTo(5);
+  }
+
+  @Test
+  void shouldTreatNotContainsOnABasicCollectionAsNoElementMatching() {
+    tagCustomers();
+
+    var query = repository.query().where("tags", Operators.NOT_CONTAINS, "ip");
+
+    assertThat(query.findAll()).extracting(TestCustomer::getName).hasSameElementsAs(WITHOUT_VIP);
+    assertThat(query.count()).isEqualTo(5);
+  }
+
+  @Test
+  void shouldIgnoreIncludeNullsOnANegatedCollectionCondition() {
+    tagCustomers();
+
+    // Roots without elements already match "no element is vip".
+    var query = repository.query().where("tags", Operators.NOT_EQUALS, "vip", false, true);
+
+    assertThat(query.findAll()).extracting(TestCustomer::getName).hasSameElementsAs(WITHOUT_VIP);
+  }
+
+  @Test
+  void shouldAcceptANullElementWhenARepeatedCollectionConditionIncludesNulls() {
+    tagCustomers();
+
+    // Each element is tested on its own; roots without elements have no element to accept.
+    var query =
+        repository
+            .query()
+            .where("tags", Operators.EQUALS, "vip")
+            .where("tags", Operators.EQUALS, "beta", false, true);
+
+    assertThat(query.findAll()).extracting(TestCustomer::getName).containsExactly("Both");
+  }
+
+  @Test
+  void shouldKeepAnOrGroupOnTheSameCollectionPathAsAnyElementMatching() {
+    tagCustomers();
+
+    var query =
+        repository
+            .query()
+            .or(
+                group ->
+                    group
+                        .where("tags", Operators.EQUALS, "beta")
+                        .where("tags", Operators.EQUALS, "newsletter"));
+
+    assertThat(query.findAll())
+        .extracting(TestCustomer::getName)
+        .containsExactlyInAnyOrder("Both", "Other");
+    assertThat(query.count()).isEqualTo(2);
+  }
+
+  @Test
+  void shouldTestEachElementOnItsOwnWhenTheRepeatedPathIsInsideANestedOrGroup() {
+    tagCustomers();
+
+    var query =
+        repository
+            .query()
+            .where("tags", Operators.EQUALS, "vip")
+            .or(
+                group ->
+                    group
+                        .where("tags", Operators.EQUALS, "beta")
+                        .where("name", Operators.EQUALS, "VipOnly"));
+
+    assertThat(query.findAll())
+        .extracting(TestCustomer::getName)
+        .containsExactlyInAnyOrder("Both", "VipOnly");
+    assertThat(query.count()).isEqualTo(2);
+  }
+
+  @Test
+  void shouldCombineAServerConditionWithAClientConditionOnTheSameCollectionPath() {
+    tagCustomers();
+
+    QueryPlan<TestCustomer> plan =
+        repository.query().where("tags", Operators.EQUALS, "beta").plan().toBuilder()
+            .where("tags", Operators.EQUALS, "vip")
+            .build();
+
+    assertThat(repository.findAll(plan)).extracting(TestCustomer::getName).containsExactly("Both");
+    assertThat(repository.count(plan)).isEqualTo(1);
+    assertThat(repository.findAll(plan, PageRequest.of(0, 10)).getTotalElements()).isEqualTo(1);
+  }
+
+  @Test
+  void shouldLoadTheWholeFetchedCollectionWhenTheSamePathIsFilteredSeveralTimes() {
+    tagCustomers();
+
+    Page<TestCustomer> page =
+        repository
+            .query()
+            .leftFetch("tags")
+            .where("tags", Operators.EQUALS, "vip")
+            .where("tags", Operators.EQUALS, "beta")
+            .findAll(PageRequest.of(0, 10, Sort.by("name")));
+
+    assertThat(page.getContent()).extracting(TestCustomer::getName).containsExactly("Both");
+    assertThat(page.getContent().get(0).getTags()).containsExactlyInAnyOrder("vip", "beta");
+    assertThat(page.getTotalElements()).isEqualTo(1);
+  }
+
+  private void buyers() {
+    TestCustomer paidAndPending = new TestCustomer("PaidAndPending", "ACTIVE", null);
+    paidAndPending.addOrder(new TestOrder(new BigDecimal("50.00"), "PAID", false, paidAndPending));
+    paidAndPending.addOrder(
+        new TestOrder(new BigDecimal("200.00"), "PENDING", false, paidAndPending));
+    repository.save(paidAndPending);
+    TestCustomer bigPaid = new TestCustomer("BigPaid", "ACTIVE", null);
+    bigPaid.addOrder(new TestOrder(new BigDecimal("200.00"), "PAID", false, bigPaid));
+    repository.save(bigPaid);
+    fetchEntityManager.flush();
+    fetchEntityManager.clear();
+  }
+
+  @Test
+  void shouldKeepConditionsOnDifferentAttributesOfOneEntityElementOnTheSameElement() {
+    buyers();
+
+    var query =
+        repository
+            .query()
+            .where("orders.status", Operators.EQUALS, "PAID")
+            .where("orders.total", Operators.GREATER_THAN, new BigDecimal("100.00"));
+
+    assertThat(query.findAll()).extracting(TestCustomer::getName).containsExactly("BigPaid");
+    assertThat(query.count()).isEqualTo(1);
+  }
+
+  @Test
+  void shouldMatchRootsHavingEveryEntityElementWhenTheSamePathRepeats() {
+    buyers();
+
+    var query =
+        repository
+            .query()
+            .where("orders.status", Operators.EQUALS, "PAID")
+            .where("orders.status", Operators.EQUALS, "PENDING");
+
+    assertThat(query.findAll()).extracting(TestCustomer::getName).containsExactly("PaidAndPending");
+    assertThat(query.count()).isEqualTo(1);
+  }
+
+  @Test
+  void shouldTreatNotEqualsOnAnEntityCollectionAsNoElementMatching() {
+    buyers();
+
+    var query = repository.query().where("orders.status", Operators.NOT_EQUALS, "PENDING");
+
+    assertThat(query.findAll())
+        .extracting(TestCustomer::getName)
+        .containsExactlyInAnyOrder("Anna", "Borja", "John", "Lucia", "BigPaid");
+    assertThat(query.count()).isEqualTo(5);
+    assertThat(query.findAll(PageRequest.of(0, 2)).getTotalElements()).isEqualTo(5);
+  }
+
+  @Test
+  void shouldKeepTheSharedJoinWhenGroupingByTheFilteredCollectionPath() {
+    buyers();
+
+    List<GroupedRow> rows =
+        repository
+            .query()
+            .where("orders.status", Operators.NOT_EQUALS, "PENDING")
+            .groupBy("orders.status")
+            .select("orders.status")
+            .countAs("orders", "orders.id")
+            .findAllGrouped();
+
+    // The filter removes the PENDING orders from the grouped rows, not the customers having one.
+    assertThat(rows).extracting(row -> row.get("orders.status")).containsExactly("PAID");
+    assertThat(rows).extracting(row -> row.get("orders")).containsExactly(2L);
+  }
+
+  @Test
+  void shouldKeepTheSharedJoinInAProjectionOverACollection() {
+    tagCustomers();
+
+    List<GroupedRow> rows =
+        repository
+            .query()
+            .select("name")
+            .where("tags", Operators.EQUALS, "vip")
+            .where("tags", Operators.EQUALS, "beta")
+            .findRows();
+
+    assertThat(rows).isEmpty();
+  }
+
+  @Test
+  void shouldTestEachElementOnItsOwnInsideASubqueryBody() {
+    tagCustomers();
+    TestCustomer both =
+        repository.query().where("name", Operators.EQUALS, "Both").findOne().orElseThrow();
+    TestCustomer vipOnly =
+        repository.query().where("name", Operators.EQUALS, "VipOnly").findOne().orElseThrow();
+    Long bothOrder = orders.save(new TestOrder(BigDecimal.ONE, "PAID", false, both)).getId();
+    Long vipOnlyOrder = orders.save(new TestOrder(BigDecimal.TEN, "PAID", false, vipOnly)).getId();
+
+    List<TestOrder> found =
+        orders
+            .query()
+            .<TestCustomer>exists(
+                "customer",
+                sub ->
+                    sub.where("tags", Operators.EQUALS, "vip")
+                        .where("tags", Operators.EQUALS, "beta"))
+            .findAll();
+    List<TestOrder> withoutBeta =
+        orders
+            .query()
+            .<TestCustomer>exists(
+                "customer", sub -> sub.where("tags", Operators.NOT_EQUALS, "beta"))
+            .findAll();
+
+    assertThat(found).extracting(TestOrder::getId).containsExactly(bothOrder);
+    assertThat(withoutBeta).extracting(TestOrder::getId).containsExactly(vipOnlyOrder);
+  }
+
+  @Test
+  void shouldTestEachElementOnItsOwnThroughASingleAssociation() {
+    tagCustomers();
+    TestCustomer both =
+        repository.query().where("name", Operators.EQUALS, "Both").findOne().orElseThrow();
+    TestCustomer vipOnly =
+        repository.query().where("name", Operators.EQUALS, "VipOnly").findOne().orElseThrow();
+    Long bothOrder = orders.save(new TestOrder(BigDecimal.ONE, "PAID", false, both)).getId();
+    Long vipOnlyOrder = orders.save(new TestOrder(BigDecimal.TEN, "PAID", false, vipOnly)).getId();
+
+    var query = orders.query().where("customer.tags", Operators.NOT_EQUALS, "beta");
+
+    assertThat(query.findAll()).extracting(TestOrder::getId).containsExactly(vipOnlyOrder);
+    assertThat(query.count()).isEqualTo(1);
   }
 
   // -- findAll and count with QueryPlan directly --

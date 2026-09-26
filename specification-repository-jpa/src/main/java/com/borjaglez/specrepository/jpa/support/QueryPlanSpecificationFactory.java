@@ -2,7 +2,11 @@ package com.borjaglez.specrepository.jpa.support;
 
 import java.time.DateTimeException;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.IdentityHashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import jakarta.persistence.criteria.CommonAbstractCriteria;
@@ -48,6 +52,16 @@ public class QueryPlanSpecificationFactory {
       Set.of(Operators.IS_EMPTY, Operators.IS_NOT_EMPTY);
 
   /**
+   * Negative operators and their positive operator. On a collection path a negative operator means
+   * "no element matches the positive operator".
+   */
+  private static final Map<FilterOperator, FilterOperator> NEGATED_OPERATORS =
+      Map.of(
+          Operators.NOT_EQUALS, Operators.EQUALS,
+          Operators.NOT_IN, Operators.IN,
+          Operators.NOT_CONTAINS, Operators.CONTAINS);
+
+  /**
    * Field that names the element itself in an {@code exists} / {@code notExists} over a collection
    * of basic values, such as {@code exists("tags", sub -> sub.where("value", EQUALS, "vip"))}.
    */
@@ -78,6 +92,13 @@ public class QueryPlanSpecificationFactory {
 
   public <T> Specification<T> create(QueryPlan<T> plan) {
     plan.allowedFieldsPolicy().validate(plan);
+    // Grouped and projected queries keep every condition on the shared join, which is the join
+    // their groupBy and select read.
+    CollectionConditions collections =
+        collectionConditions(
+            !plan.hasSelections() && plan.groupBy().isEmpty(),
+            new GroupCondition(
+                LogicalOperator.AND, List.of(plan.rootCondition(), plan.serverCondition())));
     return (root, query, criteriaBuilder) -> {
       AssociationRegistry registry = new AssociationRegistry();
       // Fetches first: Hibernate's plain joins also implement Fetch, so a fetch requested on a
@@ -92,9 +113,21 @@ public class QueryPlanSpecificationFactory {
           and(
               criteriaBuilder,
               toPredicate(
-                  plan.rootCondition(), root, root.getModel(), query, criteriaBuilder, registry),
+                  plan.rootCondition(),
+                  root,
+                  root.getModel(),
+                  query,
+                  criteriaBuilder,
+                  registry,
+                  collections),
               toPredicate(
-                  plan.serverCondition(), root, root.getModel(), query, criteriaBuilder, registry));
+                  plan.serverCondition(),
+                  root,
+                  root.getModel(),
+                  query,
+                  criteriaBuilder,
+                  registry,
+                  collections));
       if (predicate != null) {
         query.where(predicate);
       }
@@ -281,12 +314,14 @@ public class QueryPlanSpecificationFactory {
       ManagedType<?> fromType,
       CommonAbstractCriteria parent,
       CriteriaBuilder criteriaBuilder,
-      AssociationRegistry registry) {
+      AssociationRegistry registry,
+      CollectionConditions collections) {
     List<Predicate> predicates = new ArrayList<>();
     for (QueryCondition queryCondition : condition.conditions()) {
       if (queryCondition instanceof GroupCondition groupCondition) {
         Predicate nested =
-            toPredicate(groupCondition, from, fromType, parent, criteriaBuilder, registry);
+            toPredicate(
+                groupCondition, from, fromType, parent, criteriaBuilder, registry, collections);
         if (nested != null) {
           predicates.add(nested);
         }
@@ -299,6 +334,13 @@ public class QueryPlanSpecificationFactory {
         continue;
       }
       PredicateCondition predicateCondition = (PredicateCondition) queryCondition;
+      if (collections.ownElement(predicateCondition)
+          && !registry.isBasicElement(from)
+          && pathResolver.crossesCollection(fromType, predicateCondition.field())) {
+        predicates.add(
+            ownElementPredicate(predicateCondition, from, fromType, parent, criteriaBuilder));
+        continue;
+      }
       OperatorHandler handler = handlerFor(predicateCondition);
       Path<?> path =
           resolvePath(
@@ -307,20 +349,7 @@ public class QueryPlanSpecificationFactory {
               registry,
               predicateCondition.field(),
               !WHOLE_COLLECTION_OPERATORS.contains(predicateCondition.operator()));
-      Object convertedValue =
-          convert(
-              predicateCondition.field(),
-              predicateCondition.value(),
-              path.getJavaType(),
-              predicateCondition.operator());
-      Predicate predicate =
-          handler.create(
-              new OperatorContext(
-                  criteriaBuilder, path, convertedValue, predicateCondition.ignoreCase()));
-      predicates.add(
-          predicateCondition.includeNulls()
-              ? criteriaBuilder.or(predicate, criteriaBuilder.isNull(path))
-              : predicate);
+      predicates.add(predicate(predicateCondition, handler, path, criteriaBuilder));
     }
 
     if (predicates.isEmpty()) {
@@ -331,6 +360,111 @@ public class QueryPlanSpecificationFactory {
     return condition.logicalOperator() == LogicalOperator.OR
         ? criteriaBuilder.or(predicateArray)
         : criteriaBuilder.and(predicateArray);
+  }
+
+  private Predicate predicate(
+      PredicateCondition condition,
+      OperatorHandler handler,
+      Path<?> path,
+      CriteriaBuilder criteriaBuilder) {
+    Object convertedValue =
+        convert(condition.field(), condition.value(), path.getJavaType(), condition.operator());
+    Predicate predicate =
+        handler.create(
+            new OperatorContext(criteriaBuilder, path, convertedValue, condition.ignoreCase()));
+    return condition.includeNulls()
+        ? criteriaBuilder.or(predicate, criteriaBuilder.isNull(path))
+        : predicate;
+  }
+
+  /**
+   * A condition on a collection path tested on an element of its own, instead of the element of the
+   * shared join: {@code EXISTS} an element that matches it or, for a negative operator, {@code NOT
+   * EXISTS} an element that matches the positive operator, so roots without elements match too and
+   * {@code includeNulls} adds nothing.
+   */
+  private Predicate ownElementPredicate(
+      PredicateCondition condition,
+      From<?, ?> from,
+      ManagedType<?> fromType,
+      CommonAbstractCriteria parent,
+      CriteriaBuilder criteriaBuilder) {
+    FilterOperator positive = NEGATED_OPERATORS.get(condition.operator());
+    PredicateCondition matching =
+        positive == null
+            ? condition
+            : new PredicateCondition(
+                condition.field(), positive, condition.value(), condition.ignoreCase(), false);
+    OperatorHandler handler = handlerFor(matching);
+    Subquery<Integer> sub = parent.subquery(Integer.class);
+    Path<?> element =
+        pathResolver.resolve(
+            correlateOuter(sub, from),
+            fromType,
+            new AssociationRegistry(),
+            condition.field(),
+            JoinMode.INNER);
+    sub.select(criteriaBuilder.literal(1))
+        .where(predicate(matching, handler, element, criteriaBuilder));
+    Predicate exists = criteriaBuilder.exists(sub);
+    return positive == null ? exists : criteriaBuilder.not(exists);
+  }
+
+  /**
+   * Which conditions on a collection path test an element of their own instead of sharing one join:
+   * negative operators, and conditions on a field that is used more than once in the same AND
+   * (their closest common group is an AND group). {@code enabled} is {@code false} for grouped and
+   * projected queries, which keep every condition on the shared join.
+   */
+  private record CollectionConditions(boolean enabled, Set<PredicateCondition> repeated) {
+    boolean ownElement(PredicateCondition condition) {
+      return enabled
+          && (NEGATED_OPERATORS.containsKey(condition.operator()) || repeated.contains(condition));
+    }
+  }
+
+  private static CollectionConditions collectionConditions(
+      boolean enabled, GroupCondition condition) {
+    // By identity: the same condition written twice is still two conditions.
+    Set<PredicateCondition> repeated = Collections.newSetFromMap(new IdentityHashMap<>());
+    collectRepeated(condition, repeated);
+    return new CollectionConditions(enabled, repeated);
+  }
+
+  /**
+   * Returns the conditions below {@code condition} that would share a join, by field, and adds to
+   * {@code repeated} those whose field is used again under the same AND group. A subquery body is
+   * examined on its own when it is translated.
+   */
+  private static Map<String, List<PredicateCondition>> collectRepeated(
+      QueryCondition condition, Set<PredicateCondition> repeated) {
+    if (condition instanceof PredicateCondition predicate) {
+      FilterOperator operator = predicate.operator();
+      boolean sharesJoin =
+          !WHOLE_COLLECTION_OPERATORS.contains(operator)
+              && !NEGATED_OPERATORS.containsKey(operator);
+      return sharesJoin ? Map.of(predicate.field(), List.of(predicate)) : Map.of();
+    }
+    if (!(condition instanceof GroupCondition group)) {
+      return Map.of();
+    }
+    Map<String, List<List<PredicateCondition>>> byField = new LinkedHashMap<>();
+    for (QueryCondition child : group.conditions()) {
+      collectRepeated(child, repeated)
+          .forEach(
+              (field, conditions) ->
+                  byField.computeIfAbsent(field, key -> new ArrayList<>()).add(conditions));
+    }
+    boolean and = group.logicalOperator() == LogicalOperator.AND;
+    Map<String, List<PredicateCondition>> below = new LinkedHashMap<>();
+    byField.forEach(
+        (field, perChild) -> {
+          if (and && perChild.size() > 1) {
+            perChild.forEach(repeated::addAll);
+          }
+          below.put(field, perChild.stream().flatMap(List::stream).toList());
+        });
+    return below;
   }
 
   /**
@@ -468,7 +602,13 @@ public class QueryPlanSpecificationFactory {
       AssociationRegistry subRegistry) {
     Predicate body =
         toPredicate(
-            sc.subCondition(), context.subRoot(), context.subRootType(), sub, cb, subRegistry);
+            sc.subCondition(),
+            context.subRoot(),
+            context.subRootType(),
+            sub,
+            cb,
+            subRegistry,
+            collectionConditions(true, sc.subCondition()));
     List<Predicate> whereParts = new ArrayList<>();
     if (context.correlationPredicate() != null) {
       whereParts.add(context.correlationPredicate());

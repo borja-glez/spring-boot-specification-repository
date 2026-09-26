@@ -11,44 +11,31 @@ query is not polluted by extra joins or row duplication.
 
 ## Why not just join?
 
-Filtering a collection association with a normal `where` works for trivial
-cases, but it:
+A plain `where` on a collection path (`orders.status`, or `tags` for an
+`@ElementCollection Set<String>`) joins the collection, and several conditions
+on it share that join so that they test the same element. Since 0.4.0 the
+library already writes the subquery for the two cases a shared join gets wrong:
 
-1. Duplicates outer rows when the association is `@OneToMany` / `@ManyToMany`,
-   forcing `distinct()` and breaking stable pagination.
-2. Cannot express *negation over a collection* ("customers with no cancelled
-   order"): `where("orders.status", NOT_EQUALS, "CANCELLED")` only hides rows
-   where the join matched, leaving the customer in the result via other rows.
-3. Cannot filter by entities that are not mapped as an association from the
-   outer root.
+- a negative operator (`NOT_EQUALS`, `NOT_IN`, `NOT_CONTAINS`) becomes
+  `NOT EXISTS` of the positive operator: `where("orders.status", NOT_EQUALS,
+  "CANCELLED")` means "has no cancelled order";
+- the same path repeated in an AND becomes one `EXISTS` per condition:
+  `where("tags", EQUALS, "a").where("tags", EQUALS, "b")` means "has tag `a`
+  and has tag `b`".
 
-Subqueries solve all three.
+Conditions on different attributes of the same element
+(`orders.status` + `orders.total`) and the alternatives of an OR group keep
+sharing the join, and grouped and projected queries keep every condition on
+it. The full rules are in the README section
+[Collections and Shared Joins](../README.md#collections-and-shared-joins).
 
-### Conditions on the same collection path share one join
+Write the subquery yourself when you need something else:
 
-Every `where` on the same collection path tests the *same* joined element,
-whether the path is a collection association (`orders.status`) or a collection
-of basic values (`tags`, an `@ElementCollection Set<String>`):
-
-- `where("tags", EQUALS, "a").where("tags", EQUALS, "b")` matches nothing: no
-  single tag is both `a` and `b`.
-- `where("tags", NOT_EQUALS, "a")` means "has some tag other than `a`", not
-  "does not have tag `a`".
-
-Use one `exists` / `notExists` per condition for per-element semantics:
-
-```java
-// has tag a AND has tag b
-customers.query()
-    .<String>exists("tags", sub -> sub.where("value", Operators.EQUALS, "a"))
-    .<String>exists("tags", sub -> sub.where("value", Operators.EQUALS, "b"))
-    .findAll();
-
-// does not have tag a
-customers.query()
-    .<String>notExists("tags", sub -> sub.where("value", Operators.EQUALS, "a"))
-    .findAll();
-```
+1. A body that combines several conditions on one element in a way the rules
+   above do not, such as "has no order that is both cancelled and over 100",
+   or "has a tag other than `a`".
+2. A filter on entities that are not mapped as an association from the outer
+   root.
 
 ## API
 

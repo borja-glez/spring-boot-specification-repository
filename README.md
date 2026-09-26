@@ -292,29 +292,64 @@ List<Customer> vips = customerRepository.query()
     .findAll();
 ```
 
-**Conditions on the same collection path share one join.** Every condition on
-`tags` (or on `orders.*`) tests the *same* joined element, so:
+**How several conditions on a collection path combine** (entity queries,
+`count()` and pages; grouped and projected queries are the exception below):
 
-- `where("tags", EQUALS, "a").where("tags", EQUALS, "b")` matches nothing: no
-  single tag is both `a` and `b`.
-- `where("tags", NOT_EQUALS, "a")` means "has some tag other than `a`", not
-  "does not have tag `a`".
+- **One condition** tests *some* element: `where("tags", EQUALS, "a")` means
+  "has tag `a`".
+- **Negative operators mean "no element matches".** `NOT_EQUALS`, `NOT_IN` and
+  `NOT_CONTAINS` on a collection path become `NOT EXISTS` of the positive
+  operator: `where("tags", NOT_EQUALS, "a")` means "does not have tag `a`", and
+  roots with an empty collection match. `includeNulls` adds nothing to them.
+- **The same path repeated in an AND tests one element per condition.** Each
+  condition becomes its own `EXISTS`, so
+  `where("tags", EQUALS, "a").where("tags", EQUALS, "b")` means "has tag `a`
+  and has tag `b`". This also holds when one of them is inside a nested group
+  (`tags eq a AND (tags eq b OR name eq x)`) and between the client conditions
+  and the server conditions of a plan.
+- **Different attributes of the same element share one join.**
+  `where("orders.status", EQUALS, "PAID").where("orders.total", GREATER_THAN, 100)`
+  means "has an order that is PAID *and* over 100".
+- **Alternatives of an OR group share one join.**
+  `or(g -> g.where("tags", EQUALS, "a").where("tags", EQUALS, "b"))` means "has
+  tag `a` or tag `b`".
+- **Grouped and projected queries** (`groupBy`, `select`, aggregates,
+  `selectInto`) keep every condition on the shared join, because it is the join
+  their rows are read from: `where("orders.status", NOT_EQUALS, "PENDING")
+  .groupBy("orders.status")` groups the orders that are not pending.
+- `IS_EMPTY` / `IS_NOT_EMPTY` test the whole collection. `IS_NOT_NULL` is not
+  a negative operator: it means "has a non-null element".
 
-For per-element semantics, use one `exists` / `notExists` subquery per
-condition (see [EXISTS and Subqueries](#exists-and-subqueries)):
+Conditions translated to `EXISTS` / `NOT EXISTS` add no join to the outer
+query, so they do not repeat roots and do not restrict a fetched collection.
 
 ```java
 // has tag a AND has tag b
 customerRepository.query()
-    .<String>exists("tags", sub -> sub.where("value", Operators.EQUALS, "a"))
-    .<String>exists("tags", sub -> sub.where("value", Operators.EQUALS, "b"))
+    .where("tags", Operators.EQUALS, "a")
+    .where("tags", Operators.EQUALS, "b")
     .findAll();
 
-// does not have tag a
+// does not have tag a (customers without tags included)
 customerRepository.query()
-    .<String>notExists("tags", sub -> sub.where("value", Operators.EQUALS, "a"))
+    .where("tags", Operators.NOT_EQUALS, "a")
     .findAll();
 ```
+
+For anything these rules do not express, such as "has an element that is not
+`a`", write the subquery yourself (see
+[EXISTS and Subqueries](#exists-and-subqueries)):
+
+```java
+customerRepository.query()
+    .<String>exists("tags", sub -> sub.where("value", Operators.NOT_EQUALS, "a"))
+    .findAll();
+```
+
+> **Changed in 0.4.0.** Before, every condition on a collection path tested the
+> same joined element: `tags eq a AND tags eq b` matched nothing and
+> `tags neq a` meant "has some tag other than `a`". Use the `exists` form above
+> for the old meaning of a negative operator.
 
 ### Logical Groups (AND / OR)
 
@@ -466,9 +501,9 @@ List<Customer> results = customerRepository.query()
     .findAll();
 ```
 
-**`NOT EXISTS`** is the canonical way to express "none of the related rows
-match" -- something a plain `where("orders.status", NOT_EQUALS, ...)` cannot do
-correctly:
+**`NOT EXISTS`** expresses "none of the related rows match" for any body; a
+plain `where("orders.status", NOT_EQUALS, ...)` is the short form for a single
+condition (see [Collections and Shared Joins](#collections-and-shared-joins)):
 
 ```java
 List<Customer> noCancellations = customerRepository.query()
@@ -728,9 +763,9 @@ record ProductSummary(String name, String categoryName) {}
 | Operator | Description | Example |
 |---|---|---|
 | `EQUALS` | Equality comparison | `.where("status", Operators.EQUALS, "ACTIVE")` |
-| `NOT_EQUALS` | Negated equality | `.where("status", Operators.NOT_EQUALS, "DISCONTINUED")` |
+| `NOT_EQUALS` | Negated equality; on a collection path, no element equals the value | `.where("status", Operators.NOT_EQUALS, "DISCONTINUED")` |
 | `CONTAINS` | SQL `LIKE '%value%'`; the value is matched literally (`%`, `_` and `\` are escaped) | `.where("name", Operators.CONTAINS, "Pro")` |
-| `NOT_CONTAINS` | Negated `LIKE '%value%'`; the value is matched literally | `.where("name", Operators.NOT_CONTAINS, "test")` |
+| `NOT_CONTAINS` | Negated `LIKE '%value%'`; the value is matched literally; on a collection path, no element contains it | `.where("name", Operators.NOT_CONTAINS, "test")` |
 | `STARTS_WITH` | SQL `LIKE 'value%'`; the value is matched literally | `.where("name", Operators.STARTS_WITH, "Mac")` |
 | `ENDS_WITH` | SQL `LIKE '%value'`; the value is matched literally | `.where("email", Operators.ENDS_WITH, "@example.com")` |
 | `GREATER_THAN` | `>` comparison | `.where("price", Operators.GREATER_THAN, "100")` |
@@ -743,9 +778,15 @@ record ProductSummary(String name, String categoryName) {}
 | `IS_EMPTY` | `IS EMPTY` on collections | `.where("orders", Operators.IS_EMPTY, null)` |
 | `IS_NOT_EMPTY` | `IS NOT EMPTY` on collections | `.where("orders", Operators.IS_NOT_EMPTY, null)` |
 | `IN` | SQL `IN (...)` | `.where("status", Operators.IN, List.of("A", "B"))` |
-| `NOT_IN` | Negated `IN (...)` | `.where("status", Operators.NOT_IN, List.of("X"))` |
+| `NOT_IN` | Negated `IN (...)`; on a collection path, no element is in the list | `.where("status", Operators.NOT_IN, List.of("X"))` |
 
 Custom operators: `Operators.custom("my_operator")` -- register a matching `OperatorHandler` to support them.
+
+On a collection path (`tags`, `orders.status`) the negative operators `NOT_EQUALS`, `NOT_IN` and
+`NOT_CONTAINS` mean "no element matches" (`NOT EXISTS`), and a path repeated in an AND tests one
+element per condition (`EXISTS`); the other conditions on the collection share one join. Grouped and
+projected queries always share the join. See
+[Collections and Shared Joins](#collections-and-shared-joins).
 
 ## Extension Points
 
