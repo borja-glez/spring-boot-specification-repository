@@ -1057,6 +1057,105 @@ class SpecificationRepositoryIntegrationTest {
     assertThat(withoutOrders).isEqualTo(4);
   }
 
+  // -- EXISTS / NOT EXISTS over element collections of basic values --
+
+  @Test
+  void shouldFilterByExistsOnBasicCollection() {
+    repository.save(new TestCustomer("Tagged", "ACTIVE", null).tagged("vip", "newsletter"));
+    repository.save(new TestCustomer("Other", "ACTIVE", null).tagged("newsletter"));
+
+    List<TestCustomer> vips =
+        repository
+            .query()
+            .<String>exists("tags", sub -> sub.where("value", Operators.EQUALS, "vip"))
+            .findAll();
+
+    assertThat(vips).extracting(TestCustomer::getName).containsExactly("Tagged");
+  }
+
+  @Test
+  void shouldFilterByNotExistsOnBasicCollection() {
+    repository.save(new TestCustomer("Tagged", "ACTIVE", null).tagged("vip", "newsletter"));
+    repository.save(new TestCustomer("Other", "ACTIVE", null).tagged("newsletter"));
+
+    List<TestCustomer> results =
+        repository
+            .query()
+            .<String>notExists("tags", sub -> sub.where("value", Operators.EQUALS, "vip"))
+            .findAll();
+    // With the shared join, NOT_EQUALS means "has some tag other than vip".
+    List<TestCustomer> someOtherTag =
+        repository.query().where("tags", Operators.NOT_EQUALS, "vip").distinct().findAll();
+
+    assertThat(results)
+        .extracting(TestCustomer::getName)
+        .containsExactlyInAnyOrder("Borja", "Lucia", "John", "Anna", "Other");
+    assertThat(someOtherTag)
+        .extracting(TestCustomer::getName)
+        .containsExactlyInAnyOrder("Tagged", "Other");
+  }
+
+  @Test
+  void shouldRequireEveryTagWithOneExistsPerElement() {
+    repository.save(new TestCustomer("Both", "ACTIVE", null).tagged("vip", "beta"));
+    repository.save(new TestCustomer("VipOnly", "ACTIVE", null).tagged("vip"));
+
+    // A shared join matches nothing here; one subquery per element keeps the conditions apart.
+    long sharedJoin =
+        repository
+            .query()
+            .where("tags", Operators.EQUALS, "vip")
+            .where("tags", Operators.EQUALS, "beta")
+            .count();
+    List<TestCustomer> both =
+        repository
+            .query()
+            .<String>exists("tags", sub -> sub.where("value", Operators.EQUALS, "vip"))
+            .<String>exists("tags", sub -> sub.where("value", Operators.EQUALS, "beta"))
+            .findAll();
+
+    assertThat(sharedJoin).isZero();
+    assertThat(both).extracting(TestCustomer::getName).containsExactly("Both");
+  }
+
+  @Test
+  void shouldFilterByExistsOnBasicCollectionWithNestedGroupAndNoBody() {
+    repository.save(new TestCustomer("Tagged", "ACTIVE", null).tagged("vip"));
+    repository.save(new TestCustomer("Beta", "ACTIVE", null).tagged("beta"));
+    repository.save(new TestCustomer("Other", "ACTIVE", null).tagged("newsletter"));
+
+    List<TestCustomer> matching =
+        repository
+            .query()
+            .<String>exists(
+                "tags",
+                sub ->
+                    sub.or(
+                        group ->
+                            group
+                                .where("value", Operators.EQUALS, "vip")
+                                .where("value", Operators.STARTS_WITH, "bet")))
+            .findAll();
+    long tagged = repository.query().<String>exists("tags", sub -> {}).count();
+
+    assertThat(matching)
+        .extracting(TestCustomer::getName)
+        .containsExactlyInAnyOrder("Tagged", "Beta");
+    assertThat(tagged).isEqualTo(3);
+  }
+
+  @Test
+  void shouldRejectAnAttributeOfABasicCollectionElementInsideExists() {
+    assertThatThrownBy(
+            () ->
+                repository
+                    .query()
+                    .<String>exists("tags", sub -> sub.where("name", Operators.EQUALS, "vip"))
+                    .findAll())
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("value");
+  }
+
   // -- findAll and count with QueryPlan directly --
 
   @Test

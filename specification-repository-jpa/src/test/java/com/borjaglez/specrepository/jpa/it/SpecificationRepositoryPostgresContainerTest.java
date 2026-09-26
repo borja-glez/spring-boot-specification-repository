@@ -108,6 +108,31 @@ class SpecificationRepositoryPostgresContainerTest {
         .containsExactly("C:\\algodón");
   }
 
+  @Test
+  void shouldFilterByExistsAndNotExistsOnBasicCollectionOnPostgres() {
+    repository.save(new TestCustomer("PgBoth", "ACTIVE", null).tagged("pg-vip", "pg-beta"));
+    repository.save(new TestCustomer("PgVip", "ACTIVE", null).tagged("pg-vip"));
+    repository.save(new TestCustomer("PgNone", "ACTIVE", null));
+
+    List<TestCustomer> both =
+        repository
+            .query()
+            .<String>exists("tags", sub -> sub.where("value", Operators.EQUALS, "pg-vip"))
+            .<String>exists("tags", sub -> sub.where("value", Operators.EQUALS, "pg-beta"))
+            .findAll();
+    List<TestCustomer> withoutBeta =
+        repository
+            .query()
+            .where("name", Operators.IN, List.of("PgBoth", "PgVip", "PgNone"))
+            .<String>notExists("tags", sub -> sub.where("value", Operators.EQUALS, "pg-beta"))
+            .findAll();
+
+    assertThat(both).extracting(TestCustomer::getName).containsExactly("PgBoth");
+    assertThat(withoutBeta)
+        .extracting(TestCustomer::getName)
+        .containsExactlyInAnyOrder("PgVip", "PgNone");
+  }
+
   @Configuration(proxyBeanMethods = false)
   @EnableAutoConfiguration
   @EnableJpaRepositories(

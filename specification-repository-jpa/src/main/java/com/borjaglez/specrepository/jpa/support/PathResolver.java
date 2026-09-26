@@ -127,11 +127,19 @@ public class PathResolver {
     }
   }
 
+  /**
+   * Resolves the type reached by an association path, or {@code null} when the path ends in a
+   * collection of basic values (for example an {@code @ElementCollection} of strings), whose
+   * elements have no attributes to navigate.
+   */
   ManagedType<?> resolveAssociationTarget(ManagedType<?> fromType, String associationPath) {
     String[] segments = associationPath.split("\\.");
     ManagedType<?> currentType = fromType;
     for (String segment : segments) {
       Attribute<?, ?> attribute = currentType.getAttribute(segment);
+      if (isBasicCollection(attribute)) {
+        return null;
+      }
       currentType = managedType(attribute);
     }
     return currentType;
