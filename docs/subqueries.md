@@ -152,6 +152,10 @@ validated against the outer policy, since they belong to a different entity.
 If you need sub-entity validation, enforce it with a separate policy on the
 inner repository.
 
+Only client conditions are validated. A subquery added as a server condition,
+through a builder derived from a plan (`plan.toBuilder()` or
+`repository.query(plan)`), is not checked against the policy.
+
 ## Limitations
 
 - No `ALL` / `ANY` quantifiers.

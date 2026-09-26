@@ -44,7 +44,12 @@ public class QueryPlanArgumentResolver implements HandlerMethodArgumentResolver 
     AllowedFieldsPolicy policy = buildPolicy(annotation);
     Set<String> caseInsensitiveFields =
         Arrays.stream(annotation.caseInsensitiveFields()).collect(Collectors.toSet());
-    return parser.toQueryPlan(annotation.value(), params, policy, caseInsensitiveFields);
+    QueryPlan<?> plan =
+        parser.toQueryPlan(annotation.value(), params, policy, caseInsensitiveFields);
+    // Checked here so a disallowed client field fails before the handler runs, without the
+    // wrapping of the repository proxy. The plan keeps the policy for later client input.
+    policy.validate(plan);
+    return plan;
   }
 
   /**

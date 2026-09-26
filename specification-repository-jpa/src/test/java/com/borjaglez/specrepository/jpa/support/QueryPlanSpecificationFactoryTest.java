@@ -308,6 +308,88 @@ class QueryPlanSpecificationFactoryTest {
   }
 
   @Test
+  void shouldUseTheServerConditionAloneWhenThereAreNoClientConditions() {
+    Path<?> customerPath = mock(Path.class);
+    doReturn(String.class).when(customerPath).getJavaType();
+    doReturn(customerPath)
+        .when(pathResolver)
+        .resolve(eq(root), any(), eq("customerId"), eq(JoinMode.LEFT));
+    when(valueConversionService.convert("u1", String.class, Operators.EQUALS)).thenReturn("u1");
+    Predicate serverPredicate = mock(Predicate.class);
+    Predicate server = mock(Predicate.class);
+    OperatorHandler eqHandler = mock(OperatorHandler.class);
+    when(operatorRegistry.find(Operators.EQUALS)).thenReturn(Optional.of(eqHandler));
+    when(eqHandler.create(any(OperatorContext.class))).thenReturn(serverPredicate);
+    when(cb.and(any(Predicate[].class))).thenReturn(server);
+    QueryPlan<Object> plan =
+        planWithServerCondition(
+            new GroupCondition(LogicalOperator.AND, List.of()),
+            new GroupCondition(
+                LogicalOperator.AND,
+                List.of(
+                    new PredicateCondition("customerId", Operators.EQUALS, "u1", false, false))),
+            AllowedFieldsPolicy.of(Set.of("status"), Set.of()));
+
+    Predicate result = factory.create(plan).toPredicate(root, query, cb);
+
+    assertThat(result).isSameAs(server);
+    verify(query).where(server);
+  }
+
+  @Test
+  void shouldAndTheClientConditionsWithTheServerConditions() {
+    Path<?> statusPath = mock(Path.class);
+    doReturn(String.class).when(statusPath).getJavaType();
+    doReturn(statusPath).when(pathResolver).resolve(eq(root), any(), any(), eq(JoinMode.LEFT));
+    when(valueConversionService.convert(any(), eq(String.class), eq(Operators.EQUALS)))
+        .thenAnswer(invocation -> invocation.getArgument(0));
+    OperatorHandler eqHandler = mock(OperatorHandler.class);
+    when(operatorRegistry.find(Operators.EQUALS)).thenReturn(Optional.of(eqHandler));
+    when(eqHandler.create(any(OperatorContext.class)))
+        .thenReturn(mock(Predicate.class), mock(Predicate.class));
+    Predicate client = mock(Predicate.class);
+    Predicate server = mock(Predicate.class);
+    Predicate both = mock(Predicate.class);
+    when(cb.or(any(Predicate[].class))).thenReturn(client);
+    when(cb.and(any(Predicate[].class))).thenReturn(server);
+    when(cb.and(client, server)).thenReturn(both);
+    QueryPlan<Object> plan =
+        planWithServerCondition(
+            new GroupCondition(
+                LogicalOperator.OR,
+                List.of(new PredicateCondition("status", Operators.EQUALS, "PAID", false, false))),
+            new GroupCondition(
+                LogicalOperator.AND,
+                List.of(
+                    new PredicateCondition("customerId", Operators.EQUALS, "u1", false, false))),
+            AllowedFieldsPolicy.of(Set.of("status"), Set.of()));
+
+    Predicate result = factory.create(plan).toPredicate(root, query, cb);
+
+    assertThat(result).isSameAs(both);
+    verify(query).where(both);
+  }
+
+  @Test
+  void shouldStillRejectADisallowedClientConditionNextToServerConditions() {
+    QueryPlan<Object> plan =
+        planWithServerCondition(
+            new GroupCondition(
+                LogicalOperator.AND,
+                List.of(
+                    new PredicateCondition("customerId", Operators.EQUALS, "u2", false, false))),
+            new GroupCondition(
+                LogicalOperator.AND,
+                List.of(
+                    new PredicateCondition("customerId", Operators.EQUALS, "u1", false, false))),
+            AllowedFieldsPolicy.of(Set.of("status"), Set.of()));
+
+    assertThatExceptionOfType(DisallowedFieldException.class)
+        .isThrownBy(() -> factory.create(plan))
+        .withMessage("Field 'customerId' is not allowed for filtering");
+  }
+
+  @Test
   void shouldBuildOrPredicateForOrGroup() {
     Path<?> namePath = mock(Path.class);
     doReturn(String.class).when(namePath).getJavaType();
@@ -1130,6 +1212,24 @@ class QueryPlanSpecificationFactoryTest {
             })
         .withMessage(
             "Invalid filter on field '" + field + "': unknown operator '" + operator + "'");
+  }
+
+  private QueryPlan<Object> planWithServerCondition(
+      GroupCondition rootCondition, GroupCondition serverCondition, AllowedFieldsPolicy policy) {
+    return new QueryPlan<>(
+        Object.class,
+        rootCondition,
+        serverCondition,
+        List.of(),
+        List.of(),
+        List.of(),
+        List.of(),
+        null,
+        List.of(),
+        List.of(),
+        Sort.unsorted(),
+        false,
+        policy);
   }
 
   private QueryPlan<Object> plan(GroupCondition rootCondition) {

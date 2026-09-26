@@ -36,7 +36,47 @@ public final class AllowedFieldsPolicy {
     }
   }
 
+  /**
+   * Checks the client input of {@code plan} against this policy: the fields of its client
+   * conditions ({@link QueryPlan#rootCondition()}, including nested groups and the outer fields of
+   * subqueries), its {@code having} fields and its sort. The server conditions ({@link
+   * QueryPlan#serverCondition()}) are not checked.
+   *
+   * @throws DisallowedFieldException for the first field outside the policy
+   */
+  public void validate(QueryPlan<?> plan) {
+    if (isAllowAll()) {
+      return;
+    }
+    validateConditions(plan.rootCondition());
+    for (HavingCondition having : plan.having()) {
+      validateFilter(having.field());
+    }
+    plan.sort().forEach(order -> validateSort(order.getProperty()));
+  }
+
   public boolean isAllowAll() {
     return this == ALLOW_ALL;
+  }
+
+  private void validateConditions(GroupCondition group) {
+    for (QueryCondition condition : group.conditions()) {
+      if (condition instanceof PredicateCondition predicate) {
+        validateFilter(predicate.field());
+      } else if (condition instanceof GroupCondition nested) {
+        validateConditions(nested);
+      } else {
+        validateSubqueryOuterFields((SubqueryCondition) condition);
+      }
+    }
+  }
+
+  private void validateSubqueryOuterFields(SubqueryCondition subquery) {
+    if (subquery.kind() == SubqueryKind.IN || subquery.kind() == SubqueryKind.NOT_IN) {
+      validateFilter(subquery.outerField());
+    }
+    for (CorrelationPair pair : subquery.correlations()) {
+      validateFilter(pair.outerField());
+    }
   }
 }

@@ -14,7 +14,8 @@ Extensible Spring Data JPA query library with a fluent DSL and native-friendly a
 - Aggregate projections with `sum`, `avg`, `min`, `max`, and `count(field)`, plus aliasing, `having(...)` and structured `GroupedRow` results (see [docs/reporting.md](docs/reporting.md))
 - Pure builder model -- the builder only creates an immutable query plan
 - `SpecificationRepository` as a repository base abstraction for execution
-- Per-query field whitelisting for secure API exposure (`AllowedFieldsPolicy`)
+- Per-query field whitelisting of client input for secure API exposure (`AllowedFieldsPolicy`), plus
+  server conditions added to a plan received over HTTP (`repository.query(plan)`)
 - Pluggable operators, predicate factories, converters, and dialect extensions
 - GraalVM-aware path resolution based on JPA metamodel metadata instead of reflection-heavy lookup
   (`selectInto(...)` DTOs need a reflection hint in a native image, see [GraalVM Native Image](#graalvm-native-image))
@@ -573,6 +574,22 @@ userRepository.query()
 The policy is per-query, so each endpoint can define its own restrictions. Without
 `allowedFields()`, all fields are permitted (backward-compatible default).
 
+The policy guards **client input**, not the whole query. A plan keeps its conditions in two parts,
+combined with AND when the query runs:
+
+- **client conditions** (`QueryPlan.rootCondition()`): the filters a caller chose, such as the ones
+  parsed from an HTTP request. They are checked against the policy, together with the plan's sort
+  and `having` fields.
+- **server conditions** (`QueryPlan.serverCondition()`): conditions the application adds, such as
+  "only the current customer's orders", a tenant or a soft-delete flag. They are not checked against
+  the policy, so they can use fields the client may not filter by. They are always ANDed with the
+  client conditions: a client `orFilter` cannot widen them.
+
+Server conditions are added by deriving a plan (see
+[Extending a plan received over HTTP](#extending-a-plan-received-over-http)). What the server
+defines itself (selections, `groupBy`, aggregates, joins, fetches and subquery bodies) is not
+checked either.
+
 ### Pre-Built Query Plans
 
 Build a plan once and reuse it:
@@ -589,6 +606,48 @@ long count = productRepository.count(activePlan);
 
 This is the safest way to keep list and count endpoints aligned when they must share exactly the
 same filters.
+
+### Extending a plan received over HTTP
+
+`plan.toBuilder()` (or `SpecificationQueryBuilder.from(plan)`) returns a builder seeded with every
+component of a plan, and `repository.query(plan)` does the same with the repository terminals. The
+original plan is not changed. On a derived builder:
+
+- `where`, `and`, `or`, `exists`, ... add **server conditions**: they are ANDed with the client
+  conditions and are not checked against the plan's `AllowedFieldsPolicy`;
+- the client conditions, the policy, joins, fetches, sort, projection and `distinct` are kept, and
+  the other DSL methods (`leftFetch`, `groupBy`, `select`, `selectInto`, ...) add to them;
+- `sort(...)` replaces the client sort, and `sortedByDefault(...)` sets a sort only when the client
+  sent none.
+
+"My orders": the client filters by status and total, the server scopes the rows to the
+authenticated customer, although `customerId` is not in the whitelist:
+
+```java
+@GetMapping("/my-orders")
+Page<Order> myOrders(
+        @AuthenticationPrincipal Customer customer,
+        @FilterableQuery(
+                value = Order.class,
+                filterableFields = {"status", "total"},
+                sortableFields = {"placedAt", "total"})
+                QueryPlan<Order> plan,
+        Pageable pageable) {
+    return orderRepository.query(plan)
+            .where("customerId", Operators.EQUALS, customer.id())
+            .leftFetch("lines")
+            .sortedByDefault(Sort.by(Sort.Direction.DESC, "placedAt"))
+            .findAll(pageable);
+}
+```
+
+`?filter=customerId:eq:someone-else` is still rejected with `DisallowedFieldException`, and
+`?orFilter=status:eq:PAID;status:eq:PLACED` only matches the customer's own orders:
+`(client conditions) AND customerId = ?`.
+
+The derived plan keeps the client's policy, so the sort is still checked against the sortable
+fields. That includes a sort set with `sort(...)` or `sortedByDefault(...)`: pick a default sort
+among the sortable fields.
 
 ### Built-In `BETWEEN`
 
@@ -815,6 +874,13 @@ public class ProductController {
 
 `filterableFields` and `sortableFields` are translated into an `AllowedFieldsPolicy`, so any
 client attempting to filter or sort by a non-whitelisted field receives a `DisallowedFieldException`.
+The resolver checks the request's filters and sort while it resolves the argument, before the
+handler runs, so the exception reaches your `@ExceptionHandler` unwrapped. The plan keeps the policy
+and is checked again when it runs.
+
+To add conditions the client must not control (the current user, a tenant, "on sale only"), derive
+the plan with `repository.query(plan)` or `plan.toBuilder()`: see
+[Extending a plan received over HTTP](#extending-a-plan-received-over-http).
 
 `@FilterableQuery` also works as a meta-annotation, so endpoints that expose the same entity can
 share one declaration instead of repeating the field lists:

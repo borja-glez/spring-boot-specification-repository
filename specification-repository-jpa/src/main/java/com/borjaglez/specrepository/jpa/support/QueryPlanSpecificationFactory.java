@@ -20,7 +20,6 @@ import jakarta.persistence.metamodel.ManagedType;
 import org.springframework.core.convert.ConversionException;
 import org.springframework.data.jpa.domain.Specification;
 
-import com.borjaglez.specrepository.core.AllowedFieldsPolicy;
 import com.borjaglez.specrepository.core.CorrelationMode;
 import com.borjaglez.specrepository.core.CorrelationPair;
 import com.borjaglez.specrepository.core.FetchInstruction;
@@ -37,7 +36,6 @@ import com.borjaglez.specrepository.core.PredicateCondition;
 import com.borjaglez.specrepository.core.QueryCondition;
 import com.borjaglez.specrepository.core.QueryPlan;
 import com.borjaglez.specrepository.core.SubqueryCondition;
-import com.borjaglez.specrepository.core.SubqueryKind;
 import com.borjaglez.specrepository.jpa.spi.OperatorContext;
 import com.borjaglez.specrepository.jpa.spi.OperatorHandler;
 
@@ -79,7 +77,7 @@ public class QueryPlanSpecificationFactory {
   }
 
   public <T> Specification<T> create(QueryPlan<T> plan) {
-    validateFields(plan);
+    plan.allowedFieldsPolicy().validate(plan);
     return (root, query, criteriaBuilder) -> {
       AssociationRegistry registry = new AssociationRegistry();
       // Fetches first: Hibernate's plain joins also implement Fetch, so a fetch requested on a
@@ -91,8 +89,12 @@ public class QueryPlanSpecificationFactory {
       applyHaving(root, query, registry, plan.having(), criteriaBuilder);
 
       Predicate predicate =
-          toPredicate(
-              plan.rootCondition(), root, root.getModel(), query, criteriaBuilder, registry);
+          and(
+              criteriaBuilder,
+              toPredicate(
+                  plan.rootCondition(), root, root.getModel(), query, criteriaBuilder, registry),
+              toPredicate(
+                  plan.serverCondition(), root, root.getModel(), query, criteriaBuilder, registry));
       if (predicate != null) {
         query.where(predicate);
       }
@@ -101,6 +103,21 @@ public class QueryPlanSpecificationFactory {
       }
       return predicate;
     };
+  }
+
+  /**
+   * The client conditions ANDed with the server conditions, so an OR in the client conditions
+   * cannot widen the server ones. Either may be {@code null} when it has no conditions.
+   */
+  private static Predicate and(
+      CriteriaBuilder criteriaBuilder, Predicate client, Predicate server) {
+    if (server == null) {
+      return client;
+    }
+    if (client == null) {
+      return server;
+    }
+    return criteriaBuilder.and(client, server);
   }
 
   /**
@@ -467,34 +484,6 @@ public class QueryPlanSpecificationFactory {
   private record SubRootContext(
       From<?, ?> subRoot, ManagedType<?> subRootType, Predicate correlationPredicate) {}
 
-  private <T> void validateFields(QueryPlan<T> plan) {
-    AllowedFieldsPolicy policy = plan.allowedFieldsPolicy();
-    if (policy.isAllowAll()) {
-      return;
-    }
-    validateFilterFields(policy, plan.rootCondition());
-    for (HavingCondition having : plan.having()) {
-      policy.validateFilter(having.field());
-    }
-    if (plan.sort().isSorted()) {
-      plan.sort().forEach(order -> policy.validateSort(order.getProperty()));
-    }
-  }
-
-  private void validateFilterFields(AllowedFieldsPolicy policy, GroupCondition group) {
-    for (QueryCondition condition : group.conditions()) {
-      if (condition instanceof PredicateCondition predicate) {
-        policy.validateFilter(predicate.field());
-      }
-      if (condition instanceof GroupCondition nested) {
-        validateFilterFields(policy, nested);
-      }
-      if (condition instanceof SubqueryCondition subquery) {
-        validateSubqueryOuterFields(policy, subquery);
-      }
-    }
-  }
-
   private OperatorHandler handlerFor(PredicateCondition condition) {
     return operatorRegistry
         .find(condition.operator())
@@ -551,14 +540,5 @@ public class QueryPlanSpecificationFactory {
       return sub.correlate((Root) outerRoot);
     }
     return sub.correlate((Join) outer);
-  }
-
-  private void validateSubqueryOuterFields(AllowedFieldsPolicy policy, SubqueryCondition subquery) {
-    if (subquery.kind() == SubqueryKind.IN || subquery.kind() == SubqueryKind.NOT_IN) {
-      policy.validateFilter(subquery.outerField());
-    }
-    for (CorrelationPair pair : subquery.correlations()) {
-      policy.validateFilter(pair.outerField());
-    }
   }
 }

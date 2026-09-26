@@ -27,6 +27,15 @@ public class SpecificationExecutableQuery<T> extends QueryPlanBuilder<T> {
     this.repository = repository;
   }
 
+  /**
+   * A query derived from {@code plan}: see {@link QueryPlan#toBuilder()}. The conditions added
+   * through it are server conditions.
+   */
+  public SpecificationExecutableQuery(QueryPlan<T> plan, SpecificationRepository<T, ?> repository) {
+    super(plan);
+    this.repository = repository;
+  }
+
   @Override
   public SpecificationExecutableQuery<T> where(
       String field, FilterOperator operator, Object value) {
@@ -242,6 +251,12 @@ public class SpecificationExecutableQuery<T> extends QueryPlanBuilder<T> {
   @Override
   public SpecificationExecutableQuery<T> sort(Sort sort) {
     super.sort(sort);
+    return this;
+  }
+
+  @Override
+  public SpecificationExecutableQuery<T> sortedByDefault(Sort sort) {
+    super.sortedByDefault(sort);
     return this;
   }
 

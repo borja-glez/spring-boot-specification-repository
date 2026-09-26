@@ -23,8 +23,40 @@ public class QueryPlanBuilder<T> {
   private boolean distinct;
   private AllowedFieldsPolicy allowedFieldsPolicy = AllowedFieldsPolicy.allowAll();
 
+  /** Whether this builder derives from a plan: then the conditions added are server conditions. */
+  private final boolean derived;
+
+  /** The client conditions of the plan this builder derives from. */
+  private final GroupCondition clientCondition;
+
+  private final List<QueryCondition> serverConditions = new ArrayList<>();
+
   public QueryPlanBuilder(Class<T> entityType) {
     this.entityType = Objects.requireNonNull(entityType, "entityType must not be null");
+    this.derived = false;
+    this.clientCondition = null;
+  }
+
+  /**
+   * A builder seeded with every component of {@code plan}, which it derives from: see {@link
+   * QueryPlan#toBuilder()}. The conditions added through it are server conditions.
+   */
+  protected QueryPlanBuilder(QueryPlan<T> plan) {
+    Objects.requireNonNull(plan, "plan must not be null");
+    this.entityType = plan.entityType();
+    this.derived = true;
+    this.clientCondition = plan.rootCondition();
+    this.serverConditions.addAll(plan.serverCondition().conditions());
+    this.joins.addAll(plan.joins());
+    this.fetches.addAll(plan.fetches());
+    this.projections.addAll(plan.projections());
+    this.selections.addAll(plan.selections());
+    this.projectionType = plan.projectionType();
+    this.groupBy.addAll(plan.groupBy());
+    this.having.addAll(plan.having());
+    this.sort = plan.sort();
+    this.distinct = plan.distinct();
+    this.allowedFieldsPolicy = plan.allowedFieldsPolicy();
   }
 
   public QueryPlanBuilder<T> where(String field, FilterOperator operator, Object value) {
@@ -120,6 +152,18 @@ public class QueryPlanBuilder<T> {
     return this;
   }
 
+  /**
+   * Sets the sort only when none is set yet. On a builder derived from a plan, it applies only when
+   * the client sent no sort.
+   */
+  public QueryPlanBuilder<T> sortedByDefault(Sort sort) {
+    Objects.requireNonNull(sort, "sort must not be null");
+    if (this.sort.isUnsorted()) {
+      this.sort = sort;
+    }
+    return this;
+  }
+
   public QueryPlanBuilder<T> select(String... fields) {
     Arrays.stream(fields).forEach(this::selectField);
     return this;
@@ -208,9 +252,15 @@ public class QueryPlanBuilder<T> {
     if (!having.isEmpty() && groupBy.isEmpty()) {
       throw new IllegalStateException("having requires at least one groupBy field");
     }
+    GroupCondition added = rootGroup.build();
+    List<QueryCondition> server = new ArrayList<>(serverConditions);
+    if (derived) {
+      server.addAll(added.conditions());
+    }
     return new QueryPlan<>(
         entityType,
-        rootGroup.build(),
+        derived ? clientCondition : added,
+        new GroupCondition(LogicalOperator.AND, List.copyOf(server)),
         List.copyOf(joins),
         List.copyOf(fetches),
         List.copyOf(projections),

@@ -69,7 +69,7 @@ class QueryPlanBuilderTest {
   @Test
   void shouldRejectNullEntityType() {
     assertThatNullPointerException()
-        .isThrownBy(() -> new QueryPlanBuilder<>(null))
+        .isThrownBy(() -> new QueryPlanBuilder<>((Class<Object>) null))
         .withMessage("entityType must not be null");
   }
 
