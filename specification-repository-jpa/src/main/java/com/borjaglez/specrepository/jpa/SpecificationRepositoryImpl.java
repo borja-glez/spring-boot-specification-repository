@@ -2,17 +2,27 @@ package com.borjaglez.specrepository.jpa;
 
 import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 
 import jakarta.persistence.EntityManager;
+import jakarta.persistence.Tuple;
 import jakarta.persistence.TypedQuery;
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.CriteriaQuery;
+import jakarta.persistence.criteria.Fetch;
+import jakarta.persistence.criteria.FetchParent;
+import jakarta.persistence.criteria.From;
+import jakarta.persistence.criteria.Join;
+import jakarta.persistence.criteria.Order;
 import jakarta.persistence.criteria.Path;
+import jakarta.persistence.criteria.Predicate;
 import jakarta.persistence.criteria.Root;
 import jakarta.persistence.criteria.Selection;
+import jakarta.persistence.metamodel.Attribute;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
@@ -25,6 +35,7 @@ import org.springframework.data.jpa.repository.support.JpaEntityInformation;
 import org.springframework.data.jpa.repository.support.SimpleJpaRepository;
 
 import com.borjaglez.specrepository.core.AggregateSelection;
+import com.borjaglez.specrepository.core.FetchInstruction;
 import com.borjaglez.specrepository.core.FieldSelection;
 import com.borjaglez.specrepository.core.GroupedRow;
 import com.borjaglez.specrepository.core.JoinMode;
@@ -38,6 +49,7 @@ import com.borjaglez.specrepository.jpa.support.SpecificationRepositoryConfigura
 public class SpecificationRepositoryImpl<T, ID extends Serializable>
     extends SimpleJpaRepository<T, ID> implements SpecificationRepository<T, ID> {
 
+  private final JpaEntityInformation<T, ?> entityInformation;
   private final EntityManager entityManager;
   private final PathResolver pathResolver;
   private final QueryPlanSpecificationFactory specificationFactory;
@@ -55,6 +67,7 @@ public class SpecificationRepositoryImpl<T, ID extends Serializable>
       EntityManager entityManager,
       SpecificationRepositoryConfiguration configuration) {
     super(entityInformation, entityManager);
+    this.entityInformation = entityInformation;
     this.entityManager = entityManager;
     SpecificationRepositoryConfiguration repositoryConfiguration =
         Objects.requireNonNull(configuration, "configuration must not be null");
@@ -81,20 +94,148 @@ public class SpecificationRepositoryImpl<T, ID extends Serializable>
 
   /** The entities of the plan, at most {@code limit} of them ({@code 0}: all). */
   private List<T> fetchEntities(QueryPlan<T> plan, int limit) {
+    return fetchEntityWindow(plan, plan.sort(), 0, limit);
+  }
+
+  /**
+   * The entities of the plan in the given order, skipping {@code offset} of them and returning at
+   * most {@code limit} ({@code 0}: all).
+   *
+   * <p>A limit over a fetched collection cannot be applied by the database, since each root takes
+   * one row per element: Hibernate would read every row and paginate in memory (or fail, with
+   * {@code hibernate.query.fail_on_pagination_over_collection_fetch}). Then the window is taken
+   * over the root ids first, and a second query loads those roots with their fetches.
+   */
+  private List<T> fetchEntityWindow(QueryPlan<T> plan, Sort sort, long offset, int limit) {
     CriteriaBuilder builder = entityManager.getCriteriaBuilder();
     CriteriaQuery<T> query = builder.createQuery(getDomainClass());
     Root<T> root = query.from(getDomainClass());
     specificationFactory.create(plan).toPredicate(root, query, builder);
     query.select(root);
-    if (plan.sort().isSorted()) {
-      query.orderBy(QueryUtils.toOrders(plan.sort(), root, builder));
+    if (sort.isSorted()) {
+      query.orderBy(QueryUtils.toOrders(sort, root, builder));
     }
-    keepDistinctWorkable(plan, query, plan.sort());
+    keepDistinctWorkable(plan, query, sort);
+    if (limit > 0 && fetchesACollection(root) && hasSingleBasicId()) {
+      return fetchEntitiesByIds(plan, sort, offset, limit, builder, query, root);
+    }
     TypedQuery<T> typedQuery = entityManager.createQuery(query);
     if (limit > 0) {
+      typedQuery.setFirstResult((int) offset);
       typedQuery.setMaxResults(limit);
     }
     return typedQuery.getResultList();
+  }
+
+  /**
+   * Runs the entity query restricted to the ids of the requested window, which a query without
+   * fetches reads with the offset and limit, and returns the entities in the order of those ids.
+   */
+  private List<T> fetchEntitiesByIds(
+      QueryPlan<T> plan,
+      Sort sort,
+      long offset,
+      int limit,
+      CriteriaBuilder builder,
+      CriteriaQuery<T> query,
+      Root<T> root) {
+    List<Object> ids = fetchRootIds(plan, sort, offset, limit, builder);
+    if (ids.isEmpty()) {
+      return List.of();
+    }
+    Predicate inWindow = root.get(idAttributeName()).in(ids);
+    Predicate restriction = query.getRestriction();
+    query.where(restriction == null ? inWindow : builder.and(restriction, inWindow));
+    // The ids already carry the order, and without an ORDER BY the query never breaks the
+    // PostgreSQL rule for SELECT DISTINCT.
+    query.orderBy(List.of());
+    Map<Object, T> byId = new HashMap<>();
+    for (T entity : entityManager.createQuery(query).getResultList()) {
+      byId.put(entityInformation.getId(entity), entity);
+    }
+    return ids.stream().map(byId::get).filter(Objects::nonNull).toList();
+  }
+
+  /**
+   * The ids of the roots in the window: the plan's conditions and joins without its fetches, with
+   * the sort. The sort expressions are selected next to the id, so the query stays valid with
+   * {@code distinct} on databases such as PostgreSQL that only order a {@code SELECT DISTINCT} by
+   * selected columns. An inner fetch still drops the roots without the association, so it becomes
+   * an inner join here.
+   */
+  private List<Object> fetchRootIds(
+      QueryPlan<T> plan, Sort sort, long offset, int limit, CriteriaBuilder builder) {
+    CriteriaQuery<Tuple> query = builder.createTupleQuery();
+    Root<T> root = query.from(getDomainClass());
+    specificationFactory.create(withoutFetches(plan)).toPredicate(root, query, builder);
+    for (FetchInstruction fetch : plan.fetches()) {
+      if (fetch.mode() == JoinMode.INNER) {
+        pathResolver.join(root, new AssociationRegistry(), fetch.path(), JoinMode.INNER);
+      }
+    }
+    List<Selection<?>> selections = new ArrayList<>();
+    selections.add(root.get(idAttributeName()));
+    if (sort.isSorted()) {
+      List<Order> orders = QueryUtils.toOrders(sort, root, builder);
+      orders.forEach(order -> selections.add(order.getExpression()));
+      query.orderBy(orders);
+    }
+    query.multiselect(selections);
+    query.distinct(plan.distinct() || joinsACollection(root));
+    TypedQuery<Tuple> typedQuery = entityManager.createQuery(query);
+    typedQuery.setFirstResult((int) offset);
+    typedQuery.setMaxResults(limit);
+    // A sort over a collection returns a root once per element: each id is kept once, in the
+    // position of its first row.
+    return typedQuery.getResultList().stream().map(row -> row.get(0)).distinct().toList();
+  }
+
+  private static <X> QueryPlan<X> withoutFetches(QueryPlan<X> plan) {
+    return new QueryPlan<>(
+        plan.entityType(),
+        plan.rootCondition(),
+        plan.joins(),
+        List.of(),
+        plan.projections(),
+        plan.selections(),
+        plan.projectionType(),
+        plan.groupBy(),
+        plan.having(),
+        plan.sort(),
+        plan.distinct(),
+        plan.allowedFieldsPolicy());
+  }
+
+  /**
+   * Whether the ids can be matched with {@code in}. Entities with a composite id ({@code @IdClass}
+   * or {@code @EmbeddedId}) keep the single query, paginated in memory by Hibernate.
+   */
+  private boolean hasSingleBasicId() {
+    return !entityInformation.hasCompositeId()
+        && entityInformation.getIdAttribute().getPersistentAttributeType()
+            == Attribute.PersistentAttributeType.BASIC;
+  }
+
+  private String idAttributeName() {
+    return entityInformation.getIdAttribute().getName();
+  }
+
+  private static boolean fetchesACollection(FetchParent<?, ?> parent) {
+    for (Fetch<?, ?> fetch : parent.getFetches()) {
+      if (fetch.getAttribute().isCollection() || fetchesACollection(fetch)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private static boolean joinsACollection(From<?, ?> from) {
+    for (Join<?, ?> join : from.getJoins()) {
+      if (join.getAttribute().isCollection() || joinsACollection(join)) {
+        return true;
+      }
+    }
+    return false;
   }
 
   /**
@@ -156,20 +297,8 @@ public class SpecificationRepositoryImpl<T, ID extends Serializable>
   }
 
   private List<T> fetchEntityPage(QueryPlan<T> plan, Pageable pageable, int extraLimit) {
-    CriteriaBuilder builder = entityManager.getCriteriaBuilder();
-    CriteriaQuery<T> query = builder.createQuery(getDomainClass());
-    Root<T> root = query.from(getDomainClass());
-    specificationFactory.create(plan).toPredicate(root, query, builder);
-    query.select(root);
     Sort sort = pageable.getSort().isSorted() ? pageable.getSort() : plan.sort();
-    if (sort.isSorted()) {
-      query.orderBy(QueryUtils.toOrders(sort, root, builder));
-    }
-    keepDistinctWorkable(plan, query, sort);
-    TypedQuery<T> typedQuery = entityManager.createQuery(query);
-    typedQuery.setFirstResult((int) pageable.getOffset());
-    typedQuery.setMaxResults(pageable.getPageSize() + extraLimit);
-    return typedQuery.getResultList();
+    return fetchEntityWindow(plan, sort, pageable.getOffset(), pageable.getPageSize() + extraLimit);
   }
 
   private <R> Slice<R> toSlice(List<R> fetched, Pageable pageable) {
@@ -189,9 +318,7 @@ public class SpecificationRepositoryImpl<T, ID extends Serializable>
     } else if (plan.hasSelections()) {
       results = (List<T>) executeProjectedQuery(plan, null, 1);
     } else {
-      // A limit over a fetched collection makes Hibernate paginate in memory (or fail, with
-      // fail_on_pagination_over_collection_fetch): plans with fetches keep reading every row.
-      results = fetchEntities(plan, plan.fetches().isEmpty() ? 1 : 0);
+      results = fetchEntities(plan, 1);
     }
     return results.stream().findFirst();
   }

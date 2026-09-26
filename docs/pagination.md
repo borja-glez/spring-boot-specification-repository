@@ -69,6 +69,50 @@ Use it when:
 - field projections via `select(...)`,
 - aggregate / `groupBy` queries.
 
+## Pages that fetch a collection
+
+A fetch join over a collection (`leftFetch("orders")`) returns one row per
+element, so the database cannot cut a page of roots with `LIMIT` / `OFFSET`.
+Left to Hibernate, it would read every matching row and paginate in memory
+(warning `HHH90003004`), or throw with
+`hibernate.query.fail_on_pagination_over_collection_fetch=true`.
+
+When the entity query of `findAll(Pageable)`, `findSlice(Pageable)` or
+`findOne()` fetches at least one collection (at any depth, such as
+`customer.orders`), the page is read in two steps:
+
+1. **Id query**: the root ids with the plan's conditions, joins and sort, and
+   the page's offset and limit (`pageSize + 1` for a slice, `1` for
+   `findOne`). It has no fetches; an `innerFetch` becomes an inner join, so it
+   still drops the roots without the association. The sort expressions are
+   selected next to the id, which keeps `SELECT DISTINCT` valid on PostgreSQL
+   when the plan sorts by an association such as `profile.city`.
+2. **Entity query**: the roots with the plan's conditions and fetches,
+   restricted to `id in (:ids)`, with no offset or limit. The entities are
+   returned in the order of the ids.
+
+```sql
+SELECT DISTINCT c.id, p.city, c.name FROM customer c
+  LEFT JOIN orders o ON ... LEFT JOIN profile p ON ...
+  WHERE o.status = ? ORDER BY 2, 3 LIMIT 20 OFFSET 0
+SELECT c.*, o.* FROM customer c LEFT JOIN orders o ON ...
+  WHERE o.status = ? AND c.id IN (?, ?, ...)
+```
+
+An empty id list returns an empty page without the second query. The totals
+of `findAll(Pageable)` still come from the count query, and `hasNext` of a
+slice from the id query. Plans that fetch only to-one associations, and
+`findAll()` without a page, keep a single query.
+
+Notes:
+
+- A sort by a collection path (`orders.total`) returns one id row per
+  element: each root is kept once, at its first position, so such a page can
+  hold fewer roots than its size.
+- Entities with a composite id (`@IdClass` or `@EmbeddedId`) keep the single
+  query, which Hibernate paginates in memory (and rejects with
+  `fail_on_pagination_over_collection_fetch`).
+
 ## `Page` vs `Slice` — when to use what
 
 | Aspect                       | `findAll(Pageable)` → `Page` | `findSlice(Pageable)` → `Slice` |
