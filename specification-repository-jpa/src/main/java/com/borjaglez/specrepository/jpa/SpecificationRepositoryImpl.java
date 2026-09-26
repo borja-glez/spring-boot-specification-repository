@@ -307,8 +307,26 @@ public class SpecificationRepositoryImpl<T, ID extends Serializable>
   }
 
   private List<T> fetchEntityPage(QueryPlan<T> plan, Pageable pageable, int extraLimit) {
-    Sort sort = pageable.getSort().isSorted() ? pageable.getSort() : plan.sort();
+    Sort sort = effectiveSort(plan, pageable);
     return fetchEntityWindow(plan, sort, pageable.getOffset(), pageable.getPageSize() + extraLimit);
+  }
+
+  /**
+   * The sort of a query read with {@code pageable}: a sorted {@code pageable} overrides the plan
+   * sort, otherwise the plan sort applies. The sort of a {@code pageable} usually comes from the
+   * client (the {@code sort} request parameter), so each of its properties is checked against the
+   * plan's {@link com.borjaglez.specrepository.core.AllowedFieldsPolicy} first, like the plan sort.
+   *
+   * @throws com.borjaglez.specrepository.core.DisallowedFieldException for the first property the
+   *     policy does not allow to sort by, before any query is sent
+   */
+  private static Sort effectiveSort(QueryPlan<?> plan, Pageable pageable) {
+    if (pageable == null || pageable.getSort().isUnsorted()) {
+      return plan.sort();
+    }
+    Sort sort = pageable.getSort();
+    sort.forEach(order -> plan.allowedFieldsPolicy().validateSort(order.getProperty()));
+    return sort;
   }
 
   private <R> Slice<R> toSlice(List<R> fetched, Pageable pageable) {
@@ -421,7 +439,7 @@ public class SpecificationRepositoryImpl<T, ID extends Serializable>
     Root<T> root = query.from(getDomainClass());
     specificationFactory.create(plan).toPredicate(root, query, builder);
     applyProjection(plan, builder, root, query);
-    applySort(plan, null, builder, root, query);
+    applySort(plan.sort(), builder, root, query);
 
     TypedQuery<?> typedQuery = entityManager.createQuery(query);
     if (limit > 0) {
@@ -437,12 +455,13 @@ public class SpecificationRepositoryImpl<T, ID extends Serializable>
 
   private <P> List<P> executeProjectedQuery(
       QueryPlan<T> plan, Pageable pageable, Class<P> resultType, int extraLimit) {
+    Sort sort = effectiveSort(plan, pageable);
     CriteriaBuilder builder = entityManager.getCriteriaBuilder();
     CriteriaQuery<P> query = builder.createQuery(resultType);
     Root<T> root = query.from(getDomainClass());
     specificationFactory.create(plan).toPredicate(root, query, builder);
     applyProjection(plan, builder, root, query, resultType);
-    applySort(plan, pageable, builder, root, query);
+    applySort(sort, builder, root, query);
 
     TypedQuery<P> typedQuery = entityManager.createQuery(query);
     if (pageable != null) {
@@ -505,18 +524,10 @@ public class SpecificationRepositoryImpl<T, ID extends Serializable>
         builder, aggregateSelection.function(), aggregateSelection.field(), path);
   }
 
-  private void applySort(
-      QueryPlan<T> plan,
-      Pageable pageable,
-      CriteriaBuilder builder,
-      Root<T> root,
-      CriteriaQuery<?> query) {
-    if (pageable != null && pageable.getSort().isSorted()) {
-      query.orderBy(QueryUtils.toOrders(pageable.getSort(), root, builder));
-      return;
-    }
-    if (plan.sort().isSorted()) {
-      query.orderBy(QueryUtils.toOrders(plan.sort(), root, builder));
+  private static void applySort(
+      Sort sort, CriteriaBuilder builder, Root<?> root, CriteriaQuery<?> query) {
+    if (sort.isSorted()) {
+      query.orderBy(QueryUtils.toOrders(sort, root, builder));
     }
   }
 }

@@ -576,6 +576,20 @@ The policy is per-query, so each endpoint can define its own restrictions. Witho
 code. HTTP endpoints resolved with `@FilterableQuery` are the opposite: they deny every field that
 is not declared (see [Deny by default](#deny-by-default)).
 
+The sort of a `Pageable` is client input too, and is checked the same way. When a sorted `Pageable`
+is passed to `findAll(plan, pageable)`, `findSlice(plan, pageable)`, `findAllProjected(plan,
+pageable)`, `findSliceProjected(plan, pageable)` or the fluent `findAll(pageable)` /
+`findSlice(pageable)`, each of its properties must be sortable under the plan's policy, or the call
+throws `DisallowedFieldException` (usage `sorting`) before any SQL runs. An unsorted `Pageable`
+leaves the plan sort in place, which is checked as before.
+
+```java
+// Throws: "Field 'passwordHash' is not allowed for sorting"
+userRepository.query()
+    .allowedFields(policy)
+    .findAll(PageRequest.of(0, 20, Sort.by("passwordHash")));
+```
+
 The policy guards **client input**, not the whole query. A plan keeps its conditions in two parts,
 combined with AND when the query runs:
 
@@ -879,6 +893,12 @@ client attempting to filter or sort by a non-whitelisted field receives a `Disal
 The resolver checks the request's filters and sort while it resolves the argument, before the
 handler runs, so the exception reaches your `@ExceptionHandler` unwrapped. The plan keeps the policy
 and is checked again when it runs.
+
+Passing the `Pageable` unchanged is safe: Spring Data builds its sort from the same request, and the
+repository checks that sort against the plan's policy when the query runs (see
+[Field Whitelisting](#field-whitelisting)). That check happens inside the repository, so a call
+through the repository proxy throws `InvalidDataAccessApiUsageException` with the
+`DisallowedFieldException` as its cause (see [Error Handling](#error-handling)).
 
 #### Deny by default
 

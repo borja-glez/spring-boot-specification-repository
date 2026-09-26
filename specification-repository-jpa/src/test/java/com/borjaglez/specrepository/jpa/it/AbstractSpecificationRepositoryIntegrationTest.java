@@ -2,6 +2,7 @@ package com.borjaglez.specrepository.jpa.it;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.assertj.core.api.Assertions.tuple;
 
 import java.math.BigDecimal;
@@ -1546,6 +1547,149 @@ abstract class AbstractSpecificationRepositoryIntegrationTest {
                     .findAll())
         .isInstanceOf(DisallowedFieldException.class)
         .hasMessage("Field 'status' is not allowed for sorting");
+  }
+
+  // -- The Pageable sort is client input too: the policy checks it --
+
+  private static final AllowedFieldsPolicy NAME_ONLY_POLICY =
+      AllowedFieldsPolicy.of(Set.of("name"), Set.of("name"));
+
+  private static final PageRequest PAGE_SORTED_BY_STATUS = PageRequest.of(0, 5, Sort.by("status"));
+
+  /**
+   * The repository proxy translates the exception of a direct call into an {@link
+   * InvalidDataAccessApiUsageException}; the fluent query calls the repository itself and throws it
+   * as is. Both carry the {@link DisallowedFieldException}.
+   */
+  private static void assertDisallowedSortOnStatus(
+      org.assertj.core.api.ThrowableAssert.ThrowingCallable call) {
+    Throwable thrown = catchThrowable(call);
+    Throwable reason =
+        thrown instanceof InvalidDataAccessApiUsageException ? thrown.getCause() : thrown;
+    assertThat(reason)
+        .isInstanceOfSatisfying(
+            DisallowedFieldException.class,
+            exception -> {
+              assertThat(exception.field()).isEqualTo("status");
+              assertThat(exception.usage()).isEqualTo("sorting");
+            });
+  }
+
+  @Test
+  void shouldRejectDisallowedPageableSortInFindAll() {
+    QueryPlan<TestCustomer> plan = repository.query().allowedFields(NAME_ONLY_POLICY).plan();
+
+    assertDisallowedSortOnStatus(() -> repository.findAll(plan, PAGE_SORTED_BY_STATUS));
+  }
+
+  @Test
+  void shouldRejectDisallowedPageableSortInFindSlice() {
+    QueryPlan<TestCustomer> plan = repository.query().allowedFields(NAME_ONLY_POLICY).plan();
+
+    assertDisallowedSortOnStatus(() -> repository.findSlice(plan, PAGE_SORTED_BY_STATUS));
+  }
+
+  @Test
+  void shouldRejectDisallowedPageableSortInFindAllProjected() {
+    QueryPlan<TestCustomer> plan =
+        repository
+            .query()
+            .allowedFields(NAME_ONLY_POLICY)
+            .select("name")
+            .selectInto(NameOnlyRecord.class)
+            .plan();
+
+    assertDisallowedSortOnStatus(() -> repository.findAllProjected(plan, PAGE_SORTED_BY_STATUS));
+    assertDisallowedSortOnStatus(() -> repository.findAll(plan, PAGE_SORTED_BY_STATUS));
+  }
+
+  @Test
+  void shouldRejectDisallowedPageableSortInFindSliceProjected() {
+    QueryPlan<TestCustomer> plan =
+        repository
+            .query()
+            .allowedFields(NAME_ONLY_POLICY)
+            .select("name")
+            .selectInto(NameOnlyRecord.class)
+            .plan();
+
+    assertDisallowedSortOnStatus(() -> repository.findSliceProjected(plan, PAGE_SORTED_BY_STATUS));
+    assertDisallowedSortOnStatus(() -> repository.findSlice(plan, PAGE_SORTED_BY_STATUS));
+  }
+
+  @Test
+  void shouldRejectDisallowedPageableSortOnTheFluentPath() {
+    assertDisallowedSortOnStatus(
+        () -> repository.query().allowedFields(NAME_ONLY_POLICY).findAll(PAGE_SORTED_BY_STATUS));
+    assertDisallowedSortOnStatus(
+        () -> repository.query().allowedFields(NAME_ONLY_POLICY).findSlice(PAGE_SORTED_BY_STATUS));
+    assertDisallowedSortOnStatus(
+        () ->
+            repository
+                .query()
+                .allowedFields(NAME_ONLY_POLICY)
+                .select("name")
+                .selectInto(NameOnlyRecord.class)
+                .findAll(PAGE_SORTED_BY_STATUS));
+    assertDisallowedSortOnStatus(
+        () ->
+            repository
+                .query()
+                .allowedFields(NAME_ONLY_POLICY)
+                .select("name")
+                .selectInto(NameOnlyRecord.class)
+                .findSlice(PAGE_SORTED_BY_STATUS));
+  }
+
+  @Test
+  void shouldRejectAPageableSortOnAnAssociationOutsideThePolicy() {
+    assertThatThrownBy(
+            () ->
+                repository
+                    .query()
+                    .allowedFields(NAME_ONLY_POLICY)
+                    .findAll(PageRequest.of(0, 5, Sort.by("name", "profile.city"))))
+        .isInstanceOfSatisfying(
+            DisallowedFieldException.class,
+            exception -> assertThat(exception.field()).isEqualTo("profile.city"));
+  }
+
+  @Test
+  void shouldApplyAnAllowedPageableSortOverThePlanSort() {
+    Page<TestCustomer> page =
+        repository
+            .query()
+            .allowedFields(NAME_ONLY_POLICY)
+            .sort(Sort.by(Sort.Direction.ASC, "name"))
+            .findAll(PageRequest.of(0, 2, Sort.by(Sort.Direction.DESC, "name")));
+
+    assertThat(page.getContent())
+        .extracting(TestCustomer::getName)
+        .containsExactly("Lucia", "John");
+  }
+
+  @Test
+  void shouldKeepValidatingThePlanSortWhenThePageableIsUnsorted() {
+    assertDisallowedSortOnStatus(
+        () ->
+            repository
+                .query()
+                .allowedFields(NAME_ONLY_POLICY)
+                .sort(Sort.by("status"))
+                .findAll(PageRequest.of(0, 5)));
+  }
+
+  @Test
+  void shouldAcceptAnyPageableSortWithAnAllowAllPolicy() {
+    Page<TestCustomer> page =
+        repository
+            .query()
+            .where("status", Operators.IS_NOT_NULL, null)
+            .findAll(PageRequest.of(0, 5, Sort.by("status", "name").and(Sort.by("profile.city"))));
+
+    assertThat(page.getContent())
+        .extracting(TestCustomer::getName)
+        .containsExactly("Borja", "Lucia", "John");
   }
 
   // -- Server conditions: the policy guards the client input only --
