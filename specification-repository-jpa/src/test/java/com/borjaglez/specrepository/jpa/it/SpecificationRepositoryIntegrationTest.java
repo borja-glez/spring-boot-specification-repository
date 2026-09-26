@@ -821,6 +821,50 @@ class SpecificationRepositoryIntegrationTest {
     assertThat(rows.get(0).get("customers")).isEqualTo(2L);
   }
 
+  // -- Element collections of basic values --
+
+  @Test
+  void shouldFilterByElementOfBasicCollection() {
+    repository.save(new TestCustomer("Tagged", "ACTIVE", null).tagged("vip", "newsletter"));
+    repository.save(new TestCustomer("Other", "ACTIVE", null).tagged("newsletter"));
+
+    List<TestCustomer> vips = repository.query().where("tags", Operators.EQUALS, "vip").findAll();
+
+    assertThat(vips).extracting(TestCustomer::getName).containsExactly("Tagged");
+  }
+
+  @Test
+  void shouldFilterByAnyElementOfBasicCollection() {
+    repository.save(new TestCustomer("Tagged", "ACTIVE", null).tagged("vip", "newsletter"));
+    repository.save(new TestCustomer("Other", "ACTIVE", null).tagged("newsletter"));
+
+    long count = repository.query().where("tags", Operators.IN, List.of("vip", "beta")).count();
+
+    assertThat(count).isEqualTo(1);
+  }
+
+  @Test
+  void shouldCheckEmptinessOfBasicCollection() {
+    repository.save(new TestCustomer("Tagged", "ACTIVE", null).tagged("vip"));
+
+    long untagged = repository.query().where("tags", Operators.IS_EMPTY, null).count();
+    long tagged = repository.query().where("tags", Operators.IS_NOT_EMPTY, null).count();
+
+    assertThat(untagged).isEqualTo(4);
+    assertThat(tagged).isEqualTo(1);
+  }
+
+  @Test
+  void shouldStillTreatAnEntityCollectionAsAWholeWhenItIsTheLastSegment() {
+    TestCustomer withOrder = new TestCustomer("Buyer", "ACTIVE", null);
+    withOrder.addOrder(new TestOrder(BigDecimal.TEN, "PAID", false, withOrder));
+    repository.save(withOrder);
+
+    long withoutOrders = repository.query().where("orders", Operators.IS_EMPTY, null).count();
+
+    assertThat(withoutOrders).isEqualTo(4);
+  }
+
   // -- findAll and count with QueryPlan directly --
 
   @Test

@@ -328,4 +328,37 @@ class PathResolverTest {
 
   /** Helper interface that combines Fetch and From for mocking nested fetches. */
   interface FetchFrom extends Fetch<Object, Object>, From<Object, Object> {}
+
+  @Test
+  @SuppressWarnings("unchecked")
+  void shouldNotJoinAnEntityCollectionWhenItIsTheLastSegment() {
+    PluralAttribute<?, ?, ?> ordersAttr = mock(PluralAttribute.class);
+    doReturn(ordersAttr).when(entityType).getAttribute("orders");
+    doReturn(true).when(ordersAttr).isAssociation();
+    jakarta.persistence.metamodel.Type<?> elementType =
+        mock(jakarta.persistence.metamodel.Type.class);
+    doReturn(jakarta.persistence.metamodel.Type.PersistenceType.ENTITY)
+        .when(elementType)
+        .getPersistenceType();
+    doReturn(elementType).when(ordersAttr).getElementType();
+    Path<?> ordersPath = mock(Path.class);
+    doReturn(ordersPath).when(root).get("orders");
+
+    Path<?> result = pathResolver.resolve(root, registry, "orders", JoinMode.LEFT);
+
+    assertThat(result).isSameAs(ordersPath);
+  }
+
+  @Test
+  void shouldNotJoinASingularAssociationWhenItIsTheLastSegment() {
+    SingularAttribute<?, ?> profileAttr = mock(SingularAttribute.class);
+    doReturn(profileAttr).when(entityType).getAttribute("profile");
+    doReturn(true).when(profileAttr).isAssociation();
+    Path<?> profilePath = mock(Path.class);
+    doReturn(profilePath).when(root).get("profile");
+
+    Path<?> result = pathResolver.resolve(root, registry, "profile", JoinMode.LEFT);
+
+    assertThat(result).isSameAs(profilePath);
+  }
 }

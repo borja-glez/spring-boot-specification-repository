@@ -2,6 +2,7 @@ package com.borjaglez.specrepository.jpa.support;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 import jakarta.persistence.criteria.CommonAbstractCriteria;
 import jakarta.persistence.criteria.CriteriaBuilder;
@@ -38,6 +39,11 @@ import com.borjaglez.specrepository.jpa.spi.OperatorContext;
 public class QueryPlanSpecificationFactory {
   private final OperatorRegistry operatorRegistry;
   private final ValueConversionService valueConversionService;
+
+  /** Operators that test the collection itself, not its elements. */
+  private static final Set<FilterOperator> WHOLE_COLLECTION_OPERATORS =
+      Set.of(Operators.IS_EMPTY, Operators.IS_NOT_EMPTY);
+
   private final PathResolver pathResolver;
 
   public QueryPlanSpecificationFactory(
@@ -225,7 +231,13 @@ public class QueryPlanSpecificationFactory {
         continue;
       }
       PredicateCondition predicateCondition = (PredicateCondition) queryCondition;
-      Path<?> path = resolvePath(from, fromType, registry, predicateCondition.field());
+      Path<?> path =
+          resolvePath(
+              from,
+              fromType,
+              registry,
+              predicateCondition.field(),
+              !WHOLE_COLLECTION_OPERATORS.contains(predicateCondition.operator()));
       Object convertedValue =
           valueConversionService.convert(
               predicateCondition.value(), path.getJavaType(), predicateCondition.operator());
@@ -400,6 +412,18 @@ public class QueryPlanSpecificationFactory {
 
   private Path<?> resolvePath(
       From<?, ?> from, ManagedType<?> fromType, AssociationRegistry registry, String field) {
+    return resolvePath(from, fromType, registry, field, true);
+  }
+
+  private Path<?> resolvePath(
+      From<?, ?> from,
+      ManagedType<?> fromType,
+      AssociationRegistry registry,
+      String field,
+      boolean joinBasicCollections) {
+    if (!joinBasicCollections) {
+      return pathResolver.resolve(from, fromType, registry, field, JoinMode.LEFT, false);
+    }
     if (from instanceof Root<?> rootFrom) {
       return pathResolver.resolve(rootFrom, registry, field, JoinMode.LEFT);
     }
