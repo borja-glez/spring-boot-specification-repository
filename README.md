@@ -17,6 +17,7 @@ Extensible Spring Data JPA query library with a fluent DSL and native-friendly a
 - Per-query field whitelisting for secure API exposure (`AllowedFieldsPolicy`)
 - Pluggable operators, predicate factories, converters, and dialect extensions
 - GraalVM-aware path resolution based on JPA metamodel metadata instead of reflection-heavy lookup
+  (`selectInto(...)` DTOs need a reflection hint in a native image, see [GraalVM Native Image](#graalvm-native-image))
 - Spring Boot 3 and Spring Boot 4 starter modules
 - 100% JaCoCo coverage enforced (no exclusions)
 - Testcontainers-backed integration coverage and runnable demo applications
@@ -142,7 +143,9 @@ Projection behavior:
 - one aggregate function returns a scalar value at runtime (for example `Optional<Double>` from `avg(...)`)
 - multiple selected fields return `Object[]` rows at runtime
 - grouped aggregate queries can combine `select(...)` and aggregate functions, returning `Object[]` rows at runtime
-- constructor-based DTO and record projections are supported through `selectInto(...)`
+- constructor-based DTO and record projections are supported through `selectInto(...)`; in a GraalVM
+  native image the DTO constructors must be registered for reflection (see
+  [GraalVM Native Image](#graalvm-native-image))
 - `select(...)` and/or aggregate selection methods must be called before `selectInto(...)`
 - projected wrappers only expose terminal operations plus plan inspection; no further mutation is available after `selectInto(...)`
 - fetch joins are intended for entity loading and should not be combined with projections
@@ -573,7 +576,9 @@ record ProductSummary(String name, String categoryName) {}
 - one aggregate function returns a scalar value at runtime
 - multiple selected fields return `Object[]` rows at runtime
 - grouped `select(...)` + aggregate combinations return `Object[]` rows at runtime
-- `selectInto(...)` maps the current selection list into a constructor-based DTO or record
+- `selectInto(...)` maps the current selection list into a constructor-based DTO or record; the JPA
+  provider calls that constructor by reflection, so native images need a hint for the type (see
+  [GraalVM Native Image](#graalvm-native-image))
 - `groupBy(...)` is applied to the generated `CriteriaQuery`
 - `groupBy(...)` does not add its fields to the result rows; select them with `select(...)`, in the order you want the columns
 - grouped `count()` and grouped aggregate queries honor the same filters as `findAll()`
@@ -824,6 +829,58 @@ Postman collections are available in `examples/`:
 
 - `Specification-Repository-Demo.postman_collection.json` (H2 demos)
 - `Specification-Repository-Postgres-Demo.postman_collection.json` (PostgreSQL demos)
+
+## GraalVM Native Image
+
+Specification repositories run in a GraalVM native image without extra hints. Repositories, the
+query DSL, subqueries, `select(...)` without `selectInto(...)`, aggregate functions and
+`findAllGrouped()` resolve paths through the JPA metamodel and need no reflection registration.
+The library itself registers no runtime hints (no `RuntimeHintsRegistrar`, no `aot.factories`).
+
+`selectInto(Dto.class)` is the exception. The repository builds the projection with
+`CriteriaBuilder.construct(Dto.class, ...)`, and the JPA provider calls the DTO constructor by
+reflection. In a native image every `selectInto(...)` projection type must have its constructors
+registered for reflection, unless something else already registers it. A type that is also a Spring
+MVC controller return type, for example, already gets binding hints from Spring. A projection used
+only internally does not, and it works on the JVM but fails at runtime in a native image when the
+provider instantiates it.
+
+```java
+record RevenueByDay(LocalDate day, BigDecimal revenue) {}   // used only internally
+
+orders.query().groupBy("day").select("day").sumAs("revenue", "total")
+    .selectInto(RevenueByDay.class).findAll();
+```
+
+Register the type with `@RegisterReflectionForBinding` on a configuration class:
+
+```java
+@Configuration(proxyBeanMethods = false)
+@RegisterReflectionForBinding(RevenueByDay.class)
+class ProjectionHintsConfiguration {}
+```
+
+Or register its constructors with a `RuntimeHintsRegistrar` imported with `@ImportRuntimeHints`:
+
+```java
+@Configuration(proxyBeanMethods = false)
+@ImportRuntimeHints(ProjectionHints.class)
+class ProjectionHintsConfiguration {}
+
+class ProjectionHints implements RuntimeHintsRegistrar {
+
+  @Override
+  public void registerHints(RuntimeHints hints, ClassLoader classLoader) {
+    hints.reflection()
+        .registerType(RevenueByDay.class, MemberCategory.INVOKE_DECLARED_CONSTRUCTORS);
+  }
+}
+```
+
+The same applies to Spring Boot 3 and Spring Boot 4. Binding hints (the ones Spring registers for
+controller return types and the ones `@RegisterReflectionForBinding` registers) are the variant
+validated in a native image; the `RuntimeHintsRegistrar` variant is the lower-level equivalent and
+has not been exercised in a native image build.
 
 ## Configuration
 
