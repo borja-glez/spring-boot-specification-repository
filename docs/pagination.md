@@ -65,9 +65,25 @@ Use it when:
 `findSlice` works for the same shapes as `findAll(Pageable)`:
 
 - entity results,
-- DTO and record projections via `selectInto(...)`,
-- field projections via `select(...)`,
-- aggregate / `groupBy` queries.
+- DTO and record projections via `selectInto(...)`, including selected fields
+  and aggregate / `groupBy` queries.
+
+A query with `select(...)` or aggregate selections and no `selectInto(...)`
+returns rows, not entities, so `findAll(Pageable)` and `findSlice(Pageable)`
+reject it with `IllegalStateException`. Page such a query by mapping it with
+`selectInto(...)`:
+
+```java
+record StatusCount(String status, Long customers) {}
+
+Page<StatusCount> page = customerRepository.query()
+    .groupBy("status")
+    .sort(Sort.by("status"))
+    .select("status")
+    .count("id")
+    .selectInto(StatusCount.class)
+    .findAll(PageRequest.of(0, 20));
+```
 
 ## Pages that fetch a collection
 

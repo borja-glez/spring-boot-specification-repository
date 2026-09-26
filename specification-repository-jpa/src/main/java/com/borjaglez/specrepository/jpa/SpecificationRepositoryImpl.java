@@ -86,10 +86,20 @@ public class SpecificationRepositoryImpl<T, ID extends Serializable>
     if (plan.projectionType() != null) {
       return (List<T>) findAllProjected(plan);
     }
-    if (plan.hasSelections()) {
-      return (List<T>) executeProjectedQuery(plan, null);
-    }
+    requireNoSelections(plan);
     return fetchEntities(plan, 0);
+  }
+
+  /**
+   * A plan that selects fields or aggregates without a projection type returns rows, not entities:
+   * handing them out typed as {@code T} would only fail later, with a {@link ClassCastException}.
+   */
+  private static void requireNoSelections(QueryPlan<?> plan) {
+    if (plan.hasSelections()) {
+      throw new IllegalStateException(
+          "The query selects fields or aggregates, so it returns rows, not entities:"
+              + " read it with findRows() or findRow(), or map it with selectInto(...)");
+    }
   }
 
   /** The entities of the plan, at most {@code limit} of them ({@code 0}: all). */
@@ -262,10 +272,7 @@ public class SpecificationRepositoryImpl<T, ID extends Serializable>
     if (plan.projectionType() != null) {
       return (Page<T>) findAllProjected(plan, pageable);
     }
-    if (plan.hasSelections()) {
-      List<?> content = executeProjectedQuery(plan, pageable, 0);
-      return new PageImpl<>((List<T>) content, pageable, countSelectedRows(plan));
-    }
+    requireNoSelections(plan);
     List<T> content = fetchEntityPage(plan, pageable, 0);
     return new PageImpl<>(content, pageable, count(plan));
   }
@@ -282,10 +289,7 @@ public class SpecificationRepositoryImpl<T, ID extends Serializable>
     if (plan.projectionType() != null) {
       return (Slice<T>) findSliceProjected(plan, pageable);
     }
-    if (plan.hasSelections()) {
-      List<?> fetched = executeProjectedQuery(plan, pageable, 1);
-      return toSlice((List<T>) fetched, pageable);
-    }
+    requireNoSelections(plan);
     List<T> fetched = fetchEntityPage(plan, pageable, 1);
     return toSlice(fetched, pageable);
   }
@@ -315,9 +319,8 @@ public class SpecificationRepositoryImpl<T, ID extends Serializable>
     List<T> results;
     if (plan.projectionType() != null) {
       results = (List<T>) executeProjectedQuery(plan, null, requiredProjectionType(plan), 1);
-    } else if (plan.hasSelections()) {
-      results = (List<T>) executeProjectedQuery(plan, null, 1);
     } else {
+      requireNoSelections(plan);
       results = fetchEntities(plan, 1);
     }
     return results.stream().findFirst();
@@ -330,10 +333,26 @@ public class SpecificationRepositoryImpl<T, ID extends Serializable>
   }
 
   @Override
+  public List<GroupedRow> findRows(QueryPlan<T> plan) {
+    return readRows(plan, "findRows", 0);
+  }
+
+  @Override
+  public Optional<GroupedRow> findRow(QueryPlan<T> plan) {
+    // Only the first row is read: the database stops there instead of sending every match.
+    return readRows(plan, "findRow", 1).stream().findFirst();
+  }
+
+  @Override
   public List<GroupedRow> findAllGrouped(QueryPlan<T> plan) {
+    return readRows(plan, "findAllGrouped", 0);
+  }
+
+  /** The selected columns of the plan as rows, at most {@code limit} of them ({@code 0}: all). */
+  private List<GroupedRow> readRows(QueryPlan<T> plan, String method, int limit) {
     if (!plan.hasSelections()) {
       throw new IllegalStateException(
-          "findAllGrouped requires at least one select() or aggregate selection");
+          method + " requires at least one select() or aggregate selection");
     }
     List<String> columns = new ArrayList<>();
     for (com.borjaglez.specrepository.core.Selection selection : plan.selections()) {
@@ -343,7 +362,7 @@ public class SpecificationRepositoryImpl<T, ID extends Serializable>
         columns.add(((AggregateSelection) selection).columnName());
       }
     }
-    List<?> rawRows = executeProjectedQuery(plan, null);
+    List<?> rawRows = executeRowQuery(plan, limit);
     List<GroupedRow> rows = new ArrayList<>(rawRows.size());
     boolean singleColumn = plan.selections().size() == 1;
     for (Object raw : rawRows) {
@@ -387,11 +406,7 @@ public class SpecificationRepositoryImpl<T, ID extends Serializable>
     return entityManager.createQuery(query).getResultList().size();
   }
 
-  private List<?> executeProjectedQuery(QueryPlan<T> plan, Pageable pageable) {
-    return executeProjectedQuery(plan, pageable, 0);
-  }
-
-  private List<?> executeProjectedQuery(QueryPlan<T> plan, Pageable pageable, int extraLimit) {
+  private List<?> executeRowQuery(QueryPlan<T> plan, int limit) {
     CriteriaBuilder builder = entityManager.getCriteriaBuilder();
     CriteriaQuery<?> query =
         plan.selections().size() == 1
@@ -400,12 +415,11 @@ public class SpecificationRepositoryImpl<T, ID extends Serializable>
     Root<T> root = query.from(getDomainClass());
     specificationFactory.create(plan).toPredicate(root, query, builder);
     applyProjection(plan, builder, root, query);
-    applySort(plan, pageable, builder, root, query);
+    applySort(plan, null, builder, root, query);
 
     TypedQuery<?> typedQuery = entityManager.createQuery(query);
-    if (pageable != null) {
-      typedQuery.setFirstResult((int) pageable.getOffset());
-      typedQuery.setMaxResults(pageable.getPageSize() + extraLimit);
+    if (limit > 0) {
+      typedQuery.setMaxResults(limit);
     }
     return typedQuery.getResultList();
   }

@@ -12,6 +12,7 @@ import com.borjaglez.specrepository.core.GroupedRow;
 import com.borjaglez.specrepository.core.QueryPlan;
 import com.borjaglez.specrepository.examples.boot3.entity.Product;
 import com.borjaglez.specrepository.examples.boot3.service.ProductAggregateSummaryResponse;
+import com.borjaglez.specrepository.examples.boot3.service.ProductNamePriceResponse;
 import com.borjaglez.specrepository.examples.boot3.service.ProductService;
 import com.borjaglez.specrepository.http.spring.FilterableQuery;
 
@@ -114,12 +115,12 @@ public class ProductController {
   }
 
   @GetMapping("/names")
-  public List<?> findProductNames() {
+  public List<String> findProductNames() {
     return productService.findProductNames();
   }
 
   @GetMapping("/name-and-price")
-  public List<?> findProductNameAndPrice(@RequestParam String status) {
+  public List<ProductNamePriceResponse> findProductNameAndPrice(@RequestParam String status) {
     return productService.findProductNameAndPrice(status);
   }
 

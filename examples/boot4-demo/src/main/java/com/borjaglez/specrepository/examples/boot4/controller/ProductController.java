@@ -8,6 +8,7 @@ import org.springframework.web.bind.annotation.*;
 
 import com.borjaglez.specrepository.examples.boot4.entity.Product;
 import com.borjaglez.specrepository.examples.boot4.service.ProductAggregateSummaryResponse;
+import com.borjaglez.specrepository.examples.boot4.service.ProductNamePriceResponse;
 import com.borjaglez.specrepository.examples.boot4.service.ProductService;
 
 @RestController
@@ -109,12 +110,12 @@ public class ProductController {
   }
 
   @GetMapping("/names")
-  public List<?> findProductNames() {
+  public List<String> findProductNames() {
     return productService.findProductNames();
   }
 
   @GetMapping("/name-and-price")
-  public List<?> findProductNameAndPrice(@RequestParam String status) {
+  public List<ProductNamePriceResponse> findProductNameAndPrice(@RequestParam String status) {
     return productService.findProductNameAndPrice(status);
   }
 

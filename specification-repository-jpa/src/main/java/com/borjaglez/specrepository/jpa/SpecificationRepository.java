@@ -43,5 +43,23 @@ public interface SpecificationRepository<T, ID>
 
   long count(QueryPlan<T> plan);
 
+  /**
+   * The selected fields and aggregates of the plan, one {@link GroupedRow} per result row. A plan
+   * with selections and no projection type is read with this method or {@link #findRow(QueryPlan)}:
+   * the entity methods ({@code findAll}, {@code findSlice}, {@code findOne}) reject it.
+   *
+   * @throws IllegalStateException if the plan has no selections
+   */
+  List<GroupedRow> findRows(QueryPlan<T> plan);
+
+  /**
+   * The first row of {@link #findRows(QueryPlan)}, reading only that row. A single aggregate
+   * without {@code groupBy} returns exactly one row, holding its value.
+   *
+   * @throws IllegalStateException if the plan has no selections
+   */
+  Optional<GroupedRow> findRow(QueryPlan<T> plan);
+
+  /** Same as {@link #findRows(QueryPlan)}, named for {@code groupBy} reports. */
   List<GroupedRow> findAllGrouped(QueryPlan<T> plan);
 }

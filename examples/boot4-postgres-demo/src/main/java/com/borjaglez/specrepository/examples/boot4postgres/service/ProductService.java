@@ -10,6 +10,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.borjaglez.specrepository.core.GroupedRow;
 import com.borjaglez.specrepository.core.Operators;
 import com.borjaglez.specrepository.core.QueryPlan;
 import com.borjaglez.specrepository.examples.boot4postgres.entity.Product;
@@ -145,31 +146,31 @@ public class ProductService {
                 .query()
                 .where("status", Operators.EQUALS, "ACTIVE")
                 .sum("price")
-                .findOne()),
+                .findRow()),
         toDouble(
             productRepository
                 .query()
                 .where("status", Operators.EQUALS, "ACTIVE")
                 .avg("price")
-                .findOne()),
+                .findRow()),
         toBigDecimal(
             productRepository
                 .query()
                 .where("status", Operators.EQUALS, "ACTIVE")
                 .min("price")
-                .findOne()),
+                .findRow()),
         toBigDecimal(
             productRepository
                 .query()
                 .where("status", Operators.EQUALS, "ACTIVE")
                 .max("price")
-                .findOne()),
+                .findRow()),
         toLong(
             productRepository
                 .query()
                 .where("status", Operators.EQUALS, "ACTIVE")
                 .count("description")
-                .findOne()));
+                .findRow()));
   }
 
   /** Find products with null description. */
@@ -214,23 +215,27 @@ public class ProductService {
         .findAll();
   }
 
-  /** Select projection: product names only. */
-  public List<?> findProductNames() {
+  /** Select projection: product names only, read as rows. */
+  public List<String> findProductNames() {
     return productRepository
         .query()
         .where("status", Operators.EQUALS, "ACTIVE")
         .sort(Sort.by("name"))
         .select("name")
-        .findAll();
+        .findRows()
+        .stream()
+        .map(row -> (String) row.get("name"))
+        .toList();
   }
 
-  /** Multi-field projection: name and price. */
-  public List<?> findProductNameAndPrice(String status) {
+  /** Multi-field projection: name and price, mapped into a record. */
+  public List<ProductNamePriceResponse> findProductNameAndPrice(String status) {
     return productRepository
         .query()
         .where("status", Operators.EQUALS, status)
         .sort(Sort.by("price"))
         .select("name", "price")
+        .selectInto(ProductNamePriceResponse.class)
         .findAll();
   }
 
@@ -248,15 +253,15 @@ public class ProductService {
     return productRepository.query().groupBy("category.name").count();
   }
 
-  private static BigDecimal toBigDecimal(Optional<?> value) {
-    return value.map(BigDecimal.class::cast).orElse(null);
+  private static BigDecimal toBigDecimal(Optional<GroupedRow> row) {
+    return row.map(value -> (BigDecimal) value.get(0)).orElse(null);
   }
 
-  private static Double toDouble(Optional<?> value) {
-    return value.map(Double.class::cast).orElse(null);
+  private static Double toDouble(Optional<GroupedRow> row) {
+    return row.map(value -> (Double) value.get(0)).orElse(null);
   }
 
-  private static long toLong(Optional<?> value) {
-    return value.map(Long.class::cast).orElse(0L);
+  private static long toLong(Optional<GroupedRow> row) {
+    return row.map(value -> (Long) value.get(0)).orElse(0L);
   }
 }

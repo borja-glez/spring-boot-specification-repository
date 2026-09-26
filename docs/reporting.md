@@ -13,7 +13,7 @@ fluent query builder.
 
 Several aggregate selections can be combined in the same query. This was
 already supported through the projection pipeline; the new aliasing API makes
-the result columns easier to refer to from `having` and `findAllGrouped()`.
+the result columns easier to refer to from `having` and `findRows()`.
 
 ```java
 List<GroupedRow> rows = customerRepository.query()
@@ -26,7 +26,7 @@ List<GroupedRow> rows = customerRepository.query()
     .countAs("customers", "id")
     .minAs("youngest", "age")
     .maxAs("oldest", "age")
-    .findAllGrouped();
+    .findRows();
 ```
 
 The aliased variants (`sumAs`, `avgAs`, `minAs`, `maxAs`, `countAs`) take an
@@ -36,11 +36,42 @@ derived as `FUNCTION_field` (for example `SUM_age`).
 
 For full control, use `aggregate(AggregateFunction.SUM, "age", "totalAge")`.
 
-## `findAllGrouped()` and `GroupedRow`
+## `findRows()`, `findRow()` and `GroupedRow`
 
-`findAllGrouped()` is a terminal method that returns each result row as a
-`GroupedRow`. A `GroupedRow` carries both the column names (from the
-selections) and their values, and supports lookup by index or by name:
+A query with `select(...)` or aggregate selections returns rows, not entities.
+Read them with one of the row terminals, or map them into a type with
+`selectInto(...)`:
+
+| Terminal | Returns |
+|---|---|
+| `findRows()` | `List<GroupedRow>`, one per result row |
+| `findRow()` | `Optional<GroupedRow>`, the first row only (the database stops there) |
+| `findAllGrouped()` | Same as `findRows()` |
+| `selectInto(Dto.class).findAll()` (and `findAll(Pageable)`, `findSlice`, `findOne`) | the rows mapped into `Dto` |
+
+The repository exposes the same row reads for a prebuilt plan:
+`findRows(QueryPlan)`, `findRow(QueryPlan)` and `findAllGrouped(QueryPlan)`.
+
+The entity terminals (`findAll()`, `findAll(Pageable)`, `findSlice(Pageable)`,
+`findOne()`, and the repository `findAll`, `findSlice` and `findOne` methods
+that take a `QueryPlan`) reject a plan with selections and no `selectInto(...)`
+with an `IllegalStateException` that names these alternatives. Through a
+repository proxy, Spring translates it to `InvalidDataAccessApiUsageException`.
+Rows are never handed out typed as the entity.
+
+A single aggregate without `groupBy(...)` returns exactly one row:
+
+```java
+Number totalAge = (Number) customerRepository.query()
+    .where("status", Operators.IS_NOT_NULL, null)
+    .sumAs("totalAge", "age")
+    .findRow()
+    .map(row -> row.get("totalAge"))
+    .orElse(null);
+```
+
+A `GroupedRow` carries both the column names (from the selections) and their
+values, and supports lookup by index or by name:
 
 ```java
 GroupedRow active = rows.get(0);
@@ -61,8 +92,12 @@ Notes:
 - For `AggregateSelection` the column name is the alias if provided, or
   `FUNCTION_field` (for example `COUNT_id`) otherwise.
 - `GroupedRow.values()` returns a defensive copy of the underlying array.
-- Calling `findAllGrouped()` on a query without any selection throws
-  `IllegalStateException` -- there is nothing meaningful to project.
+- Calling `findRows()`, `findRow()` or `findAllGrouped()` on a query without
+  any selection throws `IllegalStateException` -- there is nothing meaningful
+  to project.
+- A row terminal has no pagination: to page selected fields or aggregates, map
+  them with `selectInto(...)` and use `findAll(Pageable)` or
+  `findSlice(Pageable)` (see [pagination.md](pagination.md)).
 
 If you prefer constructor-based DTOs, the existing `selectInto(MyRecord.class)`
 projection still works and is often a better fit when columns are known at
@@ -84,7 +119,7 @@ List<GroupedRow> bigSpenders = orderRepository.query()
     .countAs("orders", "id")
     .having(AggregateFunction.SUM, "amount", Operators.GREATER_THAN, 1_000)
     .having(AggregateFunction.COUNT, "id", Operators.GREATER_THAN_OR_EQUAL, 5)
-    .findAllGrouped();
+    .findRows();
 
 // each row: [customerId, revenue, orders]
 Object customerId = bigSpenders.get(0).get("customerId");
@@ -135,7 +170,7 @@ List<GroupedRow> rows = orderRepository.query()
     .sumAs("revenue", "amount")
     .countAs("orders", "id")
     .having(AggregateFunction.SUM, "amount", Operators.GREATER_THAN, 100)
-    .findAllGrouped();
+    .findRows();
 
 for (GroupedRow row : rows) {
     System.out.println(
