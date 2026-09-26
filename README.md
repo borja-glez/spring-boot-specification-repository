@@ -796,6 +796,30 @@ public class ProductController {
 `filterableFields` and `sortableFields` are translated into an `AllowedFieldsPolicy`, so any
 client attempting to filter or sort by a non-whitelisted field receives a `DisallowedFieldException`.
 
+`@FilterableQuery` also works as a meta-annotation, so endpoints that expose the same entity can
+share one declaration instead of repeating the field lists:
+
+```java
+@Target(ElementType.PARAMETER)
+@Retention(RetentionPolicy.RUNTIME)
+@FilterableQuery(
+        value = Product.class,
+        filterableFields = {"name", "status", "price"},
+        sortableFields = {"name", "price"})
+public @interface ProductSearch {}
+
+@GetMapping("/filter")
+public Page<Product> filter(@ProductSearch QueryPlan<Product> query, Pageable pageable) { ... }
+
+@GetMapping("/facets")
+public Facets facets(@ProductSearch QueryPlan<Product> query) { ... }
+```
+
+Composition may be nested (add `ElementType.ANNOTATION_TYPE` to the composed annotation's
+`@Target` to meta-annotate it again), and a composed annotation can expose attributes of its own
+with `@AliasFor(annotation = FilterableQuery.class)`, for example a `value()` that sets the entity.
+A `@FilterableQuery` declared directly on the parameter wins over a meta-present one.
+
 `HttpFilterAutoConfiguration` is also registered for the `@WebMvcTest` slice on Spring Boot 3 and
 Spring Boot 4, so controller slice tests resolve `@FilterableQuery QueryPlan<T>` parameters without
 an extra `@ImportAutoConfiguration(HttpFilterAutoConfiguration.class)`. Custom `HttpFilterParser` or

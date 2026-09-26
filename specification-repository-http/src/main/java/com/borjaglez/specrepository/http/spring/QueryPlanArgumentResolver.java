@@ -8,6 +8,8 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 import org.springframework.core.MethodParameter;
+import org.springframework.core.annotation.MergedAnnotation;
+import org.springframework.core.annotation.MergedAnnotations;
 import org.springframework.web.bind.support.WebDataBinderFactory;
 import org.springframework.web.context.request.NativeWebRequest;
 import org.springframework.web.method.support.HandlerMethodArgumentResolver;
@@ -27,7 +29,7 @@ public class QueryPlanArgumentResolver implements HandlerMethodArgumentResolver 
 
   @Override
   public boolean supportsParameter(MethodParameter parameter) {
-    return parameter.hasParameterAnnotation(FilterableQuery.class)
+    return findAnnotation(parameter) != null
         && QueryPlan.class.isAssignableFrom(parameter.getParameterType());
   }
 
@@ -37,10 +39,23 @@ public class QueryPlanArgumentResolver implements HandlerMethodArgumentResolver 
       ModelAndViewContainer mavContainer,
       NativeWebRequest webRequest,
       WebDataBinderFactory binderFactory) {
-    FilterableQuery annotation = parameter.getParameterAnnotation(FilterableQuery.class);
+    FilterableQuery annotation = findAnnotation(parameter);
     Map<String, List<String>> params = extractParams(webRequest);
     AllowedFieldsPolicy policy = buildPolicy(annotation);
     return parser.toQueryPlan(annotation.value(), params, policy);
+  }
+
+  /**
+   * Finds {@link FilterableQuery} directly on the parameter or meta-present on a composed
+   * annotation, merging {@code @AliasFor} overrides. Starts from {@link
+   * MethodParameter#getParameterAnnotations()} so that annotations a handler method inherits from
+   * an interface are honoured as well. A direct declaration wins over meta-present ones.
+   */
+  private FilterableQuery findAnnotation(MethodParameter parameter) {
+    return MergedAnnotations.from(parameter, parameter.getParameterAnnotations())
+        .get(FilterableQuery.class)
+        .synthesize(MergedAnnotation::isPresent)
+        .orElse(null);
   }
 
   private Map<String, List<String>> extractParams(NativeWebRequest webRequest) {
