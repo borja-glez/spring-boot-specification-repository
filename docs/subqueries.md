@@ -125,5 +125,7 @@ inner repository.
 ## GraalVM native image
 
 Subquery translation does not use reflection; path resolution is done via
-the JPA metamodel, which is native-image friendly. No additional hints are
-required beyond what the library already registers.
+the JPA metamodel, which is native-image friendly, so subqueries need no
+reflection hints. The library registers no hints of its own; `selectInto(...)`
+projections do need one, see
+[GraalVM Native Image](../README.md#graalvm-native-image) in the README.
