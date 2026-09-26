@@ -16,6 +16,7 @@ dependencies {
     testImplementation(libs.spring.core)
     testImplementation(libs.spring.boot3.starter.test)
     testImplementation(libs.spring.boot3.starter.data.jpa)
+    testImplementation(project(":specification-repository-test-support"))
     testImplementation(libs.h2)
     testImplementation(libs.testcontainers.junit)
     testImplementation(libs.testcontainers.postgresql)

@@ -19,6 +19,7 @@ This document describes the complete CI/CD pipeline for this project.
 
 **What it does:**
 - Runs `./gradlew quality` (all tests + coverage)
+- The JPA integration suites run on H2 and on PostgreSQL 17 (Testcontainers, needs Docker, available on the runner); see `CONTRIBUTING.md`
 
 **Purpose:** Gate that blocks merging until all tests pass and coverage meets the 100% threshold.
 

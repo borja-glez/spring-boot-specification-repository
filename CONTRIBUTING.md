@@ -8,6 +8,7 @@ Thank you for your interest in contributing to this project! Every contribution 
 
 - **Java 21** (Temurin or any compatible distribution)
 - **Git**
+- **Docker** (optional, needed for the PostgreSQL integration tests)
 
 No additional installation is needed — the project uses the Gradle wrapper (`./gradlew`).
 
@@ -27,6 +28,21 @@ No additional installation is needed — the project uses the Gradle wrapper (`.
 # Run a single test method
 ./gradlew :specification-repository-core:test --tests "com.borjaglez.specrepository.core.QueryPlanBuilderTest.shouldBuildImmutableQueryPlan"
 ```
+
+### JPA integration tests on H2 and PostgreSQL
+
+The JPA integration suites (`AbstractSpecificationRepositoryIntegrationTest`,
+`AbstractExistsAndSubqueryIntegrationTest` in `specification-repository-jpa`) run twice: on the
+embedded H2 database (`*IntegrationTest`) and on PostgreSQL 17 through Testcontainers
+(`*PostgresIntegrationTest`). Add new database-neutral tests to the abstract suite so they run on
+both.
+
+- The PostgreSQL classes need Docker. Without it they are skipped, and the H2 run alone still
+  reaches the 100% coverage gate. CI has Docker and runs both.
+- All PostgreSQL classes use `@PostgresIntegrationTest`, which shares one container per test JVM
+  (with the `unaccent` extension created) and one Spring context.
+- A test that cannot run on one database is overridden in that database's subclass with
+  `@Test @Disabled("<database>: <reason>")`.
 
 ## Code Style
 
