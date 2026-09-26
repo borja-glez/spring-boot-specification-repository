@@ -283,6 +283,65 @@ class SpecificationRepositoryIntegrationTest {
     assertThat(found).isEmpty();
   }
 
+  @Test
+  void shouldReturnAndCountEachCustomerOnceWhenSeveralOfTheirOrdersMatch() {
+    TestCustomer borja =
+        repository.query().where("name", Operators.EQUALS, "Borja").findOne().orElseThrow();
+    borja.getOrders().add(new TestOrder(new java.math.BigDecimal("10.00"), "PAID", false, borja));
+    borja.getOrders().add(new TestOrder(new java.math.BigDecimal("20.00"), "PAID", false, borja));
+    repository.save(borja);
+
+    var plan =
+        com.borjaglez.specrepository.core.SpecificationQueryBuilder.forEntity(TestCustomer.class)
+            .where("orders.status", Operators.EQUALS, "PAID")
+            .build();
+
+    assertThat(repository.findAll(plan)).extracting(TestCustomer::getName).containsExactly("Borja");
+    assertThat(repository.count(plan)).isEqualTo(1);
+    assertThat(repository.findAll(plan, org.springframework.data.domain.PageRequest.of(0, 10)))
+        .extracting(TestCustomer::getName)
+        .containsExactly("Borja");
+  }
+
+  @org.springframework.beans.factory.annotation.Autowired private TestOrderRepository orders;
+
+  @Test
+  void shouldKeepTheRowsOfAProjectionOverACollection() {
+    TestCustomer borja =
+        repository.query().where("name", Operators.EQUALS, "Borja").findOne().orElseThrow();
+    borja.getOrders().add(new TestOrder(new java.math.BigDecimal("10.00"), "PAID", false, borja));
+    borja.getOrders().add(new TestOrder(new java.math.BigDecimal("20.00"), "PAID", false, borja));
+    repository.save(borja);
+
+    List<?> names =
+        repository
+            .query()
+            .select("name")
+            .where("orders.status", Operators.EQUALS, "PAID")
+            .findAll();
+
+    assertThat(names).hasSize(2);
+  }
+
+  @Test
+  void shouldReturnEachRootOnceWhenACollectionIsReachedThroughAnotherAssociation() {
+    TestCustomer borja =
+        repository.query().where("name", Operators.EQUALS, "Borja").findOne().orElseThrow();
+    TestOrder first = new TestOrder(new java.math.BigDecimal("10.00"), "PAID", false, borja);
+    borja.getOrders().add(first);
+    borja.getOrders().add(new TestOrder(new java.math.BigDecimal("20.00"), "PAID", false, borja));
+    repository.save(borja);
+
+    var plan =
+        com.borjaglez.specrepository.core.SpecificationQueryBuilder.forEntity(TestOrder.class)
+            .where("customer.orders.status", Operators.EQUALS, "PAID")
+            .where("total", Operators.EQUALS, new java.math.BigDecimal("10.00"))
+            .build();
+
+    assertThat(orders.findAll(plan)).hasSize(1);
+    assertThat(orders.count(plan)).isEqualTo(1);
+  }
+
   // -- findOne --
 
   @Test

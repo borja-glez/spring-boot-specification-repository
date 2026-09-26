@@ -79,18 +79,39 @@ public class QueryPlanSpecificationFactory {
       applyGrouping(root, query, registry, plan.groupBy());
       applyHaving(root, query, registry, plan.having(), criteriaBuilder);
 
-      if (plan.distinct()) {
-        query.distinct(true);
-      }
-
       Predicate predicate =
           toPredicate(
               plan.rootCondition(), root, root.getModel(), query, criteriaBuilder, registry);
       if (predicate != null) {
         query.where(predicate);
       }
+      if (plan.distinct() || (joinsACollection(root) && countsRoots(plan, query, root))) {
+        query.distinct(true);
+      }
       return predicate;
     };
+  }
+
+  /**
+   * Whether the query returns (or counts) root entities: a join over a collection repeats a root
+   * once per matching element, so those queries need {@code distinct} to return and count each root
+   * once. Projections and grouped queries keep their rows as they are.
+   */
+  private static boolean countsRoots(QueryPlan<?> plan, CriteriaQuery<?> query, Root<?> root) {
+    if (!plan.groupBy().isEmpty()) {
+      return false;
+    }
+    Class<?> resultType = query.getResultType();
+    return resultType.equals(root.getJavaType()) || Long.class.equals(resultType);
+  }
+
+  private static boolean joinsACollection(From<?, ?> from) {
+    for (Join<?, ?> join : from.getJoins()) {
+      if (join.getAttribute().isCollection() || joinsACollection(join)) {
+        return true;
+      }
+    }
+    return false;
   }
 
   private void applyJoins(

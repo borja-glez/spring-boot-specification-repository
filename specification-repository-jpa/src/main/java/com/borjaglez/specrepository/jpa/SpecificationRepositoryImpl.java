@@ -221,7 +221,11 @@ public class SpecificationRepositoryImpl<T, ID extends Serializable>
     CriteriaQuery<Long> query = builder.createQuery(Long.class);
     Root<T> root = query.from(getDomainClass());
     specificationFactory.create(plan).toPredicate(root, query, builder);
-    query.select(plan.distinct() ? builder.countDistinct(root) : builder.count(root));
+    // The specification asks for distinct when it must count each root once; for a count that
+    // means count(distinct root), not a distinct count.
+    boolean distinct = plan.distinct() || query.isDistinct();
+    query.distinct(false);
+    query.select(distinct ? builder.countDistinct(root) : builder.count(root));
     return entityManager.createQuery(query).getSingleResult();
   }
 
