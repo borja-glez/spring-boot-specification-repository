@@ -19,6 +19,7 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Slice;
 import org.springframework.data.domain.SliceImpl;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.repository.query.QueryUtils;
 import org.springframework.data.jpa.repository.support.JpaEntityInformation;
 import org.springframework.data.jpa.repository.support.SimpleJpaRepository;
@@ -88,11 +89,25 @@ public class SpecificationRepositoryImpl<T, ID extends Serializable>
     if (plan.sort().isSorted()) {
       query.orderBy(QueryUtils.toOrders(plan.sort(), root, builder));
     }
+    keepDistinctWorkable(plan, query, plan.sort());
     TypedQuery<T> typedQuery = entityManager.createQuery(query);
     if (limit > 0) {
       typedQuery.setMaxResults(limit);
     }
     return typedQuery.getResultList();
+  }
+
+  /**
+   * The specification asks for {@code distinct} when a filter crosses a collection. Databases such
+   * as PostgreSQL reject {@code SELECT DISTINCT} ordered by a column outside the select list, which
+   * an order on an association is: then the query keeps its repeated roots, as it did before.
+   */
+  private static void keepDistinctWorkable(QueryPlan<?> plan, CriteriaQuery<?> query, Sort sort) {
+    if (!plan.distinct()
+        && query.isDistinct()
+        && sort.stream().anyMatch(order -> order.getProperty().contains("."))) {
+      query.distinct(false);
+    }
   }
 
   @Override
@@ -146,11 +161,11 @@ public class SpecificationRepositoryImpl<T, ID extends Serializable>
     Root<T> root = query.from(getDomainClass());
     specificationFactory.create(plan).toPredicate(root, query, builder);
     query.select(root);
-    if (pageable.getSort().isSorted()) {
-      query.orderBy(QueryUtils.toOrders(pageable.getSort(), root, builder));
-    } else if (plan.sort().isSorted()) {
-      query.orderBy(QueryUtils.toOrders(plan.sort(), root, builder));
+    Sort sort = pageable.getSort().isSorted() ? pageable.getSort() : plan.sort();
+    if (sort.isSorted()) {
+      query.orderBy(QueryUtils.toOrders(sort, root, builder));
     }
+    keepDistinctWorkable(plan, query, sort);
     TypedQuery<T> typedQuery = entityManager.createQuery(query);
     typedQuery.setFirstResult((int) pageable.getOffset());
     typedQuery.setMaxResults(pageable.getPageSize() + extraLimit);

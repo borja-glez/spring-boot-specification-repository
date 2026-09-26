@@ -276,14 +276,6 @@ class SpecificationRepositoryIntegrationTest {
   }
 
   @Test
-  void shouldKeepAnInnerJoinWhenTheSamePathIsFetchedWithALeftJoin() {
-    List<TestCustomer> found = repository.query().innerJoin("orders").leftFetch("orders").findAll();
-
-    // Nobody has orders in the fixtures: the inner join still filters every customer out.
-    assertThat(found).isEmpty();
-  }
-
-  @Test
   void shouldReturnAndCountEachCustomerOnceWhenSeveralOfTheirOrdersMatch() {
     TestCustomer borja =
         repository.query().where("name", Operators.EQUALS, "Borja").findOne().orElseThrow();
@@ -340,6 +332,37 @@ class SpecificationRepositoryIntegrationTest {
 
     assertThat(orders.findAll(plan)).hasSize(1);
     assertThat(orders.count(plan)).isEqualTo(1);
+  }
+
+  @Test
+  void shouldKeepAnInnerJoinWhenTheSamePathIsFetchedWithALeftJoin() {
+    List<TestCustomer> found = repository.query().innerJoin("orders").leftFetch("orders").findAll();
+
+    // Nobody has orders in the fixtures: the inner join still filters every customer out.
+    assertThat(found).isEmpty();
+  }
+
+  @Test
+  void shouldStillSortByAnAssociationWhenAFilterCrossesACollection() {
+    TestCustomer borja =
+        repository.query().where("name", Operators.EQUALS, "Borja").findOne().orElseThrow();
+    borja.getOrders().add(new TestOrder(new java.math.BigDecimal("10.00"), "PAID", false, borja));
+    repository.save(borja);
+
+    var plan =
+        com.borjaglez.specrepository.core.SpecificationQueryBuilder.forEntity(TestCustomer.class)
+            .where("orders.status", Operators.EQUALS, "PAID")
+            .sort(org.springframework.data.domain.Sort.by("profile.city"))
+            .build();
+
+    assertThat(repository.findAll(plan)).extracting(TestCustomer::getName).containsExactly("Borja");
+    assertThat(
+            repository.findAll(
+                plan,
+                org.springframework.data.domain.PageRequest.of(
+                    0, 10, org.springframework.data.domain.Sort.by("profile.city"))))
+        .extracting(TestCustomer::getName)
+        .containsExactly("Borja");
   }
 
   // -- findOne --
@@ -1483,6 +1506,38 @@ class SpecificationRepositoryIntegrationTest {
   }
 
   @Test
+  void shouldGroupByAssociationPathUsingTheSameJoinAsTheFilter() {
+    List<GroupedRow> rows =
+        repository
+            .query()
+            .where("profile.city", Operators.IS_NOT_NULL, null)
+            .groupBy("profile.city")
+            .sort(Sort.by("profile.city"))
+            .select("profile.city")
+            .countAs("customers", "id")
+            .findAllGrouped();
+
+    assertThat(rows).hasSize(2);
+    assertThat(rows.get(0).get("profile.city")).isEqualTo("Barcelona");
+    assertThat(rows.get(0).get("customers")).isEqualTo(1L);
+    assertThat(rows.get(1).get("profile.city")).isEqualTo("Madrid");
+    assertThat(rows.get(1).get("customers")).isEqualTo(2L);
+  }
+
+  @Test
+  void shouldGroupByAssociationPathWithoutFilters() {
+    List<GroupedRow> rows =
+        repository
+            .query()
+            .groupBy("profile.city")
+            .select("profile.city")
+            .countAs("customers", "id")
+            .findAllGrouped();
+
+    assertThat(rows).extracting(row -> row.get("customers")).containsExactlyInAnyOrder(1L, 2L, 1L);
+  }
+
+  @Test
   void shouldCountDistinctRootsWhenFilteringThroughAToManyPath() {
     TestCustomer buyer =
         repository.findAll().stream()
@@ -1524,38 +1579,6 @@ class SpecificationRepositoryIntegrationTest {
             .findAllGrouped();
 
     assertThat(rows.getFirst().get("COUNT_DISTINCT_id")).isEqualTo(2L);
-  }
-
-  @Test
-  void shouldGroupByAssociationPathUsingTheSameJoinAsTheFilter() {
-    List<GroupedRow> rows =
-        repository
-            .query()
-            .where("profile.city", Operators.IS_NOT_NULL, null)
-            .groupBy("profile.city")
-            .sort(Sort.by("profile.city"))
-            .select("profile.city")
-            .countAs("customers", "id")
-            .findAllGrouped();
-
-    assertThat(rows).hasSize(2);
-    assertThat(rows.get(0).get("profile.city")).isEqualTo("Barcelona");
-    assertThat(rows.get(0).get("customers")).isEqualTo(1L);
-    assertThat(rows.get(1).get("profile.city")).isEqualTo("Madrid");
-    assertThat(rows.get(1).get("customers")).isEqualTo(2L);
-  }
-
-  @Test
-  void shouldGroupByAssociationPathWithoutFilters() {
-    List<GroupedRow> rows =
-        repository
-            .query()
-            .groupBy("profile.city")
-            .select("profile.city")
-            .countAs("customers", "id")
-            .findAllGrouped();
-
-    assertThat(rows).extracting(row -> row.get("customers")).containsExactlyInAnyOrder(1L, 2L, 1L);
   }
 
   @Test

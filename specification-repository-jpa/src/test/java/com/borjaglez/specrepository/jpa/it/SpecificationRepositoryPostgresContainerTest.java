@@ -32,10 +32,10 @@ class SpecificationRepositoryPostgresContainerTest {
 
   @org.springframework.beans.factory.annotation.Autowired private TestCustomerRepository repository;
 
-  @org.springframework.beans.factory.annotation.Autowired private JdbcTemplate jdbcTemplate;
-
   @org.springframework.beans.factory.annotation.Autowired
   private TestOrderRepository orderRepository;
+
+  @org.springframework.beans.factory.annotation.Autowired private JdbcTemplate jdbcTemplate;
 
   @DynamicPropertySource
   static void registerProperties(DynamicPropertyRegistry registry) {
@@ -50,20 +50,6 @@ class SpecificationRepositoryPostgresContainerTest {
     repository.save(new TestCustomer("Borja", "ACTIVE", new TestProfile("Madrid")));
 
     assertThat(repository.query().where("profile.city", Operators.EQUALS, "Madrid").count())
-        .isEqualTo(1);
-  }
-
-  @Test
-  void ignoreCaseShouldAlsoIgnoreAccentsInTheSearchTerm() {
-    // Requires the unaccent extension, as documented for case-insensitive search on PostgreSQL.
-    jdbcTemplate.execute("create extension if not exists unaccent");
-    repository.save(new TestCustomer("Café Ramón", "ACTIVE", null));
-    repository.save(new TestCustomer("CAFE MOLIDO", "ACTIVE", null));
-    repository.save(new TestCustomer("Té verde", "ACTIVE", null));
-
-    assertThat(repository.query().where("name", Operators.CONTAINS, "café", true, false).count())
-        .isEqualTo(2);
-    assertThat(repository.query().where("name", Operators.EQUALS, "te verde", true, false).count())
         .isEqualTo(1);
   }
 
@@ -88,6 +74,20 @@ class SpecificationRepositoryPostgresContainerTest {
 
     assertThat(rows).extracting(row -> row.get("orders.status")).containsExactly("PAID", "PENDING");
     assertThat(rows).extracting(row -> row.get("customers")).containsExactly(2L, 1L);
+  }
+
+  @Test
+  void ignoreCaseShouldAlsoIgnoreAccentsInTheSearchTerm() {
+    // Requires the unaccent extension, as documented for case-insensitive search on PostgreSQL.
+    jdbcTemplate.execute("create extension if not exists unaccent");
+    repository.save(new TestCustomer("Café Ramón", "ACTIVE", null));
+    repository.save(new TestCustomer("CAFE MOLIDO", "ACTIVE", null));
+    repository.save(new TestCustomer("Té verde", "ACTIVE", null));
+
+    assertThat(repository.query().where("name", Operators.CONTAINS, "café", true, false).count())
+        .isEqualTo(2);
+    assertThat(repository.query().where("name", Operators.EQUALS, "te verde", true, false).count())
+        .isEqualTo(1);
   }
 
   @Configuration(proxyBeanMethods = false)
