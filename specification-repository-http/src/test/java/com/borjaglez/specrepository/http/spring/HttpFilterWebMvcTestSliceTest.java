@@ -1,0 +1,63 @@
+package com.borjaglez.specrepository.http.spring;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.SpringBootConfiguration;
+import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.context.ApplicationContext;
+import org.springframework.context.annotation.Import;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+import com.borjaglez.specrepository.core.QueryPlan;
+import com.borjaglez.specrepository.http.HttpFilterParser;
+
+/**
+ * Boot 3 {@code @WebMvcTest} slice without {@code @ImportAutoConfiguration}: the slice must pick up
+ * {@link HttpFilterAutoConfiguration} from the {@code AutoConfigureWebMvc.imports} file.
+ */
+@WebMvcTest(HttpFilterWebMvcTestSliceTest.DemoController.class)
+class HttpFilterWebMvcTestSliceTest {
+
+  @Autowired private MockMvc mvc;
+
+  @Autowired private ApplicationContext context;
+
+  @Test
+  void shouldRegisterHttpFilterBeansInTheSlice() {
+    assertThat(context.getBeansOfType(HttpFilterParser.class)).hasSize(1);
+    assertThat(context.getBeansOfType(QueryPlanArgumentResolver.class)).hasSize(1);
+  }
+
+  @Test
+  void shouldResolveQueryPlanParameter() throws Exception {
+    mvc.perform(get("/demo").param("filter", "name:eq:x"))
+        .andExpect(status().isOk())
+        .andExpect(content().string("1"));
+  }
+
+  static class Demo {}
+
+  @RestController
+  static class DemoController {
+
+    @GetMapping("/demo")
+    String demo(
+        @FilterableQuery(
+                value = Demo.class,
+                filterableFields = {"name"})
+            QueryPlan<Demo> plan) {
+      return String.valueOf(plan.rootCondition().conditions().size());
+    }
+  }
+
+  @SpringBootConfiguration
+  @Import(DemoController.class)
+  static class TestApplication {}
+}
