@@ -10,6 +10,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.time.DateTimeException;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -26,16 +27,20 @@ import jakarta.persistence.metamodel.EntityType;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.core.convert.ConversionFailedException;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
+import org.springframework.format.support.DefaultFormattingConversionService;
 
 import com.borjaglez.specrepository.core.AllowedFieldsPolicy;
 import com.borjaglez.specrepository.core.CorrelationMode;
 import com.borjaglez.specrepository.core.CorrelationPair;
 import com.borjaglez.specrepository.core.DisallowedFieldException;
 import com.borjaglez.specrepository.core.FetchInstruction;
+import com.borjaglez.specrepository.core.FilterOperator;
 import com.borjaglez.specrepository.core.GroupCondition;
 import com.borjaglez.specrepository.core.InvalidFilterException;
+import com.borjaglez.specrepository.core.InvalidFilterValueException;
 import com.borjaglez.specrepository.core.JoinInstruction;
 import com.borjaglez.specrepository.core.JoinMode;
 import com.borjaglez.specrepository.core.LogicalOperator;
@@ -47,6 +52,7 @@ import com.borjaglez.specrepository.core.SubqueryCondition;
 import com.borjaglez.specrepository.core.SubqueryKind;
 import com.borjaglez.specrepository.jpa.spi.OperatorContext;
 import com.borjaglez.specrepository.jpa.spi.OperatorHandler;
+import com.borjaglez.specrepository.jpa.spi.ValueConverter;
 
 @SuppressWarnings("unchecked")
 class QueryPlanSpecificationFactoryTest {
@@ -926,6 +932,127 @@ class QueryPlanSpecificationFactoryTest {
     Predicate result = spec.toPredicate(root, query, cb);
 
     assertThat(result).isNull();
+  }
+
+  // -- Unconvertible values --
+
+  enum Status {
+    ACTIVE,
+    INACTIVE
+  }
+
+  @Test
+  void shouldRejectAnUnknownEnumConstantAsAnInvalidFilterValue() {
+    Specification<Object> spec =
+        specWithRealConversion(List.of(), "status", Status.class, Operators.EQUALS, "SOLD_OUT");
+
+    assertThatExceptionOfType(InvalidFilterValueException.class)
+        .isThrownBy(() -> spec.toPredicate(root, query, cb))
+        .satisfies(
+            ex -> {
+              assertThat(ex.field()).isEqualTo("status");
+              assertThat(ex.value()).isEqualTo("SOLD_OUT");
+              assertThat(ex.targetType()).isEqualTo(Status.class);
+              assertThat(ex.reason()).isEqualTo("cannot convert 'SOLD_OUT' to Status");
+              assertThat(ex).hasCauseInstanceOf(ConversionFailedException.class);
+              assertThat(ex).hasRootCauseInstanceOf(IllegalArgumentException.class);
+            });
+  }
+
+  @Test
+  void shouldReportTheOffendingElementOfAnInListOfEnumConstants() {
+    Specification<Object> spec =
+        specWithRealConversion(
+            List.of(), "status", Status.class, Operators.IN, List.of("ACTIVE", "SOLD_OUT"));
+
+    assertThatExceptionOfType(InvalidFilterValueException.class)
+        .isThrownBy(() -> spec.toPredicate(root, query, cb))
+        .satisfies(ex -> assertThat(ex.value()).isEqualTo("SOLD_OUT"));
+  }
+
+  @Test
+  void shouldTranslateAnIllegalArgumentExceptionFromACustomConverter() {
+    NumberFormatException failure = new NumberFormatException("bad");
+    Specification<Object> spec =
+        specWithRealConversion(
+            List.of(throwingConverter(failure)), "age", Integer.class, Operators.EQUALS, "x");
+
+    assertThatExceptionOfType(InvalidFilterValueException.class)
+        .isThrownBy(() -> spec.toPredicate(root, query, cb))
+        .satisfies(ex -> assertThat(ex.getCause()).isSameAs(failure));
+  }
+
+  @Test
+  void shouldTranslateADateTimeExceptionFromACustomConverter() {
+    DateTimeException failure = new DateTimeException("bad");
+    Specification<Object> spec =
+        specWithRealConversion(
+            List.of(throwingConverter(failure)), "age", Integer.class, Operators.EQUALS, "x");
+
+    assertThatExceptionOfType(InvalidFilterValueException.class)
+        .isThrownBy(() -> spec.toPredicate(root, query, cb))
+        .satisfies(ex -> assertThat(ex.getCause()).isSameAs(failure));
+  }
+
+  @Test
+  void shouldPropagateOtherRuntimeExceptionsFromACustomConverterUnchanged() {
+    IllegalStateException failure = new IllegalStateException("bug");
+    Specification<Object> spec =
+        specWithRealConversion(
+            List.of(throwingConverter(failure)), "age", Integer.class, Operators.EQUALS, "x");
+
+    assertThatExceptionOfType(IllegalStateException.class)
+        .isThrownBy(() -> spec.toPredicate(root, query, cb))
+        .isSameAs(failure);
+  }
+
+  @Test
+  void shouldConvertValuesThatAreValidExactlyAsBefore() {
+    Specification<Object> spec =
+        specWithRealConversion(
+            List.of(), "status", Status.class, Operators.IN, List.of("ACTIVE", "INACTIVE"));
+    OperatorHandler handler = operatorRegistry.find(Operators.IN).orElseThrow();
+
+    spec.toPredicate(root, query, cb);
+
+    org.mockito.ArgumentCaptor<OperatorContext> context =
+        org.mockito.ArgumentCaptor.forClass(OperatorContext.class);
+    verify(handler).create(context.capture());
+    assertThat(context.getValue().value()).isEqualTo(List.of(Status.ACTIVE, Status.INACTIVE));
+  }
+
+  private Specification<Object> specWithRealConversion(
+      List<ValueConverter> converters,
+      String field,
+      Class<?> javaType,
+      FilterOperator operator,
+      Object value) {
+    factory =
+        new QueryPlanSpecificationFactory(
+            operatorRegistry,
+            new ValueConversionService(new DefaultFormattingConversionService(), converters),
+            pathResolver);
+    Path<?> path = mock(Path.class);
+    doReturn(javaType).when(path).getJavaType();
+    doReturn(path).when(pathResolver).resolve(eq(root), any(), eq(field), eq(JoinMode.LEFT));
+    when(operatorRegistry.find(operator)).thenReturn(Optional.of(mock(OperatorHandler.class)));
+    PredicateCondition condition = new PredicateCondition(field, operator, value, false, false);
+    return factory.create(
+        plan(new GroupCondition(LogicalOperator.AND, List.of((QueryCondition) condition))));
+  }
+
+  private static ValueConverter throwingConverter(RuntimeException failure) {
+    return new ValueConverter() {
+      @Override
+      public boolean supports(Class<?> targetType, FilterOperator operator) {
+        return true;
+      }
+
+      @Override
+      public Object convert(Object value, Class<?> targetType, FilterOperator operator) {
+        throw failure;
+      }
+    };
   }
 
   // -- Unknown operators --

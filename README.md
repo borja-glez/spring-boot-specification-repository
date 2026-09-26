@@ -919,7 +919,17 @@ module throws `InvalidFilterException` (in `specification-repository-core`, also
   `unknown operator '<op>'`;
 - unknown field: a path segment the entity does not have, in a filter, join, fetch, subquery,
   `groupBy` or selection. `field()` is the full dotted path, `reason()` is `unknown field` (or `unknown field '<segment>'` when the
-  unknown segment is not the last one), and the JPA provider's exception is the cause.
+  unknown segment is not the last one), and the JPA provider's exception is the cause;
+- unconvertible value: a value that cannot be converted to the field's Java type, such as `abc` on
+  a numeric field, an unknown enum constant or an unparsable date, in a filter (at any nesting
+  level) or a `having` clause. The exception is the subclass `InvalidFilterValueException`:
+  `field()` is the condition's field, `value()` the value that failed (for `in`, `notin` and
+  `between`, the offending element), `targetType()` the type it was converted to, `reason()` is
+  `cannot convert '<value>' to <TargetSimpleName>`, and the original exception
+  (`ConversionFailedException`, `DateTimeParseException`, `NumberFormatException`, ...) is the
+  cause. Spring `ConversionException`s, `DateTimeException`s and `IllegalArgumentException`s
+  thrown while converting are translated; any other exception from a custom `ValueConverter`
+  propagates unchanged.
 
 The message is `Invalid filter on field '<field>': <reason>`.
 

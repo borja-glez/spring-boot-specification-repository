@@ -6,12 +6,14 @@ import static org.assertj.core.api.Assertions.tuple;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.format.DateTimeParseException;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.core.convert.ConversionFailedException;
 import org.springframework.dao.InvalidDataAccessApiUsageException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -25,6 +27,7 @@ import com.borjaglez.specrepository.core.DisallowedFieldException;
 import com.borjaglez.specrepository.core.FilterOperator;
 import com.borjaglez.specrepository.core.GroupedRow;
 import com.borjaglez.specrepository.core.InvalidFilterException;
+import com.borjaglez.specrepository.core.InvalidFilterValueException;
 import com.borjaglez.specrepository.core.Operators;
 import com.borjaglez.specrepository.core.QueryPlan;
 
@@ -1556,6 +1559,148 @@ abstract class AbstractSpecificationRepositoryIntegrationTest {
         .cause()
         .isInstanceOfSatisfying(
             InvalidFilterException.class, ex -> assertThat(ex.field()).isEqualTo("name"));
+  }
+
+  // -- Unconvertible values --
+
+  @Test
+  void shouldRejectANonNumericValueOnANumericFieldAsAnInvalidFilterValue() {
+    assertThatThrownBy(
+            () -> repository.query().where("age", Operators.GREATER_THAN_OR_EQUAL, "abc").findAll())
+        .isInstanceOfSatisfying(
+            InvalidFilterValueException.class,
+            ex -> {
+              assertThat(ex.field()).isEqualTo("age");
+              assertThat(ex.value()).isEqualTo("abc");
+              assertThat(ex.targetType()).isEqualTo(Integer.class);
+              assertThat(ex.reason()).isEqualTo("cannot convert 'abc' to Integer");
+              assertThat(ex).hasCauseInstanceOf(ConversionFailedException.class);
+              assertThat(ex).hasRootCauseInstanceOf(NumberFormatException.class);
+            });
+  }
+
+  @Test
+  void shouldRejectAnUnparsableDateAsAnInvalidFilterValue() {
+    assertThatThrownBy(
+            () ->
+                repository.query().where("createdAt", Operators.GREATER_THAN, "yesterday").count())
+        .isInstanceOfSatisfying(
+            InvalidFilterValueException.class,
+            ex -> {
+              assertThat(ex.field()).isEqualTo("createdAt");
+              assertThat(ex.value()).isEqualTo("yesterday");
+              assertThat(ex.targetType()).isEqualTo(LocalDate.class);
+              assertThat(ex).hasCauseInstanceOf(DateTimeParseException.class);
+            });
+  }
+
+  @Test
+  void shouldReportTheOffendingElementOfAnInList() {
+    assertThatThrownBy(
+            () -> repository.query().where("age", Operators.IN, List.of("25", "x", "41")).findAll())
+        .isInstanceOfSatisfying(
+            InvalidFilterValueException.class,
+            ex -> {
+              assertThat(ex.field()).isEqualTo("age");
+              assertThat(ex.value()).isEqualTo("x");
+            });
+  }
+
+  @Test
+  void shouldReportTheOffendingBoundOfABetween() {
+    assertThatThrownBy(
+            () ->
+                repository
+                    .query()
+                    .where("createdAt", Operators.BETWEEN, List.of("2024-01-01", "soon"))
+                    .findAll())
+        .isInstanceOfSatisfying(
+            InvalidFilterValueException.class,
+            ex -> {
+              assertThat(ex.field()).isEqualTo("createdAt");
+              assertThat(ex.value()).isEqualTo("soon");
+            });
+  }
+
+  @Test
+  void shouldRejectAnUnconvertibleValueInsideAnOrGroup() {
+    assertThatThrownBy(
+            () ->
+                repository
+                    .query()
+                    .where("status", Operators.EQUALS, "ACTIVE")
+                    .or(group -> group.where("age", Operators.EQUALS, "old"))
+                    .count())
+        .isInstanceOfSatisfying(
+            InvalidFilterValueException.class, ex -> assertThat(ex.field()).isEqualTo("age"));
+  }
+
+  @Test
+  void shouldRejectAnUnconvertibleValueInsideASubqueryBody() {
+    assertThatThrownBy(
+            () ->
+                repository
+                    .query()
+                    .<TestOrder>exists(
+                        "orders", sub -> sub.where("total", Operators.GREATER_THAN, "lots"))
+                    .findAll())
+        .isInstanceOfSatisfying(
+            InvalidFilterValueException.class,
+            ex -> {
+              assertThat(ex.field()).isEqualTo("total");
+              assertThat(ex.targetType()).isEqualTo(BigDecimal.class);
+            });
+  }
+
+  @Test
+  void shouldRejectAnUnconvertibleHavingValueWithTheHavingField() {
+    assertThatThrownBy(
+            () ->
+                repository
+                    .query()
+                    .groupBy("status")
+                    .select("status")
+                    .avg("age")
+                    .having(AggregateFunction.AVG, "age", Operators.GREATER_THAN, "abc")
+                    .findAll())
+        .isInstanceOfSatisfying(
+            InvalidFilterValueException.class,
+            ex -> {
+              assertThat(ex.field()).isEqualTo("age");
+              assertThat(ex.value()).isEqualTo("abc");
+              assertThat(ex.targetType()).isEqualTo(Double.class);
+            });
+  }
+
+  @Test
+  void shouldRejectAnUnconvertibleHavingBetweenBound() {
+    assertThatThrownBy(
+            () ->
+                repository
+                    .query()
+                    .groupBy("status")
+                    .select("status")
+                    .count("id")
+                    .having(AggregateFunction.COUNT, "id", Operators.BETWEEN, List.of("1", "many"))
+                    .findAll())
+        .isInstanceOfSatisfying(
+            InvalidFilterValueException.class,
+            ex -> {
+              assertThat(ex.field()).isEqualTo("id");
+              assertThat(ex.value()).isEqualTo("many");
+              assertThat(ex.targetType()).isEqualTo(Long.class);
+            });
+  }
+
+  @Test
+  void shouldExposeAnInvalidFilterValueAsTheCauseThroughTheRepositoryProxy() {
+    QueryPlan<TestCustomer> plan = repository.query().where("age", Operators.EQUALS, "abc").plan();
+
+    assertThatThrownBy(() -> repository.findAll(plan))
+        .isInstanceOf(InvalidDataAccessApiUsageException.class)
+        .cause()
+        .isInstanceOfSatisfying(
+            InvalidFilterValueException.class, ex -> assertThat(ex.field()).isEqualTo("age"));
   }
 
   // -- HAVING / multiple aggregates / grouped rows --
