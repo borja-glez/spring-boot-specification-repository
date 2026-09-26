@@ -14,4 +14,7 @@ dependencies {
     testImplementation(libs.spring.data.jpa)
     testImplementation(libs.spring.boot.starter.test)
     testImplementation(libs.h2)
+    testImplementation(libs.testcontainers2.junit)
+    testImplementation(libs.testcontainers2.postgresql)
+    testRuntimeOnly(libs.postgresql)
 }

@@ -136,6 +136,10 @@ Notes:
 - Entities with a composite id (`@IdClass` or `@EmbeddedId`) keep the single
   query, which Hibernate paginates in memory (and rejects with
   `fail_on_pagination_over_collection_fetch`).
+- A plan with a pessimistic lock (`lock(...)`) cannot fetch a collection
+  here: the lock would have to cover the id query too. It fails with an
+  `IllegalStateException`; lock the page without the fetch and load the
+  collection afterwards, in the same transaction.
 
 ## `Page` vs `Slice` — when to use what
 

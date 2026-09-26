@@ -52,6 +52,9 @@ testcontainers-junit = { module = "org.testcontainers:junit-jupiter", version.re
 testcontainers-postgresql = { module = "org.testcontainers:postgresql", version.ref = "testcontainers" }
 h2 = { module = "com.h2database:h2", version.ref = "h2" }
 postgresql = { module = "org.postgresql:postgresql", version.ref = "postgresql-driver" }
+# Testcontainers 2 modules, versioned by the Spring Boot 4 BOM.
+testcontainers2-junit = { module = "org.testcontainers:testcontainers-junit-jupiter" }
+testcontainers2-postgresql = { module = "org.testcontainers:testcontainers-postgresql" }
 
 [plugins]
 spring-boot = { id = "org.springframework.boot", version.ref = "spring-boot" }
