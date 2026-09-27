@@ -39,6 +39,11 @@ Extensible Spring Data JPA query library with a fluent DSL and native-friendly a
 
 The `specification-repository-core` and `specification-repository-jpa` modules stay Spring/Boot integration agnostic at the build level. Version alignment is intentionally owned by the Boot 3 and Boot 4 starters and example applications.
 
+## Requirements
+
+- Java 21+ (tested on 21 and 25). The artifacts are compiled for Java 21 (class file version 65).
+- Spring Boot 3.5 (`specification-repository-boot3-starter`) or Spring Boot 4 (`specification-repository-boot4-starter`).
+
 ## Quick Start
 
 ### Spring Boot 3
@@ -1344,6 +1349,13 @@ Run all tests and coverage verification:
 
 ```bash
 ./gradlew quality
+```
+
+Run the tests on another Java runtime (compilation stays on Java 21); Gradle must be able to find
+that JDK as a toolchain:
+
+```bash
+./gradlew quality -PtestJavaVersion=25
 ```
 
 Build a single module:

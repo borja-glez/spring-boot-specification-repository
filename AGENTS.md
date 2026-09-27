@@ -17,7 +17,8 @@ Use this file as the default operating guide for coding agents working in this r
 ## Environment
 - Java toolchain is pinned to Java 21.
 - Gradle wrapper is present: use `./gradlew`, never assume a globally installed Gradle.
-- CI runs `./gradlew quality` on Ubuntu with Temurin 21.
+- CI runs `./gradlew quality` on Ubuntu with Temurin 21, in a matrix that runs the tests on Java 21 and Java 25.
+- `-PtestJavaVersion=<n>` runs every `Test` task on a Java `<n>` toolchain launcher; compilation stays on Java 21 with `release = 21`.
 - Gradle configuration cache, parallelism, and build cache are enabled in `gradle.properties`.
 
 ## Source Of Truth
