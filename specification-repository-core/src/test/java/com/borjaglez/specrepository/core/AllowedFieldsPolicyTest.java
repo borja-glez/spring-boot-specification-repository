@@ -194,6 +194,59 @@ class AllowedFieldsPolicyTest {
   }
 
   @Test
+  void validateShouldNotCheckASortReplacedOnADerivedBuilder() {
+    QueryPlan<String> plan =
+        clientQuery().sort(Sort.by("total")).build().toBuilder().sort(Sort.by("score")).build();
+
+    assertThatCode(() -> CLIENT.validate(plan)).doesNotThrowAnyException();
+  }
+
+  @Test
+  void validateShouldStillCheckTheClientSortKeptByADerivedBuilder() {
+    QueryPlan<String> plan =
+        clientQuery().sort(Sort.by("total")).build().toBuilder()
+            .where("customerId", Operators.EQUALS, "u1")
+            .build();
+
+    assertDisallowed(plan, "total", "sorting");
+  }
+
+  @Test
+  void validateShouldNotCheckADefaultSortSetOnADerivedBuilder() {
+    QueryPlan<String> plan =
+        clientQuery().build().toBuilder().sortedByDefault(Sort.by("score")).build();
+
+    assertThatCode(() -> CLIENT.validate(plan)).doesNotThrowAnyException();
+  }
+
+  @Test
+  void validateShouldStillCheckTheClientSortADefaultSortDoesNotReplace() {
+    QueryPlan<String> plan =
+        clientQuery().sort(Sort.by("total")).build().toBuilder()
+            .sortedByDefault(Sort.by("placedAt"))
+            .build();
+
+    assertDisallowed(plan, "total", "sorting");
+  }
+
+  @Test
+  void validateShouldKeepTheServerSortOfAPlanDerivedAgain() {
+    QueryPlan<String> plan =
+        clientQuery().build().toBuilder().sort(Sort.by("score")).build().toBuilder()
+            .where("customerId", Operators.EQUALS, "u1")
+            .build();
+
+    assertThatCode(() -> CLIENT.validate(plan)).doesNotThrowAnyException();
+  }
+
+  @Test
+  void validateShouldCheckADefaultSortSetOnAPlainBuilder() {
+    QueryPlan<String> plan = clientQuery().sortedByDefault(Sort.by("total")).build();
+
+    assertDisallowed(plan, "total", "sorting");
+  }
+
+  @Test
   void validateShouldRejectADisallowedOuterFieldOfAnInSubquery() {
     QueryPlan<String> plan =
         clientQuery().inSubquery("customerId", Integer.class, "id", sub -> {}).build();

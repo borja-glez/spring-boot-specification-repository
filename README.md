@@ -703,7 +703,9 @@ combined with AND when the query runs:
   client conditions: a client `orFilter` cannot widen them.
 
 Server conditions are added by deriving a plan (see
-[Extending a plan received over HTTP](#extending-a-plan-received-over-http)).
+[Extending a plan received over HTTP](#extending-a-plan-received-over-http)). The sort follows the
+same rule: the plan's own sort, such as the one parsed from the `sort` request parameter, is client
+input and is checked; a sort set on a derived builder is server input and is not.
 
 #### What the policy covers
 
@@ -715,9 +717,10 @@ can define are not checked:
 | `filter` and `orFilter` request parameters | client (HTTP), into `rootCondition()` | filterable fields |
 | other conditions in `rootCondition()` (`where`, `and`, `or` on a plain builder) | caller | filterable fields |
 | outer field of `inSubquery` / `notInSubquery`, outer fields of `correlate(...)`, in `rootCondition()` | caller | filterable fields |
-| `sort` request parameter and the plan sort, also one set with `sort(...)` or `sortedByDefault(...)` on a derived builder | client or server | sortable fields |
+| `sort` request parameter and the plan sort set on a plain builder, also when a derived builder keeps it | client or caller | sortable fields |
 | sort of a sorted `Pageable` | client (HTTP) | sortable fields |
 | server conditions (`where`, `and`, `or`, `exists`, ... on a derived builder), including their subqueries | server | not checked |
+| sort set with `sort(...)` or `sortedByDefault(...)` on a derived builder | server | not checked |
 | `select`, `selectInto`, aggregates (`sum`, `countAs`, ...), `groupBy` | server | not checked |
 | joins and fetches (`leftJoin`, `leftFetch`, ...) | server | not checked |
 | `having(...)` conditions, on a plain or a derived builder | server (the HTTP syntax has none) | not checked |
@@ -764,7 +767,7 @@ original plan is not changed. On a derived builder:
 - the client conditions, the policy, joins, fetches, sort, projection and `distinct` are kept, and
   the other DSL methods (`leftFetch`, `groupBy`, `select`, `selectInto`, ...) add to them;
 - `sort(...)` replaces the client sort, and `sortedByDefault(...)` sets a sort only when the client
-  sent none.
+  sent none. A sort set this way is a server sort and is not checked against the policy.
 
 "My orders": the client filters by status and total, the server scopes the rows to the
 authenticated customer, although `customerId` is not in the whitelist:
@@ -791,9 +794,12 @@ Page<Order> myOrders(
 `?orFilter=status:eq:PAID;status:eq:PLACED` only matches the customer's own orders:
 `(client conditions) AND customerId = ?`.
 
-The derived plan keeps the client's policy, so the sort is still checked against the sortable
-fields. That includes a sort set with `sort(...)` or `sortedByDefault(...)`: pick a default sort
-among the sortable fields.
+The derived plan keeps the client's policy. The client sort it keeps (the `sort` request parameter)
+and the sort of a sorted `Pageable` are still checked against the sortable fields. A sort set with
+`sort(...)` or `sortedByDefault(...)` on the derived builder is server input and is not checked, so
+a default sort may use a field the client cannot sort by. `sortedByDefault(...)` does not replace a
+client sort, so that sort is still checked. Never pass a client value straight to `sort(...)` on a
+derived builder; validate it yourself first.
 
 ### Built-In `BETWEEN`
 

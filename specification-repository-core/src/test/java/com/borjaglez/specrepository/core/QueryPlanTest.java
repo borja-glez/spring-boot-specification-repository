@@ -59,6 +59,7 @@ class QueryPlanTest {
 
     assertThat(plan).isNotEqualTo(plan.toBuilder().where("id", Operators.EQUALS, 1).build());
     assertThat(plan).isNotEqualTo(plan.toBuilder().lock(LockMode.PESSIMISTIC_WRITE).build());
+    assertThat(plan).isNotEqualTo(plan.toBuilder().sort(plan.sort()).build());
     assertThat(plan).isNotEqualTo(SpecificationQueryBuilder.forEntity(String.class).build());
     assertThat(plan).isNotEqualTo("plan");
     assertThat(plan).isNotEqualTo(null);
@@ -78,10 +79,21 @@ class QueryPlanTest {
             ", groupBy=[status]",
             ", having=",
             ", sort=status: ASC",
+            ", serverSort=false",
             ", distinct=true",
             ", allowedFieldsPolicy=",
             ", lock=QueryLock[mode=NONE, lockWait=WAIT]")
         .endsWith("]");
+  }
+
+  @Test
+  void aSortSetOnADerivedBuilderShouldBeAServerSort() {
+    QueryPlan<String> plan = plan();
+
+    assertThat(plan.serverSort()).isFalse();
+    assertThat(plan.toBuilder().build().serverSort()).isFalse();
+    assertThat(plan.toBuilder().sort(Sort.by("id")).build().serverSort()).isTrue();
+    assertThat(plan.toBuilder().sort(Sort.by("id")).build().withoutFetches().serverSort()).isTrue();
   }
 
   @Test
@@ -152,6 +164,7 @@ class QueryPlanTest {
         List.of(),
         having,
         Sort.unsorted(),
+        false,
         false,
         policy,
         lock);

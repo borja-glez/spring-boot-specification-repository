@@ -23,6 +23,10 @@ public class QueryPlanBuilder<T> {
   private final List<String> groupBy = new ArrayList<>();
   private final List<HavingCondition> having = new ArrayList<>();
   private Sort sort = Sort.unsorted();
+
+  /** Whether {@link #sort} was set on a derived builder, or kept from a plan whose sort was. */
+  private boolean serverSort;
+
   private Class<?> projectionType;
   private boolean distinct;
   private AllowedFieldsPolicy allowedFieldsPolicy = AllowedFieldsPolicy.allowAll();
@@ -60,6 +64,7 @@ public class QueryPlanBuilder<T> {
     this.groupBy.addAll(plan.groupBy());
     this.having.addAll(plan.having());
     this.sort = plan.sort();
+    this.serverSort = plan.serverSort();
     this.distinct = plan.distinct();
     this.allowedFieldsPolicy = plan.allowedFieldsPolicy();
     this.lock = plan.lock();
@@ -153,19 +158,27 @@ public class QueryPlanBuilder<T> {
     return fetch(JoinMode.RIGHT, paths);
   }
 
+  /**
+   * Replaces the sort. On a builder derived from a plan ({@link QueryPlan#toBuilder()}), the sort
+   * is server input: it replaces the client sort and is not checked against the {@link
+   * AllowedFieldsPolicy}.
+   */
   public QueryPlanBuilder<T> sort(Sort sort) {
     this.sort = Objects.requireNonNull(sort, "sort must not be null");
+    this.serverSort = derived;
     return this;
   }
 
   /**
    * Sets the sort only when none is set yet. On a builder derived from a plan, it applies only when
-   * the client sent no sort.
+   * the client sent no sort; the sort it sets is then server input and is not checked against the
+   * {@link AllowedFieldsPolicy}, while a client sort it keeps still is.
    */
   public QueryPlanBuilder<T> sortedByDefault(Sort sort) {
     Objects.requireNonNull(sort, "sort must not be null");
     if (this.sort.isUnsorted()) {
       this.sort = sort;
+      this.serverSort = derived;
     }
     return this;
   }
@@ -298,6 +311,7 @@ public class QueryPlanBuilder<T> {
         List.copyOf(groupBy),
         List.copyOf(having),
         sort,
+        serverSort,
         distinct,
         allowedFieldsPolicy,
         lock);

@@ -44,9 +44,10 @@ public final class AllowedFieldsPolicy {
   /**
    * Checks the client input of {@code plan} against this policy: the fields of its client
    * conditions ({@link QueryPlan#rootCondition()}, including nested groups and the outer fields of
-   * subqueries) and its sort. The server conditions ({@link QueryPlan#serverCondition()}) are not
-   * checked, and neither are the {@link QueryPlan#having()} conditions: no client channel produces
-   * a {@code having}, so it is always server input.
+   * subqueries) and its client sort. The server conditions ({@link QueryPlan#serverCondition()})
+   * are not checked, and neither are the {@link QueryPlan#having()} conditions (no client channel
+   * produces a {@code having}, so it is always server input) nor a sort set on a builder derived
+   * from a plan ({@link QueryPlan#toBuilder()}), which is server input as well.
    *
    * @throws DisallowedFieldException for the first field outside the policy
    */
@@ -55,7 +56,9 @@ public final class AllowedFieldsPolicy {
       return;
     }
     validateConditions(plan.rootCondition());
-    plan.sort().forEach(order -> validateSort(order.getProperty()));
+    if (!plan.serverSort()) {
+      plan.sort().forEach(order -> validateSort(order.getProperty()));
+    }
   }
 
   public boolean isAllowAll() {
