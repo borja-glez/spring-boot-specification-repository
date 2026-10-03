@@ -6,6 +6,29 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Breaking changes are marked with **BREAKING:**; [docs/upgrading.md](docs/upgrading.md)
 explains how to migrate.
+## [1.0.0] - 2026-10-03
+
+### Added
+- **BREAKING:** Map client filter errors to 400 problem details by default (#156) (92f8663)
+- Configure the HTTP filter parser through specrepository.http properties (#148) (96e1748)
+- **BREAKING:** Limit the number of values and the value length of an HTTP filter (#145) (59766fe)
+- Publish a specification-repository-bom (#144) (2fd90c8)
+- Stop checking a sort set on a derived builder against the allowed fields policy (#151) (e8498f3)
+- Stop checking having fields against the allowed fields policy (#147) (3a7b5df)
+- **BREAKING:** Define the stable public API with @API and make QueryPlan a final class (#149) (fcc4437)
+
+### Documentation
+- Prepare the 1.0.0 release (#158) (f597d31)
+- Add a guide to exposing the HTTP filter API safely (#150) (5326c94)
+- Document the versioning, deprecation and support policy (#146) (790ebae)
+
+### Fixed
+- Bind the case-insensitive search term as a query parameter (#155) (7a294f7)
+
+### Build
+- Declare an Automatic-Module-Name in every published jar (#143) (6569116)
+- Check binary API compatibility against apiBaseline (#154) (b1309ed)
+- Test the library on Java 25 in CI (#119) (03d8fd8)
 ## [0.4.0] - 2026-09-26
 
 ### Added
