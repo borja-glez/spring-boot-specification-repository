@@ -9,6 +9,7 @@ import java.util.Map;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
+import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.boot.test.context.runner.WebApplicationContextRunner;
 import org.springframework.web.method.support.HandlerMethodArgumentResolver;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
@@ -131,6 +132,47 @@ class HttpFilterAutoConfigurationTest {
           assertThat(resolvers).hasSize(1);
           assertThat(resolvers.get(0)).isInstanceOf(QueryPlanArgumentResolver.class);
         });
+  }
+
+  @Test
+  void shouldRegisterTheProblemDetailsExceptionHandlerByDefault() {
+    contextRunner.run(
+        context ->
+            assertThat(context).hasSingleBean(HttpFilterProblemDetailsExceptionHandler.class));
+  }
+
+  @Test
+  void shouldRegisterTheProblemDetailsExceptionHandlerWithACustomParser() {
+    contextRunner
+        .withBean(HttpFilterParser.class, HttpFilterParser::new)
+        .run(
+            context ->
+                assertThat(context).hasSingleBean(HttpFilterProblemDetailsExceptionHandler.class));
+  }
+
+  @Test
+  void shouldNotRegisterTheProblemDetailsExceptionHandlerWhenDisabled() {
+    contextRunner
+        .withPropertyValues("specrepository.http.problem-details.enabled=false")
+        .run(
+            context -> {
+              assertThat(context).doesNotHaveBean(HttpFilterProblemDetailsExceptionHandler.class);
+              assertThat(context).hasSingleBean(QueryPlanArgumentResolver.class);
+              assertThat(
+                      context.getBean(HttpFilterProperties.class).getProblemDetails().isEnabled())
+                  .isFalse();
+            });
+  }
+
+  @Test
+  void shouldNotRegisterTheProblemDetailsExceptionHandlerOutsideAServletApplication() {
+    new ApplicationContextRunner()
+        .withConfiguration(AutoConfigurations.of(HttpFilterAutoConfiguration.class))
+        .run(
+            context -> {
+              assertThat(context).doesNotHaveBean(HttpFilterProblemDetailsExceptionHandler.class);
+              assertThat(context).doesNotHaveBean(HttpFilterParser.class);
+            });
   }
 
   private static List<String> filters(int count) {

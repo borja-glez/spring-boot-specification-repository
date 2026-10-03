@@ -1,9 +1,9 @@
 package com.borjaglez.specrepository.examples.boot3;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.hamcrest.Matchers.containsString;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -15,10 +15,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.data.web.SpringDataWebProperties;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
-
-import com.borjaglez.specrepository.http.HttpFilterSyntaxException;
 
 /** The secure controller example of {@code docs/security.md}. */
 @SpringBootTest(classes = Boot3DemoApplication.class)
@@ -117,11 +116,10 @@ class SecureProductControllerTest {
   }
 
   @Test
-  void shouldNotMapFilterErrorsWithoutAnExceptionHandler() {
-    // /api/products/filter is outside the FilterErrorHandler advice: the exception is not handled
-    // by Spring MVC, so the servlet container answers 500.
-    assertThatThrownBy(() -> mockMvc.perform(get("/api/products/filter").param("filter", "name")))
-        .hasCauseInstanceOf(HttpFilterSyntaxException.class);
+  void shouldMapFilterErrorsOfEveryControllerByDefault() throws Exception {
+    // The library's Problem Details advice applies to every controller, not only this one.
+    expectBadRequest(
+        get("/api/products/filter").param("filter", "name"), "missing field name or operator");
   }
 
   private void expectBadRequest(MockHttpServletRequestBuilder request, String detail)
@@ -129,6 +127,7 @@ class SecureProductControllerTest {
     mockMvc
         .perform(request)
         .andExpect(status().isBadRequest())
+        .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON))
         .andExpect(jsonPath("$.status").value(400))
         .andExpect(jsonPath("$.detail").value(containsString(detail)));
   }

@@ -1281,6 +1281,8 @@ specrepository:
     max-values-per-filter: 100
     max-value-length: 1000
     allowed-operators: []   # empty = every registered operator, e.g. [eq, neq, in]
+    problem-details:
+      enabled: true         # answer the client errors with 400 Problem Details
 ```
 
 | Property | Default | Builder method |
@@ -1295,12 +1297,14 @@ specrepository:
 | `specrepository.http.max-values-per-filter` | 100 | `maxValuesPerFilter` |
 | `specrepository.http.max-value-length` | 1000 | `maxValueLength` |
 | `specrepository.http.allowed-operators` | empty (all operators) | `allowedOperators` |
+| `specrepository.http.problem-details.enabled` | `true` | none: see [Error Handling](#error-handling) |
 
 The properties are mapped onto `HttpFilterParserConfiguration.builder()`, so the same validation
 applies: a limit below 1 fails application startup. The module ships
 `spring-configuration-metadata.json`, so IDEs complete and document the keys. The properties work
 on Spring Boot 3 and Spring Boot 4, and in the `@WebMvcTest` slice. A user-defined
-`HttpFilterParser` bean replaces the auto-configured parser, and the properties are then ignored.
+`HttpFilterParser` bean replaces the auto-configured parser, and the parser properties are then
+ignored; `problem-details.enabled` configures the exception handler and still applies.
 
 ### Error Handling
 
@@ -1313,10 +1317,8 @@ on Spring Boot 3 and Spring Boot 4, and in the `@WebMvcTest` slice. A user-defin
 - `HttpUnknownOperatorException` — thrown when the operator is not in the configured
   `allowedOperators` set.
 
-All of them extend `IllegalArgumentException` and propagate to the caller so applications can map them
-to HTTP 400 responses via their preferred error handling strategy (`@ControllerAdvice`,
-`ProblemDetail`, etc.). The module does not register its own exception handler; only
-`UndeclaredFieldListException` carries a `@ResponseStatus`.
+All of them extend `IllegalArgumentException`. They are client errors, mapped to HTTP 400 by
+default (see [HTTP status](#http-status-of-the-client-errors) below).
 
 Filters that pass the parser can still be invalid for the entity. When the query runs, the JPA
 module throws `InvalidFilterException` (in `specification-repository-core`, also an
@@ -1344,19 +1346,59 @@ The message is `Invalid filter on field '<field>': <reason>`.
 Calls through the DSL (`repository.query()...findAll()`, `count()`, ...) throw the exception
 itself. Calls through the Spring Data repository proxy, such as `repository.findAll(plan)`, go
 through persistence exception translation and throw `InvalidDataAccessApiUsageException` with the
-`InvalidFilterException` as its cause. Spring MVC `@ExceptionHandler` methods also match an
-exception's causes, so one handler covers both cases, as long as no handler in the same advice
-matches the wrapper itself (for example an `@ExceptionHandler(Exception.class)`):
+`InvalidFilterException` as its cause.
+
+#### HTTP status of the client errors
+
+In a Spring MVC (servlet) application with Spring Boot, the HTTP module registers a
+`@RestControllerAdvice` that answers `HttpFilterSyntaxException`, `HttpUnknownOperatorException`,
+`DisallowedFieldException` (including `UndeclaredFieldListException`) and `InvalidFilterException`
+(including `InvalidFilterValueException`) with **400** and an RFC 9457 `ProblemDetail` body, also
+when they arrive as the cause of an `InvalidDataAccessApiUsageException`. `detail` is the exception
+message, which never echoes an oversized value, and `field` names the field when the exception
+carries one:
+
+```json
+{
+  "type": "about:blank",
+  "title": "Bad Request",
+  "status": 400,
+  "detail": "Invalid filter on field 'price': cannot convert 'abc' to BigDecimal",
+  "instance": "/api/products",
+  "field": "price"
+}
+```
+
+The advice handles only these types: an `IllegalStateException` (server misconfiguration, such as
+`allowAllFields = true` combined with field lists), any other `IllegalArgumentException`, or an
+`InvalidDataAccessApiUsageException` with another cause keeps its usual status (500).
+
+It has the lowest precedence, so your own handlers win: an `@ExceptionHandler` in the controller or
+in an application `@RestControllerAdvice` (with or without `@Order`) for one of these types
+replaces the default response for that type only. Spring MVC `@ExceptionHandler` methods also match
+an exception's causes, so one handler covers both the direct and the wrapped case, as long as no
+handler in the same advice matches the wrapper itself (for example an
+`@ExceptionHandler(Exception.class)`):
 
 ```java
 @RestControllerAdvice
 class FilterErrors {
   @ExceptionHandler(InvalidFilterException.class)
   ProblemDetail invalidFilter(InvalidFilterException ex) {
-    return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, ex.getMessage());
+    ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, ex.getMessage());
+    problem.setTitle("Invalid filter");
+    return problem;
   }
 }
 ```
+
+A catch-all handler in an application advice, such as `@ExceptionHandler(Exception.class)`, also
+wins and receives these exceptions; declare handlers for the types above in that advice (or keep it
+from matching them) if they should stay 400.
+
+Set `specrepository.http.problem-details.enabled=false` to remove the advice and map the exceptions
+yourself. Without any handler, every one of them except `UndeclaredFieldListException` (annotated
+with `@ResponseStatus(BAD_REQUEST)`) then becomes a 500. WebFlux applications are not covered.
 
 `OperatorRegistry.get` still throws `IllegalStateException` for an unknown operator; use
 `OperatorRegistry.find` to look a handler up without an exception.

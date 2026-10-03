@@ -121,6 +121,48 @@ HttpFilterParserConfiguration config = HttpFilterParserConfiguration.builder()
 With the Spring Boot starters, declare an `HttpFilterParser` bean built with that configuration; it
 takes precedence over the auto-configured one.
 
+### Client filter errors answer 400 Problem Details by default
+
+Issue #153.
+
+In a Spring MVC application with Spring Boot, the HTTP module now registers a
+`@RestControllerAdvice` that answers the client errors of the filter API with **400** and an RFC
+9457 Problem Details body (`application/problem+json`). Without a handler of your own, these
+requests used to end in a **500**:
+
+| Exception | Before | Now |
+|---|---|---|
+| `HttpFilterSyntaxException` | 500 | 400 |
+| `HttpUnknownOperatorException` | 500 | 400 |
+| `DisallowedFieldException` (argument resolver, or `Pageable` sort when the query runs) | 500 | 400 |
+| `InvalidFilterException` | 500 | 400 |
+| `InvalidFilterValueException` | 500 | 400 |
+| `UndeclaredFieldListException` | 400, empty body | 400, Problem Details body |
+
+The exceptions raised when the query runs are handled also when they arrive as the cause of an
+`InvalidDataAccessApiUsageException`. The body's `detail` is the exception message, and `field`
+names the field when the exception carries one. `IllegalStateException`, any other
+`IllegalArgumentException` and an `InvalidDataAccessApiUsageException` with another cause keep
+their status.
+
+Applications that already map these exceptions are unaffected: the advice has the lowest
+precedence, so a controller `@ExceptionHandler` or an application `@RestControllerAdvice` for the
+same types still wins. Check:
+
+- dashboards, alerts or tests that expected a 500 (or a servlet exception in `MockMvc`) for an
+  invalid filter;
+- application advices with a catch-all `@ExceptionHandler(Exception.class)`: it still receives
+  these exceptions, so they keep the status it returns.
+
+To keep the previous behaviour, set:
+
+```yaml
+specrepository:
+  http:
+    problem-details:
+      enabled: false
+```
+
 ## Upgrading to 0.4.0
 
 0.4.0 has seven breaking changes. Most applications only need the first three checks:

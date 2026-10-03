@@ -123,33 +123,92 @@ you register operators that should stay internal or that are expensive.
 
 ### HTTP status of each exception
 
-The module registers no exception handler. With Spring MVC and Spring Boot defaults:
+With Spring Boot, the HTTP module registers a `@RestControllerAdvice` that answers the client errors
+of the filter API with **400** and an RFC 9457 Problem Details body (`application/problem+json`):
 
-| Exception | Raised when | Raised by | Default status |
+| Exception | Raised when | Raised by | Status |
 |---|---|---|---|
-| `UndeclaredFieldListException` | filter or sort through a usage without a declared list | argument resolver | **400** (`@ResponseStatus(BAD_REQUEST)`) |
-| `HttpFilterSyntaxException` | malformed expression, invalid field name, a limit exceeded | argument resolver | **500** |
-| `HttpUnknownOperatorException` | operator outside `allowed-operators` | argument resolver | **500** |
-| `DisallowedFieldException` | field outside a declared list (`filter`, `orFilter`, `sort`) | argument resolver | **500** |
-| `DisallowedFieldException` | `Pageable` sort outside the sortable fields | repository, when the query runs | **500** |
-| `InvalidFilterException` | unknown field, or operator with no registered handler | repository, when the query runs | **500** |
-| `InvalidFilterValueException` | value that cannot be converted (`price:gt:abc`) | repository, when the query runs | **500** |
+| `UndeclaredFieldListException` | filter or sort through a usage without a declared list | argument resolver | **400** |
+| `HttpFilterSyntaxException` | malformed expression, invalid field name, a limit exceeded | argument resolver | **400** |
+| `HttpUnknownOperatorException` | operator outside `allowed-operators` | argument resolver | **400** |
+| `DisallowedFieldException` | field outside a declared list (`filter`, `orFilter`, `sort`) | argument resolver | **400** |
+| `DisallowedFieldException` | `Pageable` sort outside the sortable fields | repository, when the query runs | **400** |
+| `InvalidFilterException` | unknown field, or operator with no registered handler | repository, when the query runs | **400** |
+| `InvalidFilterValueException` | value that cannot be converted (`price:gt:abc`) | repository, when the query runs | **400** |
 | `IllegalStateException` | `allowAllFields = true` combined with field lists (a server bug) | argument resolver | 500 |
 
-All of them extend `IllegalArgumentException`, which Spring MVC does not map to a status. The ones
-raised when the query runs arrive wrapped in Spring's `InvalidDataAccessApiUsageException` when the
-call goes through the repository proxy (for example `repository.findAll(plan, pageable)`).
+The exceptions raised when the query runs arrive wrapped in Spring's
+`InvalidDataAccessApiUsageException` when the call goes through the repository proxy (for example
+`repository.findAll(plan, pageable)`). The advice also handles them in that case, because Spring
+MVC matches the cause of an exception. It handles nothing else: an `IllegalStateException`, any
+other `IllegalArgumentException`, or an `InvalidDataAccessApiUsageException` with another cause
+keeps its usual status.
 
-**The application must add an exception handler** that maps them to 400, or clients get a 500 for
-every invalid request. `@ExceptionHandler` methods also match the cause of an exception, so a
-handler for `DisallowedFieldException` and `InvalidFilterException` covers the wrapped case as
-well, as long as no handler in the same advice matches the wrapper itself (for example an
-`@ExceptionHandler(Exception.class)`). See `FilterErrorHandler` in the example below.
+The body is a standard `ProblemDetail`. `detail` is the exception message, which never echoes an
+oversized value (see [Input limits](#input-limits)), and `field` names the field for the
+exceptions that carry one (`DisallowedFieldException`, `InvalidFilterException` and their
+subclasses):
+
+```json
+{
+  "type": "about:blank",
+  "title": "Bad Request",
+  "status": 400,
+  "detail": "Field 'status' is not allowed for filtering",
+  "instance": "/api/catalog/products",
+  "field": "status"
+}
+```
+
+#### Customising the response
+
+The advice has the lowest precedence, so an `@ExceptionHandler` in a controller or in an
+application `@RestControllerAdvice` for one of these exceptions takes precedence. An application
+advice without `@Order` also wins: auto-configured beans are registered after the application's.
+Handle only the types you want to change, and the advice keeps answering the others:
+
+```java
+@RestControllerAdvice
+class FilterErrors {
+
+  @ExceptionHandler(InvalidFilterValueException.class)
+  ProblemDetail invalidValue(InvalidFilterValueException ex) {
+    ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, ex.getMessage());
+    problem.setTitle("Invalid filter value");
+    problem.setProperty("expectedType", ex.targetType().getSimpleName());
+    return problem;
+  }
+}
+```
+
+`@ExceptionHandler` methods match the cause of an exception too, so this handler also covers the
+wrapped case, as long as no handler in the same advice matches the wrapper itself (for example an
+`@ExceptionHandler(Exception.class)`).
+
+A catch-all handler in an application advice, such as `@ExceptionHandler(Exception.class)`, wins
+as well and receives these exceptions: declare handlers for the types above in that advice if they
+should stay 400.
+
+To turn the advice off and map the exceptions yourself, set:
+
+```yaml
+specrepository:
+  http:
+    problem-details:
+      enabled: false
+```
+
+Without it, and without a handler of your own, every exception of the table except
+`UndeclaredFieldListException` (annotated with `@ResponseStatus(BAD_REQUEST)`) reaches the servlet
+container and becomes a 500: all of them extend `IllegalArgumentException`, which Spring MVC does
+not map to a status.
 
 ## 3. What the application must do
 
-- **Map the client errors to 400.** Add a `@RestControllerAdvice` like the one below. Do not
-  render the messages as HTML: they can contain parts of the request.
+- **Keep the client errors at 400.** The default advice does it; if you disable it with
+  `specrepository.http.problem-details.enabled=false`, add your own handler (see
+  [HTTP status of each exception](#http-status-of-each-exception)). Do not render the messages as
+  HTML: they can contain parts of the request.
 - **Cap the page size.** Set `spring.data.web.pageable.max-page-size`. Spring Data's default is
   **2000** rows per page, and `?size=` above the cap is silently lowered to it. Consider also
   bounding `page` (deep `OFFSET`s scan and discard every skipped row), or use keyset pagination
@@ -242,28 +301,9 @@ public class SecureProductController {
 - `findSlice` skips the `COUNT(*)`, the transaction bounds the query time, and the response is a
   DTO.
 
-[`FilterErrorHandler`](../examples/boot3-demo/src/main/java/com/borjaglez/specrepository/examples/boot3/secure/FilterErrorHandler.java):
-
-```java
-@RestControllerAdvice
-public class FilterErrorHandler {
-
-  @ExceptionHandler({
-    HttpFilterSyntaxException.class,
-    HttpUnknownOperatorException.class,
-    DisallowedFieldException.class,
-    InvalidFilterException.class
-  })
-  public ProblemDetail invalidFilter(IllegalArgumentException ex) {
-    return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, ex.getMessage());
-  }
-}
-```
-
-`DisallowedFieldException` also covers `UndeclaredFieldListException`, and `InvalidFilterException`
-covers `InvalidFilterValueException`. The demo limits the advice to `SecureProductController`
-(`assignableTypes`) so that its other endpoints keep their behaviour; an application usually
-applies it to every controller.
+The client errors (`?filter=status:eq:DISCONTINUED`, `?sort=category.name`, `?filter=price:gt:abc`,
+...) are answered with 400 Problem Details by the default advice; the demo declares no exception
+handler of its own.
 
 `application.yml`:
 

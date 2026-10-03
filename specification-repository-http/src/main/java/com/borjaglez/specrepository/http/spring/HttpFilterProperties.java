@@ -15,8 +15,9 @@ import com.borjaglez.specrepository.http.HttpFilterParserConfiguration;
  * Configuration properties of the auto-configured {@link HttpFilterParser}, bound from {@code
  * specrepository.http}. The defaults match {@link HttpFilterParserConfiguration#defaults()}, and
  * the values are validated by {@link HttpFilterParserConfiguration.Builder}. A user-defined {@link
- * HttpFilterParser} bean replaces the auto-configured parser, and these properties are then
- * ignored.
+ * HttpFilterParser} bean replaces the auto-configured parser, and the parser properties are then
+ * ignored. {@link #getProblemDetails() problem-details} configures the exception handler of the
+ * filter API instead, and applies in both cases.
  */
 @ConfigurationProperties("specrepository.http")
 @API(status = MAINTAINED, since = "1.0.0")
@@ -51,6 +52,9 @@ public class HttpFilterProperties {
 
   /** Operators a client may use, case-insensitive. Empty allows every registered operator. */
   private Set<String> allowedOperators = new LinkedHashSet<>();
+
+  /** Exception handler that maps the client errors of the filter API to HTTP 400. */
+  private final ProblemDetails problemDetails = new ProblemDetails();
 
   public String getFilterParam() {
     return filterParam;
@@ -132,6 +136,10 @@ public class HttpFilterProperties {
     this.allowedOperators = allowedOperators;
   }
 
+  public ProblemDetails getProblemDetails() {
+    return problemDetails;
+  }
+
   /**
    * Builds the parser configuration through {@link HttpFilterParserConfiguration#builder()}, so the
    * builder validation applies. An empty {@link #getAllowedOperators() allowedOperators} leaves
@@ -157,5 +165,28 @@ public class HttpFilterProperties {
       builder.allowedOperators(Set.copyOf(allowedOperators));
     }
     return builder.build();
+  }
+
+  /**
+   * Properties of the exception handler that answers the client errors of the filter API with HTTP
+   * 400 and a Problem Details body. They do not configure the parser, so they also apply with a
+   * user-defined {@link HttpFilterParser} bean.
+   */
+  @API(status = MAINTAINED, since = "1.0.0")
+  public static class ProblemDetails {
+
+    /**
+     * Whether to answer the client errors of the filter API (malformed filter, unknown operator,
+     * disallowed field, invalid filter or value) with HTTP 400 and a Problem Details body.
+     */
+    private boolean enabled = true;
+
+    public boolean isEnabled() {
+      return enabled;
+    }
+
+    public void setEnabled(boolean enabled) {
+      this.enabled = enabled;
+    }
   }
 }

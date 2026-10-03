@@ -28,6 +28,15 @@ class HttpFilterPropertiesTest {
     assertThat(properties.getMaxValuesPerFilter()).isEqualTo(defaults.maxValuesPerFilter());
     assertThat(properties.getMaxValueLength()).isEqualTo(defaults.maxValueLength());
     assertThat(properties.getAllowedOperators()).isEmpty();
+    assertThat(properties.getProblemDetails().isEnabled()).isTrue();
+  }
+
+  @Test
+  void shouldDisableProblemDetails() {
+    HttpFilterProperties properties = new HttpFilterProperties();
+    properties.getProblemDetails().setEnabled(false);
+
+    assertThat(properties.getProblemDetails().isEnabled()).isFalse();
   }
 
   @Test
