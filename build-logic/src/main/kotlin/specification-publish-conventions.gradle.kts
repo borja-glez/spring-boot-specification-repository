@@ -1,7 +1,11 @@
 plugins {
     id("com.vanniktech.maven.publish")
-    // Every published module is checked for binary compatibility against apiBaseline.
-    id("specification-api-compatibility-conventions")
+}
+
+// A java-platform (such as a BOM) has no jar to compare, so only projects with the java plugin get
+// the binary compatibility check.
+pluginManager.withPlugin("java") {
+    apply(plugin = "specification-api-compatibility-conventions")
 }
 
 mavenPublishing {
