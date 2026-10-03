@@ -45,6 +45,10 @@ The `specification-repository-core` and `specification-repository-jpa` modules s
 - Java 21+ (tested on 21 and 25). The artifacts are compiled for Java 21 (class file version 65).
 - Spring Boot 3.5 (`specification-repository-boot3-starter`) or Spring Boot 4 (`specification-repository-boot4-starter`).
 
+See the [versioning and support policy](docs/versioning.md) for what semantic versioning covers, the
+deprecation process, and the full support matrix (Java, Spring Boot, Spring Data JPA, Hibernate and
+tested databases).
+
 ## Quick Start
 
 The library is split into several artifacts (core, jpa, http and one starter per Spring Boot
