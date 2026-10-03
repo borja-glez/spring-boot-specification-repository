@@ -8,6 +8,11 @@ spring:
     hibernate:
       ddl-auto: create-drop
     show-sql: true
+  data:
+    web:
+      pageable:
+        # Caps ?size= for every Pageable parameter (Spring Data's default is 2000).
+        max-page-size: 100
   h2:
     console:
       enabled: true

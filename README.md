@@ -15,7 +15,8 @@ Extensible Spring Data JPA query library with a fluent DSL and native-friendly a
 - Pure builder model -- the builder only creates an immutable query plan
 - `SpecificationRepository` as a repository base abstraction for execution
 - Per-query field whitelisting of client input for secure API exposure (`AllowedFieldsPolicy`), plus
-  server conditions added to a plan received over HTTP (`repository.query(plan)`)
+  server conditions added to a plan received over HTTP (`repository.query(plan)`); see
+  [docs/security.md](docs/security.md)
 - Pessimistic row locks (`FOR UPDATE`, `FOR SHARE`, `NOWAIT`, `SKIP LOCKED`) in the plan, for
   queue-like reads such as a transactional outbox relay (see [Pessimistic Locking](#pessimistic-locking))
 - Pluggable operators, predicate factories, converters, and dialect extensions
@@ -1023,6 +1024,10 @@ required dependencies include `specification-repository-core` and Spring Data Co
 exposes a Spring MVC argument resolver that is auto-configured when Spring Web is on the
 classpath. Works with both Spring Boot 3 and Spring Boot 4.
 
+Before exposing it on a public endpoint, read [docs/security.md](docs/security.md): the threat
+model, what the library guarantees, what the application must still do (exception handling, page
+size, server conditions, indexes, timeouts) and a complete secure controller.
+
 **Gradle**
 
 ```kotlin
@@ -1382,7 +1387,11 @@ The Boot 3 H2 demo also exposes the HTTP filter parser via `@FilterableQuery`:
 GET /api/products/filter?filter=name:contains:Laptop&filter=status:eq:ACTIVE&sort=price,desc&page=0&size=20
 ```
 
-That endpoint demonstrates:
+`GET /api/catalog/products` is the secure controller of [docs/security.md](docs/security.md):
+deny-by-default fields, a server condition, a `Slice`, a capped page size and 400 responses for
+invalid filters.
+
+The aggregate endpoint demonstrates:
 
 - `sum("price")`
 - `avg("price")`
