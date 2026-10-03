@@ -180,10 +180,17 @@ public final class DefaultOperatorHandlers {
    * Normalizes the search term exactly like the column: both sides go through the database's {@code
    * unaccent(upper(...))}, so "café" matches "CAFE" and the result does not depend on the JVM
    * default locale.
+   *
+   * <p>The term is bound as a query parameter, never inlined in the SQL. {@link
+   * CriteriaBuilder#literal} would inline it, and {@link CriteriaBuilder#parameter} would need a
+   * value set on the query, which a {@code Specification} cannot do. A plain value passed to {@link
+   * CriteriaBuilder#concat(String, Expression)} is bound like the pattern of the case-sensitive
+   * {@code like}, so the term is concatenated with an empty string literal, which renders as {@code
+   * unaccent(upper((?||'')))}.
    */
   private static Expression<String> normalizedValue(CriteriaBuilder criteriaBuilder, String value) {
-    return criteriaBuilder.function(
-        UNACCENT, String.class, criteriaBuilder.upper(criteriaBuilder.literal(value)));
+    Expression<String> term = criteriaBuilder.concat(value, criteriaBuilder.literal(""));
+    return criteriaBuilder.function(UNACCENT, String.class, criteriaBuilder.upper(term));
   }
 
   private enum ComparisonMode {

@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -71,6 +72,7 @@ class DefaultOperatorHandlersTest {
     Predicate result = registry.get(Operators.EQUALS).create(contextIgnoreCase("active"));
 
     assertThat(result).isSameAs(predicate);
+    verify(cb, never()).literal("active");
   }
 
   @SuppressWarnings("unchecked")
@@ -412,18 +414,23 @@ class DefaultOperatorHandlersTest {
     assertThat(result).isSameAs(negated);
   }
 
-  /** Column and search term, both normalized by the database as unaccent(upper(x)). */
+  /**
+   * Column and search term, both normalized by the database as unaccent(upper(x)). The term is
+   * bound as a parameter through concat(term, ''), never inlined with cb.literal(term).
+   */
   private record Normalized(Expression<String> column, Expression<String> term) {}
 
   @SuppressWarnings("unchecked")
   private Normalized normalizeBothSides(String rawTerm) {
-    Expression<String> literal = mock(Expression.class);
+    Expression<String> emptyLiteral = mock(Expression.class);
+    Expression<String> boundTerm = mock(Expression.class);
     Expression<String> upperTerm = mock(Expression.class);
     Expression<String> upperColumn = mock(Expression.class);
     Expression<String> term = mock(Expression.class);
     Expression<String> column = mock(Expression.class);
-    doReturn(literal).when(cb).literal(rawTerm);
-    when(cb.upper(any())).thenAnswer(i -> i.getArgument(0) == literal ? upperTerm : upperColumn);
+    doReturn(emptyLiteral).when(cb).literal("");
+    when(cb.concat(rawTerm, emptyLiteral)).thenReturn(boundTerm);
+    when(cb.upper(any())).thenAnswer(i -> i.getArgument(0) == boundTerm ? upperTerm : upperColumn);
     when(cb.function(eq("unaccent"), eq(String.class), any()))
         .thenAnswer(i -> i.getArgument(2) == upperTerm ? term : column);
     return new Normalized(column, term);

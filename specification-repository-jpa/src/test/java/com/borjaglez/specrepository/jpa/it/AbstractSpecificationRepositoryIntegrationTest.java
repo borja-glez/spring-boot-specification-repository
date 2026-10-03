@@ -2947,7 +2947,7 @@ abstract class AbstractSpecificationRepositoryIntegrationTest {
     assertThat(rows).extracting(row -> row.get("customers")).containsExactly(2L, 1L);
   }
 
-  // -- ignoreCase also ignores accents (needs the PostgreSQL unaccent extension) --
+  // -- ignoreCase also ignores accents (unaccent: PostgreSQL extension, H2 function alias) --
 
   @Test
   void ignoreCaseShouldAlsoIgnoreAccentsInTheSearchTerm() {
@@ -2976,6 +2976,71 @@ abstract class AbstractSpecificationRepositoryIntegrationTest {
     assertThat(repository.query().where("name", Operators.CONTAINS, "\\", true, false).findAll())
         .extracting(TestCustomer::getName)
         .containsExactly("C:\\algodón");
+  }
+
+  // -- ignoreCase binds the search term as a parameter (#152) --
+
+  @org.springframework.beans.factory.annotation.Autowired
+  private SqlStatementRecorder sqlStatementRecorder;
+
+  @Test
+  void ignoreCaseShouldBindTheSearchTermAsAParameter() {
+    repository.save(new TestCustomer("PROBE'x", "ACTIVE", null));
+    entityManager.flush();
+
+    List<String> statements =
+        sqlStatementRecorder.capture(
+            () ->
+                assertThat(
+                        repository
+                            .query()
+                            .where("name", Operators.CONTAINS, "PROBE'x", true, false)
+                            .count())
+                    .isEqualTo(1));
+
+    assertThat(statements)
+        .singleElement()
+        .satisfies(
+            sql ->
+                assertThat(sql)
+                    .containsIgnoringCase("unaccent(upper(")
+                    .contains("?")
+                    .doesNotContainIgnoringCase("probe"));
+  }
+
+  @Test
+  void ignoreCaseShouldKeepTheResultsOfEveryCaseInsensitiveOperator() {
+    repository.save(new TestCustomer("Café Ramón", "ACTIVE", null));
+    repository.save(new TestCustomer("CAFE MOLIDO", "ACTIVE", null));
+    repository.save(new TestCustomer("Té verde", "ACTIVE", null));
+    repository.save(new TestCustomer("100% Algodón", "ACTIVE", null));
+    repository.save(new TestCustomer("A_B", "ACTIVE", null));
+    repository.save(new TestCustomer("AXB", "ACTIVE", null));
+    repository.save(new TestCustomer("Straße", "ACTIVE", null));
+    repository.save(new TestCustomer("Ærø", "ACTIVE", null));
+    long total = repository.count();
+
+    assertThat(namesIgnoringCase(Operators.EQUALS, "TE VERDE")).containsExactly("Té verde");
+    assertThat(namesIgnoringCase(Operators.EQUALS, "ærø")).containsExactly("Ærø");
+    assertThat(namesIgnoringCase(Operators.NOT_EQUALS, "té verde")).hasSize((int) total - 1);
+    assertThat(namesIgnoringCase(Operators.CONTAINS, "café"))
+        .containsExactlyInAnyOrder("Café Ramón", "CAFE MOLIDO");
+    assertThat(namesIgnoringCase(Operators.CONTAINS, "straße")).containsExactly("Straße");
+    assertThat(namesIgnoringCase(Operators.NOT_CONTAINS, "cafe"))
+        .hasSize((int) total - 2)
+        .doesNotContain("Café Ramón", "CAFE MOLIDO");
+    assertThat(namesIgnoringCase(Operators.STARTS_WITH, "caFÉ "))
+        .containsExactlyInAnyOrder("Café Ramón", "CAFE MOLIDO");
+    assertThat(namesIgnoringCase(Operators.ENDS_WITH, "% ALGODON")).containsExactly("100% Algodón");
+    assertThat(namesIgnoringCase(Operators.CONTAINS, "0%")).containsExactly("100% Algodón");
+    assertThat(namesIgnoringCase(Operators.CONTAINS, "a_b")).containsExactly("A_B");
+    assertThat(namesIgnoringCase(Operators.STARTS_WITH, "_")).isEmpty();
+  }
+
+  private List<String> namesIgnoringCase(FilterOperator operator, String value) {
+    return repository.query().where("name", operator, value, true, false).findAll().stream()
+        .map(TestCustomer::getName)
+        .toList();
   }
 
   // -- Pagination with a collection fetch on entities with a composite id --
