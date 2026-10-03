@@ -43,6 +43,8 @@ tasks.register("quality") {
         ":specification-repository-boot3-starter:test",
         ":specification-repository-boot4-starter:test",
         ":specification-repository-test-support:test",
+        // The BOM has no code, tests or coverage; generating its POM catches a broken platform early.
+        ":specification-repository-bom:generatePomFileForMavenPublication",
         "coverage",
         "verifyAutomaticModuleNames",
         "apiCompatibility",

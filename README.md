@@ -34,6 +34,7 @@ Extensible Spring Data JPA query library with a fluent DSL and native-friendly a
 | `specification-repository-boot3-starter` | Spring Boot 3 auto-configuration |
 | `specification-repository-boot4-starter` | Spring Boot 4 auto-configuration |
 | `specification-repository-http` | Optional HTTP query parameter parser and Spring MVC argument resolver |
+| `specification-repository-bom` | Bill of materials that aligns the versions of the published modules |
 | `specification-repository-test-support` | Shared test fixtures and utilities |
 | `examples` | Runnable sample applications |
 
@@ -46,22 +47,48 @@ The `specification-repository-core` and `specification-repository-jpa` modules s
 
 ## Quick Start
 
+The library is split into several artifacts (core, jpa, http and one starter per Spring Boot
+line) that must share the same version. Import the `specification-repository-bom` once and
+declare the modules without a version. The BOM only manages this library's artifacts; Spring
+Boot keeps owning every third-party version.
+
 ### Spring Boot 3
 
 **Gradle**
 
 ```kotlin
-implementation("com.borjaglez.specrepository:specification-repository-boot3-starter:0.4.0")
+implementation(platform("com.borjaglez.specrepository:specification-repository-bom:0.4.0"))
+implementation("com.borjaglez.specrepository:specification-repository-boot3-starter")
+// Optional: HTTP query-string binding for Spring MVC controllers
+implementation("com.borjaglez.specrepository:specification-repository-http")
 ```
 
 **Maven**
 
 ```xml
-<dependency>
-    <groupId>com.borjaglez.specrepository</groupId>
-    <artifactId>specification-repository-boot3-starter</artifactId>
-    <version>0.4.0</version>
-</dependency>
+<dependencyManagement>
+    <dependencies>
+        <dependency>
+            <groupId>com.borjaglez.specrepository</groupId>
+            <artifactId>specification-repository-bom</artifactId>
+            <version>0.4.0</version>
+            <type>pom</type>
+            <scope>import</scope>
+        </dependency>
+    </dependencies>
+</dependencyManagement>
+
+<dependencies>
+    <dependency>
+        <groupId>com.borjaglez.specrepository</groupId>
+        <artifactId>specification-repository-boot3-starter</artifactId>
+    </dependency>
+    <!-- Optional: HTTP query-string binding for Spring MVC controllers -->
+    <dependency>
+        <groupId>com.borjaglez.specrepository</groupId>
+        <artifactId>specification-repository-http</artifactId>
+    </dependency>
+</dependencies>
 ```
 
 ### Spring Boot 4
@@ -69,18 +96,41 @@ implementation("com.borjaglez.specrepository:specification-repository-boot3-star
 **Gradle**
 
 ```kotlin
-implementation("com.borjaglez.specrepository:specification-repository-boot4-starter:0.4.0")
+implementation(platform("com.borjaglez.specrepository:specification-repository-bom:0.4.0"))
+implementation("com.borjaglez.specrepository:specification-repository-boot4-starter")
+// Optional: HTTP query-string binding for Spring MVC controllers
+implementation("com.borjaglez.specrepository:specification-repository-http")
 ```
 
 **Maven**
 
 ```xml
-<dependency>
-    <groupId>com.borjaglez.specrepository</groupId>
-    <artifactId>specification-repository-boot4-starter</artifactId>
-    <version>0.4.0</version>
-</dependency>
+<dependencyManagement>
+    <dependencies>
+        <dependency>
+            <groupId>com.borjaglez.specrepository</groupId>
+            <artifactId>specification-repository-bom</artifactId>
+            <version>0.4.0</version>
+            <type>pom</type>
+            <scope>import</scope>
+        </dependency>
+    </dependencies>
+</dependencyManagement>
+
+<dependencies>
+    <dependency>
+        <groupId>com.borjaglez.specrepository</groupId>
+        <artifactId>specification-repository-boot4-starter</artifactId>
+    </dependency>
+    <!-- Optional: HTTP query-string binding for Spring MVC controllers -->
+    <dependency>
+        <groupId>com.borjaglez.specrepository</groupId>
+        <artifactId>specification-repository-http</artifactId>
+    </dependency>
+</dependencies>
 ```
+
+A single artifact can still be declared with an explicit version, without the BOM.
 
 ### Upgrading
 

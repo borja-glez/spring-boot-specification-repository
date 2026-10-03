@@ -11,6 +11,7 @@ Artifacts are published under group ID `com.borjaglez.specrepository` and config
 | `specification-repository-boot3-starter` | `com.borjaglez.specrepository:specification-repository-boot3-starter` |
 | `specification-repository-boot4-starter` | `com.borjaglez.specrepository:specification-repository-boot4-starter` |
 | `specification-repository-http` | `com.borjaglez.specrepository:specification-repository-http` |
+| `specification-repository-bom` | `com.borjaglez.specrepository:specification-repository-bom` (POM-only `java-platform`) |
 
 The `specification-repository-test-support` module and all `examples/*` modules are NOT published.
 
