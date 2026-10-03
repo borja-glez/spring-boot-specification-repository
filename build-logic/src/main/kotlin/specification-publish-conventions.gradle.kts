@@ -70,3 +70,52 @@ tasks.withType<PublishToMavenRepository>().configureEach {
         }
     }
 }
+
+// A java-platform (such as a BOM) has no jar, so this applies only to projects with the java plugin.
+pluginManager.withPlugin("java") {
+    // Every published jar declares a stable JPMS name, so applications on the module path do not get one
+    // derived from the file name. The name is the module's root package:
+    // specification-repository-<x>[-starter] becomes com.borjaglez.specrepository.<x>.
+    val automaticModuleName = "com.borjaglez.specrepository." +
+        project.name.removePrefix("specification-repository-").removeSuffix("-starter")
+
+    tasks.named<Jar>("jar") {
+        manifest {
+            attributes("Automatic-Module-Name" to automaticModuleName)
+        }
+    }
+
+    val verifyAutomaticModuleName by tasks.registering {
+        group = LifecycleBasePlugin.VERIFICATION_GROUP
+        description = "Verifies that the jar manifest declares the expected Automatic-Module-Name."
+        val jarFile = tasks.named<Jar>("jar").flatMap { it.archiveFile }
+        val expectedName = automaticModuleName
+        inputs.file(jarFile)
+        inputs.property("expectedName", expectedName)
+        doLast {
+            java.util.jar.JarFile(jarFile.get().asFile).use { jar ->
+                val actualName = jar.manifest?.mainAttributes?.getValue("Automatic-Module-Name")
+                check(actualName == expectedName) {
+                    "${jar.name}: expected Automatic-Module-Name '$expectedName' but found '$actualName'"
+                }
+                val validName = expectedName.split('.').all { segment ->
+                    segment.isNotEmpty() &&
+                        Character.isJavaIdentifierStart(segment[0]) &&
+                        segment.all(Character::isJavaIdentifierPart) &&
+                        !javax.lang.model.SourceVersion.isKeyword(segment)
+                }
+                check(validName) { "${jar.name}: '$expectedName' is not a valid module name" }
+                val packageDirectory = expectedName.replace('.', '/') + "/"
+                val hasPackage = jar.entries().asSequence()
+                    .any { it.name.startsWith(packageDirectory) && it.name.endsWith(".class") }
+                check(hasPackage) {
+                    "${jar.name}: Automatic-Module-Name '$expectedName' is not a package of the jar"
+                }
+            }
+        }
+    }
+
+    tasks.named("check") {
+        dependsOn(verifyAutomaticModuleName)
+    }
+}
