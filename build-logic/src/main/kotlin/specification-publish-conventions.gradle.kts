@@ -1,5 +1,7 @@
 plugins {
     id("com.vanniktech.maven.publish")
+    // Every published module is checked for binary compatibility against apiBaseline.
+    id("specification-api-compatibility-conventions")
 }
 
 mavenPublishing {

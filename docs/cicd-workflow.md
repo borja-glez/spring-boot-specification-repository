@@ -18,7 +18,7 @@ This document describes the complete CI/CD pipeline for this project.
 **Trigger:** `pull_request` (any branch, any PR)
 
 **What it does:**
-- Runs `./gradlew quality` (all tests + coverage)
+- Runs `./gradlew quality` (all tests + coverage + Spotless + the [API compatibility check](#api-compatibility-check))
 - The JPA integration suites run on H2 and on PostgreSQL 17 (Testcontainers, needs Docker, available on the runner); see `CONTRIBUTING.md`
 
 **Purpose:** Gate that blocks merging until all tests pass and coverage meets the 100% threshold.
@@ -208,6 +208,44 @@ main (0.3.0-SNAPSHOT)          release/0.1.x              release/0.2.x
 ```
 
 Each branch is fully independent with its own `gradle.properties`, snapshots, and releases.
+
+---
+
+## API compatibility check
+
+`quality` depends on the root `apiCompatibility` task, which runs `apiCompatibility` in each published module (core, jpa, http, boot3-starter, boot4-starter). The task is defined in `build-logic/src/main/kotlin/specification-api-compatibility-conventions.gradle.kts` and uses the [japicmp Gradle plugin](https://github.com/melix/japicmp-gradle-plugin).
+
+**What it compares:** the module's jar against the same artifact at version `apiBaseline` (a property in `gradle.properties`), resolved from Maven Central. Only the released jar is compared; its dependencies are not. Public and protected members are checked.
+
+**When it fails:** on any binary-incompatible change (a removed or less accessible class or member, a changed signature or return type, a class made final, a new abstract method, ...). Source-only incompatibilities do not fail it.
+
+**What it ignores:** elements whose effective `@API` status is `INTERNAL` or `EXPERIMENTAL`. The effective status is the element's own `@API(status = ...)`, or the one of its enclosing class when it has none. A change is accepted when the baseline marks the element `INTERNAL`/`EXPERIMENTAL`, or when the baseline predates `@API` and the current version marks it so. Demoting a `STABLE` or `MAINTAINED` element to `INTERNAL` still fails, because the baseline's status wins. japicmp's built-in annotation exclusion matches the annotation type only, not its `status` value, so the check uses a custom rule (`build-logic/src/main/java/com/borjaglez/specrepository/gradle/ApiStatusBinaryCompatibilityRule.java`) that reads the status from the bytecode.
+
+**When it is skipped:**
+- `apiBaseline` is empty (the case until 1.0.0 is on Maven Central).
+- The major version in `gradle.properties` is greater than the baseline's major (for example `2.0.0-SNAPSHOT` against `1.4.0`), because a new major may break the API.
+
+**Reports:** `<module>/build/reports/japicmp/api-compatibility.html` lists every binary-incompatible change, as `Error` or `Accepted` (with the `@API` status that excused it). `<module>/build/reports/japicmp/japicmp.html` is japicmp's full diff of modified elements.
+
+**Run it locally:**
+
+```bash
+./gradlew apiCompatibility                        # uses apiBaseline from gradle.properties
+./gradlew apiCompatibility -PapiBaseline=1.0.0    # compares against another release
+./gradlew :specification-repository-jpa:apiCompatibility -PapiBaseline=1.0.0
+```
+
+### When and how to bump `apiBaseline`
+
+`apiBaseline` names the release the public API must stay binary compatible with.
+
+1. **Until 1.0.0 is released**, keep it empty. Releases before 1.0.0 make no compatibility promise, and the check is skipped.
+2. **In the first commit after 1.0.0 is on Maven Central**, set `apiBaseline=1.0.0` in `gradle.properties` on `main`. Wait until the artifacts resolve from Maven Central (the release workflow publishes with automatic release, which can take a few minutes to propagate), otherwise the check fails to resolve the baseline.
+3. **Minor and patch releases** of the same major do not need a bump: every `1.x` release stays compatible with `1.0.0`. Optionally move the baseline to the latest `1.x` release, to also protect API added after `1.0.0`; do it in a separate commit once that release is on Maven Central.
+4. **A new major** (`version=2.0.0-SNAPSHOT`) skips the check automatically. After `2.0.0` is on Maven Central, set `apiBaseline=2.0.0` in the first commit after the release, as in step 2.
+5. **Maintenance branches** (`release/X.Y.x`) keep their own `gradle.properties`; set `apiBaseline` there to the release the branch was created from (for example `1.2.0` on `release/1.2.x`).
+
+If a binary-incompatible change is intended within a major, the fix is to mark the element `@API(status = INTERNAL)` or `EXPERIMENTAL` *before* it is released as stable, or to wait for the next major. Do not empty `apiBaseline` to make the build pass.
 
 ---
 

@@ -100,6 +100,18 @@ If the current version is not a SNAPSHOT, it derives the version from the last g
 
 Triggers on pushes to `feat/**` or `feature/**` branches. Derives version from the base version + sanitized branch name. Example: `feat/my-feature` on `0.1.0-SNAPSHOT` becomes `0.1.0-my-feature-SNAPSHOT`.
 
+## API Baseline
+
+`apiBaseline` in `gradle.properties` names the release the published modules must stay binary compatible with. `./gradlew quality` (and so every workflow above) runs the `apiCompatibility` check against it, and fails on a binary-incompatible change to an element that is not `@API(status = INTERNAL)` or `EXPERIMENTAL`. The check is skipped while `apiBaseline` is empty and when the current major version is greater than the baseline's.
+
+After a stable release:
+
+- **1.0.0:** `apiBaseline` stays empty until 1.0.0 is on Maven Central. Then, in the first commit after the release, set `apiBaseline=1.0.0` on `main`.
+- **A new major (`X.0.0`):** set `apiBaseline=X.0.0` in the first commit after it is on Maven Central. Until then the check is skipped, because the version in `gradle.properties` already has the new major.
+- **Minor and patch releases:** no bump is needed; the baseline stays on the first release of the major. Moving it to a later release of the same major is optional.
+
+The release workflow does not change `apiBaseline`; it is a manual commit. See [CI/CD Workflow Guide](cicd-workflow.md#api-compatibility-check) for what the check compares and how to run it locally.
+
 ## Local Publishing
 
 If you need to publish outside CI:
