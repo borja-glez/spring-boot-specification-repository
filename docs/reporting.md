@@ -149,14 +149,23 @@ Calling `having(...)` without a preceding `groupBy(...)` is rejected by the
 builder with `IllegalStateException("having requires at least one groupBy field")`.
 This mirrors SQL semantics and catches misuse early.
 
-When an `AllowedFieldsPolicy` is attached to the query, the field referenced
-by every `having(...)` clause is validated against the *filterable* fields
-set, exactly like `where(...)` clauses. Use this to expose `having` to
-external API callers safely.
+A report is defined by the server, so an `AllowedFieldsPolicy` attached to the
+query does not check it: `groupBy(...)`, `select(...)`, `selectInto(...)`, the
+aggregate fields and the `having(...)` conditions are not validated. The HTTP
+syntax has no `having`, so a `having` is always server input, also one added on
+a builder derived from a client plan:
 
-The rest of a report is defined by the server and is not checked against the
-policy: `groupBy(...)`, `select(...)`, `selectInto(...)` and the aggregate
-fields. Do not build them from client input without validating it yourself.
+```java
+// quantity is not filterable: the client filters still are checked, the having is not
+List<GroupedRow> top = orderLineRepository.query(planFromClient)
+    .groupBy("product.name")
+    .select("product.name")
+    .sumAs("units", "quantity")
+    .having(AggregateFunction.SUM, "quantity", Operators.GREATER_THAN, 10)
+    .findRows();
+```
+
+Do not build any of them from client input without validating it yourself.
 See [What the policy covers](../README.md#what-the-policy-covers).
 
 ## Putting it together

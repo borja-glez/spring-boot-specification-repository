@@ -696,8 +696,7 @@ The policy guards **client input**, not the whole query. A plan keeps its condit
 combined with AND when the query runs:
 
 - **client conditions** (`QueryPlan.rootCondition()`): the filters a caller chose, such as the ones
-  parsed from an HTTP request. They are checked against the policy, together with the plan's sort
-  and `having` fields.
+  parsed from an HTTP request. They are checked against the policy, together with the plan's sort.
 - **server conditions** (`QueryPlan.serverCondition()`): conditions the application adds, such as
   "only the current customer's orders", a tenant or a soft-delete flag. They are not checked against
   the policy, so they can use fields the client may not filter by. They are always ANDed with the
@@ -718,20 +717,22 @@ can define are not checked:
 | outer field of `inSubquery` / `notInSubquery`, outer fields of `correlate(...)`, in `rootCondition()` | caller | filterable fields |
 | `sort` request parameter and the plan sort, also one set with `sort(...)` or `sortedByDefault(...)` on a derived builder | client or server | sortable fields |
 | sort of a sorted `Pageable` | client (HTTP) | sortable fields |
-| `having(...)` fields, also ones added on a derived builder | caller (the HTTP syntax has none) | filterable fields |
 | server conditions (`where`, `and`, `or`, `exists`, ... on a derived builder), including their subqueries | server | not checked |
 | `select`, `selectInto`, aggregates (`sum`, `countAs`, ...), `groupBy` | server | not checked |
 | joins and fetches (`leftJoin`, `leftFetch`, ...) | server | not checked |
+| `having(...)` conditions, on a plain or a derived builder | server (the HTTP syntax has none) | not checked |
 | row lock (`lock(...)`) | server (the HTTP syntax has none) | not checked |
 | fields inside a subquery body (the sub-entity's conditions and selected field) | server | not checked |
 
 The HTTP syntax cannot express selections, grouping, aggregates, joins, fetches or `having`, so an
 endpoint that resolves a plan with `@FilterableQuery` gives the client control over filters and the
-sort only. Everything else is chosen in code and trusted. A fetch still matters: it puts the
+sort only. Everything else is chosen in code and trusted. That includes `having`: a report can add
+`having(SUM, "quantity", GREATER_THAN, 10)` on a derived builder although `quantity` is not
+filterable. A fetch still matters: it puts the
 association in the serialized entity, so decide in code which associations an endpoint returns.
 
 Never let a client choose selections, fetches, joins or grouping paths directly, for example by
-passing a request parameter to `select(...)`, `groupBy(...)` or `leftFetch(...)`. If an endpoint must
+passing a request parameter to `select(...)`, `groupBy(...)`, `having(...)` or `leftFetch(...)`. If an endpoint must
 offer that choice, validate the value yourself (map it from a fixed set of options) before it reaches
 the builder.
 

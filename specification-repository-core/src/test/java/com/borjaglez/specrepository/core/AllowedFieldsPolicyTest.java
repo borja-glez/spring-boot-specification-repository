@@ -127,7 +127,7 @@ class AllowedFieldsPolicyTest {
   }
 
   @Test
-  void validateShouldAcceptAllowedHavingAndSubqueryOuterFields() {
+  void validateShouldAcceptAllowedSubqueryOuterFields() {
     QueryPlan<String> plan =
         clientQuery()
             .inSubquery("region", Integer.class, "id", sub -> {})
@@ -165,14 +165,25 @@ class AllowedFieldsPolicyTest {
   }
 
   @Test
-  void validateShouldRejectADisallowedHavingField() {
+  void validateShouldNotCheckHavingFields() {
     QueryPlan<String> plan =
         clientQuery()
             .groupBy("status")
             .having(AggregateFunction.SUM, "total", Operators.GREATER_THAN, 1)
             .build();
 
-    assertDisallowed(plan, "total", "filtering");
+    assertThatCode(() -> CLIENT.validate(plan)).doesNotThrowAnyException();
+  }
+
+  @Test
+  void validateShouldNotCheckHavingFieldsAddedOnADerivedBuilder() {
+    QueryPlan<String> plan =
+        clientQuery().where("status", Operators.EQUALS, "PLACED").build().toBuilder()
+            .groupBy("status")
+            .having(AggregateFunction.SUM, "total", Operators.GREATER_THAN, 1)
+            .build();
+
+    assertThatCode(() -> CLIENT.validate(plan)).doesNotThrowAnyException();
   }
 
   @Test

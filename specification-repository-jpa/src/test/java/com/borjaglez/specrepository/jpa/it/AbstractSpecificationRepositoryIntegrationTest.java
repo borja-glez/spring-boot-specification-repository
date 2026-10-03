@@ -2569,21 +2569,84 @@ abstract class AbstractSpecificationRepositoryIntegrationTest {
     assertThat(results).hasSize(2);
   }
 
+  // -- having is server input: no client channel produces it, so the policy does not check it --
+
+  private static final AllowedFieldsPolicy STATUS_ONLY_POLICY =
+      AllowedFieldsPolicy.of(Set.of("status"), Set.of("status"));
+
   @Test
-  void shouldValidateHavingFieldAgainstAllowedFieldsPolicy() {
-    AllowedFieldsPolicy policy = AllowedFieldsPolicy.of(Set.of("status"), Set.of("status"));
+  void shouldRunAServerHavingOnANonFilterableFieldOfADerivedReport() {
+    QueryPlan<TestCustomer> clientPlan =
+        repository
+            .query()
+            .allowedFields(STATUS_ONLY_POLICY)
+            .where("status", Operators.IS_NOT_NULL, null)
+            .plan();
+
+    List<GroupedRow> rows =
+        repository
+            .query(clientPlan)
+            .groupBy("status")
+            .select("status")
+            .countAs("customers", "id")
+            .having(AggregateFunction.SUM, "age", Operators.GREATER_THAN, 50)
+            .findRows();
+
+    assertThat(rows).extracting(row -> row.get("status")).containsExactly("ACTIVE");
+    assertThat(rows.get(0).get("customers")).isEqualTo(2L);
+  }
+
+  @Test
+  void shouldStillRejectADisallowedClientFilterOfADerivedReport() {
+    QueryPlan<TestCustomer> clientPlan =
+        repository
+            .query()
+            .allowedFields(STATUS_ONLY_POLICY)
+            .where("age", Operators.GREATER_THAN, 20)
+            .plan();
 
     assertThatThrownBy(
             () ->
                 repository
-                    .query()
-                    .allowedFields(policy)
+                    .query(clientPlan)
                     .groupBy("status")
-                    .count("id")
-                    .having(AggregateFunction.COUNT, "id", Operators.GREATER_THAN, 1L)
+                    .select("status")
+                    .having(AggregateFunction.SUM, "age", Operators.GREATER_THAN, 50)
                     .findRows())
         .isInstanceOf(DisallowedFieldException.class)
-        .hasMessage("Field 'id' is not allowed for filtering");
+        .hasMessage("Field 'age' is not allowed for filtering");
+  }
+
+  @Test
+  void shouldStillRejectADisallowedClientSortOfADerivedReport() {
+    QueryPlan<TestCustomer> clientPlan =
+        repository.query().allowedFields(STATUS_ONLY_POLICY).sort(Sort.by("name")).plan();
+
+    assertThatThrownBy(
+            () ->
+                repository
+                    .query(clientPlan)
+                    .groupBy("status")
+                    .select("status")
+                    .having(AggregateFunction.SUM, "age", Operators.GREATER_THAN, 50)
+                    .findRows())
+        .isInstanceOf(DisallowedFieldException.class)
+        .hasMessage("Field 'name' is not allowed for sorting");
+  }
+
+  @Test
+  void shouldStillRejectADisallowedPageableSortOfADerivedQuery() {
+    QueryPlan<TestCustomer> clientPlan =
+        repository.query().allowedFields(STATUS_ONLY_POLICY).plan();
+
+    assertThatThrownBy(
+            () ->
+                repository
+                    .query(clientPlan)
+                    .where("age", Operators.GREATER_THAN, 20)
+                    .findAll(PageRequest.of(0, 5, Sort.by("name"))))
+        .isInstanceOf(DisallowedFieldException.class)
+        .hasMessage("Field 'name' is not allowed for sorting");
   }
 
   @Test

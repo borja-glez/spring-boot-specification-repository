@@ -44,8 +44,8 @@ List<User> users = userRepository.query()
 
 Without `allowedFields()`, all fields are permitted (backward-compatible default).
 
-The policy guards client input: the plan's client conditions (`rootCondition()`), its sort and its
-`having` fields. Conditions the server adds by deriving a plan (`plan.toBuilder()` or
+The policy guards client input: the plan's client conditions (`rootCondition()`) and its sort. A
+`having` is not checked: the HTTP syntax has none, so it is server input. Conditions the server adds by deriving a plan (`plan.toBuilder()` or
 `repository.query(plan)`) go to `serverCondition()`, are ANDed with the client conditions and are
 not checked, so they may use fields the client cannot filter by:
 
