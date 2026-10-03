@@ -21,6 +21,18 @@ tasks.register("coverage") {
     )
 }
 
+tasks.register("verifyAutomaticModuleNames") {
+    group = LifecycleBasePlugin.VERIFICATION_GROUP
+    description = "Verifies the Automatic-Module-Name of every published jar."
+    dependsOn(
+        ":specification-repository-core:verifyAutomaticModuleName",
+        ":specification-repository-jpa:verifyAutomaticModuleName",
+        ":specification-repository-http:verifyAutomaticModuleName",
+        ":specification-repository-boot3-starter:verifyAutomaticModuleName",
+        ":specification-repository-boot4-starter:verifyAutomaticModuleName"
+    )
+}
+
 tasks.register("quality") {
     group = LifecycleBasePlugin.VERIFICATION_GROUP
     description = "Runs tests, coverage verification, and formatting checks."
@@ -32,6 +44,7 @@ tasks.register("quality") {
         ":specification-repository-boot4-starter:test",
         ":specification-repository-test-support:test",
         "coverage",
+        "verifyAutomaticModuleNames",
         "apiCompatibility",
         "spotlessCheckAll"
     )
