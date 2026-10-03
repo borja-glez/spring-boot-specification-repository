@@ -172,6 +172,7 @@ public class HttpFilterProperties {
    * 400 and a Problem Details body. They do not configure the parser, so they also apply with a
    * user-defined {@link HttpFilterParser} bean.
    */
+  @API(status = MAINTAINED, since = "1.0.0")
   public static class ProblemDetails {
 
     /**
