@@ -45,9 +45,10 @@ List<User> users = userRepository.query()
 Without `allowedFields()`, all fields are permitted (backward-compatible default).
 
 The policy guards client input: the plan's client conditions (`rootCondition()`) and its sort. A
-`having` is not checked: the HTTP syntax has none, so it is server input. Conditions the server adds by deriving a plan (`plan.toBuilder()` or
-`repository.query(plan)`) go to `serverCondition()`, are ANDed with the client conditions and are
-not checked, so they may use fields the client cannot filter by:
+`having` is not checked: the HTTP syntax has none, so it is server input. Conditions the server
+adds by deriving a plan (`plan.toBuilder()` or `repository.query(plan)`) go to `serverCondition()`,
+are ANDed with the client conditions and are not checked, so they may use fields the client cannot
+filter by:
 
 ```java
 List<Order> mine = orderRepository.query(planFromClient)
@@ -62,9 +63,10 @@ are.
 `AllowedFieldsPolicy.validate(plan)` runs the same check on demand; the HTTP argument resolver
 calls it so that a disallowed client field fails before the controller runs.
 
-Selections, `groupBy`, aggregates, joins, fetches and subquery bodies are defined by the server and
-are not checked against the policy. Never pass a client value straight to `select(...)`,
-`groupBy(...)` or `leftFetch(...)`; validate it yourself first. The README table
+Selections, `groupBy`, aggregates, `having`, joins, fetches and subquery bodies are defined by the
+server and are not checked against the policy. Never pass a client value straight to `select(...)`,
+`groupBy(...)`, `having(...)`, `leftFetch(...)`, or to `sort(...)` / `sortedByDefault(...)` on a
+derived builder; validate it yourself first. The README table
 [What the policy covers](../README.md#what-the-policy-covers) lists every part of a plan and whether
 it is checked.
 
@@ -110,4 +112,4 @@ class UserController {
 }
 ```
 
-Attempting to filter by `passwordHash` or sort by `internalScore` throws `DisallowedFieldException` with a clear message: `"Field 'passwordHash' is not allowed for filtering"`.
+Attempting to filter by `passwordHash` or sort by `internalScore` throws `DisallowedFieldException` with a clear message: `"Field 'passwordHash' is not allowed for filtering"`. With the `specification-repository-http` module in a Spring Boot MVC application, it is answered with 400 Problem Details by default, like the other client filter errors (see [docs/security.md](security.md#http-status-of-each-exception)).

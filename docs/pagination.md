@@ -9,7 +9,9 @@ Spring Data's `Pageable` argument:
 
 Both honor the same sort priority: when the supplied `Pageable` is sorted, its
 `Sort` overrides any `sort(...)` set on the builder; otherwise the builder's
-sort is used.
+sort is used. A sort set with `sort(...)` or `sortedByDefault(...)` on a
+builder derived from a client plan (`repository.query(plan)`) is server input
+and is not checked against the policy; the client sort it keeps is.
 
 The `Pageable` sort usually comes from the client (the `sort` request
 parameter), so it is checked against the plan's `AllowedFieldsPolicy` before it
@@ -18,6 +20,9 @@ overrides the plan sort: a property outside the policy's sortable fields throws
 to `findAll(plan, pageable)`, `findSlice(plan, pageable)`, their projected
 variants and the fluent `findAll(Pageable)` / `findSlice(Pageable)`. With
 `AllowedFieldsPolicy.allowAll()` (the default) any `Pageable` sort is accepted.
+In a Spring MVC application with the HTTP module, that exception is answered
+with 400 Problem Details by default (see
+[docs/security.md](security.md#http-status-of-each-exception)).
 
 ## `findAll(Pageable)` — counted pagination
 

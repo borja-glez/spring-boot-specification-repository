@@ -60,8 +60,9 @@ subqueries) has **no HTTP syntax**: it is chosen in code and trusted.
   `findSlice(pageable)` check each of its properties against the plan's sortable fields and throw
   `DisallowedFieldException` (usage `sorting`) before any SQL runs. Passing the controller's
   `Pageable` unchanged is therefore safe.
-- A sort set in code on a derived builder (`sort(...)`, `sortedByDefault(...)`) is checked too, so
-  pick a default sort among the sortable fields.
+- A sort set in code on a derived builder (`sort(...)`, `sortedByDefault(...)` when the client sent
+  no sort) is server input and is not checked, so a default sort may use a field the client cannot
+  sort by. A client sort the derived plan keeps, and the `Pageable` sort, are still checked.
 
 ### Server conditions cannot be widened
 
@@ -86,14 +87,13 @@ instead of every row. This also holds with `ignoreCase`.
 
 Queries are built with the JPA Criteria API. Field names become metamodel paths and filter values
 are passed to the criteria builder as values: there is no string concatenation into JPQL or SQL,
-and with Hibernate the values of the default operators are sent as JDBC bind parameters.
+and the values of the default operators are always sent as JDBC bind parameters.
 
-One exception: with `ignoreCase` (`caseInsensitiveFields`) and the default handlers, the search
-term of `eq`, `neq`, `contains`, `notcontains`, `startswith` and `endswith` is passed through
-`CriteriaBuilder.literal(...)`, which Hibernate renders as an SQL string literal with its quotes
-escaped, not as a bind parameter. It is not concatenated by the library, but if your database
-treats backslashes inside string literals as escapes (for example MySQL without
-`NO_BACKSLASH_ESCAPES`), prefer not to expose `caseInsensitiveFields` until this is changed.
+That includes the search term of a case-insensitive condition (`ignoreCase`, or a field listed in
+`caseInsensitiveFields`) with `eq`, `neq`, `contains`, `notcontains`, `startswith` and
+`endswith`: it is bound as a parameter inside `unaccent(upper(...))`, never rendered as an SQL
+literal. This uses only standard JPA (no provider-specific API) and is verified on Hibernate 6.6
+and 7.x, with H2 and PostgreSQL.
 
 ### Input limits
 
@@ -222,7 +222,8 @@ not map to a status.
   on public endpoints, and avoid paths through associations the endpoint should not reveal. Return
   a DTO rather than the entity, and decide in code which associations are fetched and serialized.
 - **Never pass request input to the parts of the plan that are trusted**: `select(...)`,
-  `groupBy(...)`, `having(...)`, `leftJoin(...)`, `leftFetch(...)`, `lock(...)`. If an endpoint
+  `groupBy(...)`, `having(...)`, `leftJoin(...)`, `leftFetch(...)`, `lock(...)`, and `sort(...)` or
+  `sortedByDefault(...)` on a derived builder. The policy does not check them. If an endpoint
   offers such a choice, map it from a fixed set of options.
 - **Index the filterable and sortable columns.** Every field in `filterableFields` and
   `sortableFields` is a `WHERE` or `ORDER BY` a client can trigger at will. Without an index, each

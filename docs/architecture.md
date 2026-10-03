@@ -4,7 +4,9 @@ The project is split into a pure query core and JPA/Spring adapters.
 
 - `specification-repository-core` contains the immutable query plan and fluent builder.
 - `specification-repository-jpa` translates the query plan into Spring Data JPA `Specification` objects and manages join/fetch reuse through a metamodel-driven registry.
+- `specification-repository-http` parses HTTP query parameters into a query plan and, in Spring MVC, resolves `@FilterableQuery` arguments and answers client filter errors with 400 Problem Details.
 - Starter modules expose auto-configuration for Spring Boot 3 and 4, including bean-based extension points for operators, value converters, and repository customization.
+- `specification-repository-bom` aligns the versions of the published modules.
 
 All library code lives under the `com.borjaglez.specrepository` package hierarchy.
 
