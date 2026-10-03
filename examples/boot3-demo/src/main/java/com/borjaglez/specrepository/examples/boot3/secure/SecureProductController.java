@@ -32,7 +32,8 @@ import com.borjaglez.specrepository.http.spring.FilterableQuery;
  * </ul>
  *
  * <p>The page size is capped by {@code spring.data.web.pageable.max-page-size} in {@code
- * application.yml}, and {@link FilterErrorHandler} answers the client errors with 400.
+ * application.yml}. The client errors are answered with 400 Problem Details by the advice that the
+ * HTTP module registers by default.
  */
 @RestController
 @RequestMapping("/api/catalog/products")

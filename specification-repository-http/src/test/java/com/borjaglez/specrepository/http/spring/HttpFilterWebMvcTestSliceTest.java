@@ -3,6 +3,7 @@ package com.borjaglez.specrepository.http.spring;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import org.junit.jupiter.api.Test;
@@ -11,6 +12,7 @@ import org.springframework.boot.SpringBootConfiguration;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Import;
+import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -33,6 +35,7 @@ class HttpFilterWebMvcTestSliceTest {
   void shouldRegisterHttpFilterBeansInTheSlice() {
     assertThat(context.getBeansOfType(HttpFilterParser.class)).hasSize(1);
     assertThat(context.getBeansOfType(QueryPlanArgumentResolver.class)).hasSize(1);
+    assertThat(context.getBeansOfType(HttpFilterProblemDetailsExceptionHandler.class)).hasSize(1);
   }
 
   @Test
@@ -51,6 +54,20 @@ class HttpFilterWebMvcTestSliceTest {
                 assertThat(result.getResolvedException())
                     .isInstanceOf(UndeclaredFieldListException.class)
                     .hasMessageContaining("declares no filterableFields"));
+  }
+
+  @Test
+  void shouldAnswerAMalformedFilterWithProblemDetails() throws Exception {
+    mvc.perform(get("/demo").param("filter", "name"))
+        .andExpect(status().isBadRequest())
+        .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON))
+        .andExpect(jsonPath("$.status").value(400))
+        .andExpect(jsonPath("$.title").value("Bad Request"))
+        .andExpect(
+            jsonPath("$.detail")
+                .value(
+                    "Invalid filter expression 'name': missing field name or operator separator"))
+        .andExpect(jsonPath("$.instance").value("/demo"));
   }
 
   static class Demo {}

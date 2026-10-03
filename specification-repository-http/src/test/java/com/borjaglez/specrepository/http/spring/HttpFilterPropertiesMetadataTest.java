@@ -35,7 +35,8 @@ class HttpFilterPropertiesMetadataTest {
             "specrepository.http.max-sort-fields",
             "specrepository.http.max-values-per-filter",
             "specrepository.http.max-value-length",
-            "specrepository.http.allowed-operators");
+            "specrepository.http.allowed-operators",
+            "specrepository.http.problem-details.enabled");
     assertThat(descriptions.values())
         .allSatisfy(description -> assertThat(description).isNotBlank());
   }
