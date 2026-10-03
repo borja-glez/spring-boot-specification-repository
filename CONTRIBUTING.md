@@ -81,6 +81,11 @@ Use descriptive branch names prefixed with the type of change:
 
 ## Release Branches
 
+Which released versions receive fixes is defined in the
+[versioning and support policy](docs/versioning.md): bug fixes go to the latest minor only, security
+fixes also to the previous minor for 6 months. Changes to public API marked `STABLE` or `MAINTAINED`
+follow its deprecation process.
+
 When a critical bug needs fixing in an already-released version while `main` has moved forward:
 
 ```bash
