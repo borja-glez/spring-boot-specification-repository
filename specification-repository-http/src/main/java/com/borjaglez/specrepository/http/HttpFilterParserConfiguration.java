@@ -18,6 +18,8 @@ public final class HttpFilterParserConfiguration {
   private final String orGroupSeparator;
   private final int maxFilters;
   private final int maxSortFields;
+  private final int maxValuesPerFilter;
+  private final int maxValueLength;
   private final Set<String> allowedOperators;
 
   private HttpFilterParserConfiguration(Builder builder) {
@@ -28,6 +30,8 @@ public final class HttpFilterParserConfiguration {
     this.orGroupSeparator = builder.orGroupSeparator;
     this.maxFilters = builder.maxFilters;
     this.maxSortFields = builder.maxSortFields;
+    this.maxValuesPerFilter = builder.maxValuesPerFilter;
+    this.maxValueLength = builder.maxValueLength;
     this.allowedOperators =
         builder.allowedOperators == null
             ? null
@@ -72,6 +76,19 @@ public final class HttpFilterParserConfiguration {
     return maxSortFields;
   }
 
+  /**
+   * Maximum number of values of a multi-value operator ({@code in}, {@code notin}). Defaults to
+   * 100.
+   */
+  public int maxValuesPerFilter() {
+    return maxValuesPerFilter;
+  }
+
+  /** Maximum length, in characters, of a single filter value. Defaults to 1000. */
+  public int maxValueLength() {
+    return maxValueLength;
+  }
+
   public Set<String> allowedOperators() {
     return allowedOperators;
   }
@@ -84,6 +101,8 @@ public final class HttpFilterParserConfiguration {
     private String orGroupSeparator = ";";
     private int maxFilters = 20;
     private int maxSortFields = 5;
+    private int maxValuesPerFilter = 100;
+    private int maxValueLength = 1000;
     private Set<String> allowedOperators;
 
     private Builder() {}
@@ -128,6 +147,22 @@ public final class HttpFilterParserConfiguration {
         throw new IllegalArgumentException("maxSortFields must be at least 1");
       }
       this.maxSortFields = maxSortFields;
+      return this;
+    }
+
+    public Builder maxValuesPerFilter(int maxValuesPerFilter) {
+      if (maxValuesPerFilter < 1) {
+        throw new IllegalArgumentException("maxValuesPerFilter must be at least 1");
+      }
+      this.maxValuesPerFilter = maxValuesPerFilter;
+      return this;
+    }
+
+    public Builder maxValueLength(int maxValueLength) {
+      if (maxValueLength < 1) {
+        throw new IllegalArgumentException("maxValueLength must be at least 1");
+      }
+      this.maxValueLength = maxValueLength;
       return this;
     }
 

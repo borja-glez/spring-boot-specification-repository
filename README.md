@@ -1235,16 +1235,31 @@ HttpFilterParserConfiguration config = HttpFilterParserConfiguration.builder()
         .orGroupSeparator("|")
         .maxFilters(10)
         .maxSortFields(3)
+        .maxValuesPerFilter(50)
+        .maxValueLength(200)
         .allowedOperators(Set.of("eq", "contains", "in"))
         .build();
 
 HttpFilterParser parser = new HttpFilterParser(config);
 ```
 
+The parser bounds every client input before any SQL runs. A request above a limit is rejected with
+`HttpFilterSyntaxException`, whose message names the limit (and the field, for the value limits):
+
+| Limit | Default | What it bounds |
+|-------|---------|----------------|
+| `maxFilters` | 20 | Conditions in `filter` plus all `orFilter` groups |
+| `maxSortFields` | 5 | `sort` parameters |
+| `maxValuesPerFilter` | 100 | Values of an `in` / `notin` filter (`between` always takes exactly 2) |
+| `maxValueLength` | 1000 | Characters of a single value, in `filter` and `orFilter`; each value of a multi-value filter is checked on its own |
+
+Every limit must be at least 1. The value limits keep a request from sending, for example, an `IN`
+list with thousands of bind parameters or a multi-megabyte `contains` term to the database.
+
 ### Error Handling
 
 - `HttpFilterSyntaxException` — thrown for malformed filter/sort expressions, invalid field
-  names, and filter/sort count limits exceeded.
+  names, and the filter, sort, value-count and value-length limits exceeded.
 - `UndeclaredFieldListException` — thrown by the argument resolver when a request filters or sorts
   through a `@FilterableQuery` parameter that declares no list for that usage (see
   [Deny by default](#deny-by-default)). It extends `DisallowedFieldException` and is annotated with

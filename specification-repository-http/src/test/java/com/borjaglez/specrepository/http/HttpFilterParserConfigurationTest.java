@@ -20,6 +20,8 @@ class HttpFilterParserConfigurationTest {
     assertThat(config.orGroupSeparator()).isEqualTo(";");
     assertThat(config.maxFilters()).isEqualTo(20);
     assertThat(config.maxSortFields()).isEqualTo(5);
+    assertThat(config.maxValuesPerFilter()).isEqualTo(100);
+    assertThat(config.maxValueLength()).isEqualTo(1000);
     assertThat(config.allowedOperators()).isNull();
   }
 
@@ -34,6 +36,8 @@ class HttpFilterParserConfigurationTest {
             .orGroupSeparator("&")
             .maxFilters(10)
             .maxSortFields(3)
+            .maxValuesPerFilter(50)
+            .maxValueLength(200)
             .allowedOperators(Set.of("eq", "neq"))
             .build();
 
@@ -44,6 +48,8 @@ class HttpFilterParserConfigurationTest {
     assertThat(config.orGroupSeparator()).isEqualTo("&");
     assertThat(config.maxFilters()).isEqualTo(10);
     assertThat(config.maxSortFields()).isEqualTo(3);
+    assertThat(config.maxValuesPerFilter()).isEqualTo(50);
+    assertThat(config.maxValueLength()).isEqualTo(200);
     assertThat(config.allowedOperators()).containsExactlyInAnyOrder("eq", "neq");
   }
 
@@ -89,6 +95,32 @@ class HttpFilterParserConfigurationTest {
     assertThatThrownBy(() -> HttpFilterParserConfiguration.builder().maxSortFields(0))
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("maxSortFields must be at least 1");
+  }
+
+  @Test
+  void builderShouldRejectZeroMaxValuesPerFilter() {
+    assertThatThrownBy(() -> HttpFilterParserConfiguration.builder().maxValuesPerFilter(0))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("maxValuesPerFilter must be at least 1");
+  }
+
+  @Test
+  void builderShouldAcceptOneMaxValuesPerFilter() {
+    var config = HttpFilterParserConfiguration.builder().maxValuesPerFilter(1).build();
+    assertThat(config.maxValuesPerFilter()).isEqualTo(1);
+  }
+
+  @Test
+  void builderShouldRejectZeroMaxValueLength() {
+    assertThatThrownBy(() -> HttpFilterParserConfiguration.builder().maxValueLength(0))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("maxValueLength must be at least 1");
+  }
+
+  @Test
+  void builderShouldAcceptOneMaxValueLength() {
+    var config = HttpFilterParserConfiguration.builder().maxValueLength(1).build();
+    assertThat(config.maxValueLength()).isEqualTo(1);
   }
 
   @Test

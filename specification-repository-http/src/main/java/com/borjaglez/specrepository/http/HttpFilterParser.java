@@ -197,11 +197,12 @@ public final class HttpFilterParser {
     String normalized = operator.toLowerCase(Locale.ROOT);
     validateOperator(operator, normalized);
 
-    Object value = resolveValue(raw, operator, normalized, rawValue);
+    Object value = resolveValue(raw, field, operator, normalized, rawValue);
     return new ParsedFilter(field, FilterOperator.of(normalized), value);
   }
 
-  private Object resolveValue(String raw, String operator, String lowerOp, String rawValue) {
+  private Object resolveValue(
+      String raw, String field, String operator, String lowerOp, String rawValue) {
     if (VALUELESS_OPERATORS.contains(lowerOp)) {
       return null;
     }
@@ -211,14 +212,39 @@ public final class HttpFilterParser {
     if (MULTI_VALUE_OPERATORS.contains(lowerOp)) {
       List<String> values =
           Arrays.asList(rawValue.split(Pattern.quote(config.multiValueSeparator()), -1));
-      if ("between".equals(lowerOp)
-          && (values.size() != 2 || values.get(0).isEmpty() || values.get(1).isEmpty())) {
+      if ("between".equals(lowerOp)) {
+        if (values.size() != 2 || values.get(0).isEmpty() || values.get(1).isEmpty()) {
+          throw new HttpFilterSyntaxException(
+              raw, "operator '" + operator + "' requires exactly 2 non-empty values");
+        }
+      } else if (values.size() > config.maxValuesPerFilter()) {
         throw new HttpFilterSyntaxException(
-            raw, "operator '" + operator + "' requires exactly 2 non-empty values");
+            field + ":" + operator,
+            "too many values (max " + config.maxValuesPerFilter() + ") for field '" + field + "'");
+      }
+      for (String value : values) {
+        validateValueLength(field, operator, value);
       }
       return values;
     }
+    validateValueLength(field, operator, rawValue);
     return rawValue;
+  }
+
+  /**
+   * Rejects a value longer than {@link HttpFilterParserConfiguration#maxValueLength()}. The
+   * exception names the field and operator only, so an oversized value is not echoed back.
+   */
+  private void validateValueLength(String field, String operator, String value) {
+    if (value.length() > config.maxValueLength()) {
+      throw new HttpFilterSyntaxException(
+          field + ":" + operator,
+          "value too long (max "
+              + config.maxValueLength()
+              + " characters) for field '"
+              + field
+              + "'");
+    }
   }
 
   private Sort parseSort(Map<String, List<String>> params) {
