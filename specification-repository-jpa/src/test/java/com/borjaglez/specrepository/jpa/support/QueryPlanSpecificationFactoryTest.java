@@ -10,6 +10,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.lang.reflect.Constructor;
 import java.time.DateTimeException;
 import java.util.List;
 import java.util.Optional;
@@ -36,18 +37,18 @@ import com.borjaglez.specrepository.core.AllowedFieldsPolicy;
 import com.borjaglez.specrepository.core.CorrelationMode;
 import com.borjaglez.specrepository.core.CorrelationPair;
 import com.borjaglez.specrepository.core.DisallowedFieldException;
-import com.borjaglez.specrepository.core.FetchInstruction;
 import com.borjaglez.specrepository.core.FilterOperator;
 import com.borjaglez.specrepository.core.GroupCondition;
 import com.borjaglez.specrepository.core.InvalidFilterException;
 import com.borjaglez.specrepository.core.InvalidFilterValueException;
-import com.borjaglez.specrepository.core.JoinInstruction;
 import com.borjaglez.specrepository.core.JoinMode;
 import com.borjaglez.specrepository.core.LogicalOperator;
 import com.borjaglez.specrepository.core.Operators;
 import com.borjaglez.specrepository.core.PredicateCondition;
 import com.borjaglez.specrepository.core.QueryCondition;
+import com.borjaglez.specrepository.core.QueryLock;
 import com.borjaglez.specrepository.core.QueryPlan;
+import com.borjaglez.specrepository.core.SpecificationQueryBuilder;
 import com.borjaglez.specrepository.core.SubqueryCondition;
 import com.borjaglez.specrepository.core.SubqueryKind;
 import com.borjaglez.specrepository.jpa.spi.OperatorContext;
@@ -91,20 +92,7 @@ class QueryPlanSpecificationFactoryTest {
 
   @Test
   void shouldApplyDistinct() {
-    GroupCondition rootCondition = new GroupCondition(LogicalOperator.AND, List.of());
-    QueryPlan<Object> plan =
-        new QueryPlan<>(
-            Object.class,
-            rootCondition,
-            List.of(),
-            List.of(),
-            List.of(),
-            List.of(),
-            null,
-            List.of(),
-            Sort.unsorted(),
-            true,
-            AllowedFieldsPolicy.allowAll());
+    QueryPlan<Object> plan = SpecificationQueryBuilder.forEntity(Object.class).distinct().build();
 
     Specification<Object> spec = factory.create(plan);
     spec.toPredicate(root, query, cb);
@@ -124,21 +112,8 @@ class QueryPlanSpecificationFactoryTest {
 
   @Test
   void shouldApplyJoins() {
-    GroupCondition rootCondition = new GroupCondition(LogicalOperator.AND, List.of());
-    List<JoinInstruction> joins = List.of(new JoinInstruction("profile", JoinMode.LEFT));
     QueryPlan<Object> plan =
-        new QueryPlan<>(
-            Object.class,
-            rootCondition,
-            joins,
-            List.of(),
-            List.of(),
-            List.of(),
-            null,
-            List.of(),
-            Sort.unsorted(),
-            false,
-            AllowedFieldsPolicy.allowAll());
+        SpecificationQueryBuilder.forEntity(Object.class).leftJoin("profile").build();
 
     Specification<Object> spec = factory.create(plan);
     spec.toPredicate(root, query, cb);
@@ -149,21 +124,8 @@ class QueryPlanSpecificationFactoryTest {
 
   @Test
   void shouldApplyFetchesWhenNotCountQuery() {
-    GroupCondition rootCondition = new GroupCondition(LogicalOperator.AND, List.of());
-    List<FetchInstruction> fetches = List.of(new FetchInstruction("profile", JoinMode.LEFT));
     QueryPlan<Object> plan =
-        new QueryPlan<>(
-            Object.class,
-            rootCondition,
-            List.of(),
-            fetches,
-            List.of(),
-            List.of(),
-            null,
-            List.of(),
-            Sort.unsorted(),
-            false,
-            AllowedFieldsPolicy.allowAll());
+        SpecificationQueryBuilder.forEntity(Object.class).leftFetch("profile").build();
 
     doReturn(Object.class).when(query).getResultType();
 
@@ -176,21 +138,8 @@ class QueryPlanSpecificationFactoryTest {
 
   @Test
   void shouldSkipFetchesForLongCountQuery() {
-    GroupCondition rootCondition = new GroupCondition(LogicalOperator.AND, List.of());
-    List<FetchInstruction> fetches = List.of(new FetchInstruction("profile", JoinMode.LEFT));
     QueryPlan<Object> plan =
-        new QueryPlan<>(
-            Object.class,
-            rootCondition,
-            List.of(),
-            fetches,
-            List.of(),
-            List.of(),
-            null,
-            List.of(),
-            Sort.unsorted(),
-            false,
-            AllowedFieldsPolicy.allowAll());
+        SpecificationQueryBuilder.forEntity(Object.class).leftFetch("profile").build();
 
     doReturn(Long.class).when(query).getResultType();
 
@@ -202,21 +151,8 @@ class QueryPlanSpecificationFactoryTest {
 
   @Test
   void shouldSkipFetchesForPrimitiveLongCountQuery() {
-    GroupCondition rootCondition = new GroupCondition(LogicalOperator.AND, List.of());
-    List<FetchInstruction> fetches = List.of(new FetchInstruction("profile", JoinMode.LEFT));
     QueryPlan<Object> plan =
-        new QueryPlan<>(
-            Object.class,
-            rootCondition,
-            List.of(),
-            fetches,
-            List.of(),
-            List.of(),
-            null,
-            List.of(),
-            Sort.unsorted(),
-            false,
-            AllowedFieldsPolicy.allowAll());
+        SpecificationQueryBuilder.forEntity(Object.class).leftFetch("profile").build();
 
     doReturn(long.class).when(query).getResultType();
 
@@ -228,21 +164,8 @@ class QueryPlanSpecificationFactoryTest {
 
   @Test
   void shouldApplyGroupBy() {
-    GroupCondition rootCondition = new GroupCondition(LogicalOperator.AND, List.of());
-    List<String> groupBy = List.of("status", "name");
     QueryPlan<Object> plan =
-        new QueryPlan<>(
-            Object.class,
-            rootCondition,
-            List.of(),
-            List.of(),
-            List.of(),
-            List.of(),
-            null,
-            groupBy,
-            Sort.unsorted(),
-            false,
-            AllowedFieldsPolicy.allowAll());
+        SpecificationQueryBuilder.forEntity(Object.class).groupBy("status", "name").build();
 
     Path<?> statusPath = mock(Path.class);
     Path<?> namePath = mock(Path.class);
@@ -1216,20 +1139,7 @@ class QueryPlanSpecificationFactoryTest {
 
   private QueryPlan<Object> planWithServerCondition(
       GroupCondition rootCondition, GroupCondition serverCondition, AllowedFieldsPolicy policy) {
-    return new QueryPlan<>(
-        Object.class,
-        rootCondition,
-        serverCondition,
-        List.of(),
-        List.of(),
-        List.of(),
-        List.of(),
-        null,
-        List.of(),
-        List.of(),
-        Sort.unsorted(),
-        false,
-        policy);
+    return queryPlan(rootCondition, serverCondition, Sort.unsorted(), policy);
   }
 
   private QueryPlan<Object> plan(GroupCondition rootCondition) {
@@ -1238,17 +1148,40 @@ class QueryPlanSpecificationFactoryTest {
 
   private QueryPlan<Object> plan(
       GroupCondition rootCondition, Sort sort, AllowedFieldsPolicy policy) {
-    return new QueryPlan<>(
-        Object.class,
-        rootCondition,
-        List.of(),
-        List.of(),
-        List.of(),
-        List.of(),
-        null,
-        List.of(),
-        sort,
-        false,
-        policy);
+    return queryPlan(
+        rootCondition, new GroupCondition(LogicalOperator.AND, List.of()), sort, policy);
+  }
+
+  /**
+   * A plan with hand-built condition trees, which the builders cannot express. A plan has no public
+   * constructor, so the test calls the package-private one of the core module reflectively.
+   */
+  private static QueryPlan<Object> queryPlan(
+      GroupCondition rootCondition,
+      GroupCondition serverCondition,
+      Sort sort,
+      AllowedFieldsPolicy policy) {
+    try {
+      Constructor<?> constructor = QueryPlan.class.getDeclaredConstructors()[0];
+      constructor.setAccessible(true);
+      return (QueryPlan<Object>)
+          constructor.newInstance(
+              Object.class,
+              rootCondition,
+              serverCondition,
+              List.of(),
+              List.of(),
+              List.of(),
+              List.of(),
+              null,
+              List.of(),
+              List.of(),
+              sort,
+              false,
+              policy,
+              QueryLock.NONE);
+    } catch (ReflectiveOperationException e) {
+      throw new IllegalStateException(e);
+    }
   }
 }

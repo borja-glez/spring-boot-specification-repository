@@ -117,6 +117,8 @@ Boot 4 example modules are present, but the verified task list does not expose `
 - Keep generics explicit where they communicate the domain API clearly.
 - Return immutable snapshots from builders using `List.copyOf(...)` when exposing accumulated state.
 - Favor small public APIs with fluent chaining when extending the existing builder DSL.
+- Every public top-level type in `core`, `jpa`, `http` and the starters carries `@API(status = STABLE | MAINTAINED | INTERNAL, since = "<version>")` from `org.apiguardian.api`; `PublicApiAnnotationTest` in each module fails without it. The levels are described in `docs/architecture.md`.
+- `QueryPlan` has no public constructor: create plans through the builders or `toBuilder()`, and add new settings as an accessor plus a builder method.
 
 ## Dependency Injection And Framework Style
 - Prefer constructor injection.

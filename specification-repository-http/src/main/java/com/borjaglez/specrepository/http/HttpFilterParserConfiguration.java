@@ -1,10 +1,15 @@
 package com.borjaglez.specrepository.http;
 
+import static org.apiguardian.api.API.Status.STABLE;
+
 import java.util.Locale;
 import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import org.apiguardian.api.API;
+
+@API(status = STABLE, since = "1.0.0")
 public final class HttpFilterParserConfiguration {
   private final String filterParam;
   private final String orFilterParam;

@@ -1,10 +1,13 @@
 package com.borjaglez.specrepository.jpa;
 
+import static org.apiguardian.api.API.Status.STABLE;
+
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
+import org.apiguardian.api.API;
 import org.springframework.core.annotation.AliasFor;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 
@@ -13,6 +16,7 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 @EnableJpaRepositories(
     repositoryBaseClass = SpecificationRepositoryImpl.class,
     repositoryFactoryBeanClass = SpecificationRepositoryFactoryBean.class)
+@API(status = STABLE, since = "1.0.0")
 public @interface EnableSpecificationRepositories {
 
   /**

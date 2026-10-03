@@ -1,7 +1,10 @@
 package com.borjaglez.specrepository.http.spring;
 
+import static org.apiguardian.api.API.Status.INTERNAL;
+
 import java.util.List;
 
+import org.apiguardian.api.API;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
@@ -15,6 +18,7 @@ import com.borjaglez.specrepository.http.HttpFilterParser;
 @AutoConfiguration
 @ConditionalOnClass(HandlerMethodArgumentResolver.class)
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
+@API(status = INTERNAL, since = "1.0.0")
 public class HttpFilterAutoConfiguration {
 
   @Bean

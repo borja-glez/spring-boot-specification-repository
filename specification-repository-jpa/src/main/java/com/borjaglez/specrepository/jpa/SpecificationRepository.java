@@ -1,8 +1,11 @@
 package com.borjaglez.specrepository.jpa;
 
+import static org.apiguardian.api.API.Status.STABLE;
+
 import java.util.List;
 import java.util.Optional;
 
+import org.apiguardian.api.API;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Slice;
@@ -21,6 +24,7 @@ import com.borjaglez.specrepository.core.QueryPlan;
  * would shadow {@link SpecificationRepositoryImpl} for every repository proxy.
  */
 @NoRepositoryBean
+@API(status = STABLE, since = "1.0.0")
 public interface SpecificationRepository<T, ID>
     extends JpaRepository<T, ID>, JpaSpecificationExecutor<T> {
   SpecificationExecutableQuery<T> query();

@@ -1,5 +1,9 @@
 package com.borjaglez.specrepository.core;
 
+import static org.apiguardian.api.API.Status.STABLE;
+
+import org.apiguardian.api.API;
+
 /**
  * Thrown when a filter value cannot be converted to the Java type of its field, for example {@code
  * "abc"} on an {@code Integer} field, an unknown enum constant, or an unparsable date. {@link
@@ -9,6 +13,7 @@ package com.borjaglez.specrepository.core;
  * <p>Through a Spring Data repository proxy it arrives as the cause of an {@code
  * InvalidDataAccessApiUsageException}.
  */
+@API(status = STABLE, since = "1.0.0")
 public class InvalidFilterValueException extends InvalidFilterException {
   private final transient Object value;
   private final Class<?> targetType;

@@ -1,5 +1,7 @@
 package com.borjaglez.specrepository.jpa.support;
 
+import static org.apiguardian.api.API.Status.INTERNAL;
+
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Collection;
@@ -7,9 +9,12 @@ import java.util.Date;
 import java.util.List;
 import java.util.function.Function;
 
+import org.apiguardian.api.API;
+
 import com.borjaglez.specrepository.core.FilterOperator;
 import com.borjaglez.specrepository.jpa.spi.ValueConverter;
 
+@API(status = INTERNAL, since = "1.0.0")
 public final class DefaultValueConverters {
   private DefaultValueConverters() {}
 

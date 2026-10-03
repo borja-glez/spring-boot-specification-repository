@@ -1,9 +1,12 @@
 package com.borjaglez.specrepository.jpa;
 
+import static org.apiguardian.api.API.Status.STABLE;
+
 import java.util.List;
 import java.util.Optional;
 import java.util.function.Consumer;
 
+import org.apiguardian.api.API;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Slice;
@@ -20,6 +23,7 @@ import com.borjaglez.specrepository.core.QueryPlan;
 import com.borjaglez.specrepository.core.QueryPlanBuilder;
 import com.borjaglez.specrepository.core.SubqueryBuilder;
 
+@API(status = STABLE, since = "1.0.0")
 public class SpecificationExecutableQuery<T> extends QueryPlanBuilder<T> {
   private final SpecificationRepository<T, ?> repository;
 

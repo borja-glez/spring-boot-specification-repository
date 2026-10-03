@@ -1,12 +1,16 @@
 package com.borjaglez.specrepository.http;
 
+import static org.apiguardian.api.API.Status.MAINTAINED;
+
 import java.util.List;
 import java.util.Objects;
 
+import org.apiguardian.api.API;
 import org.springframework.data.domain.Sort;
 
 import com.borjaglez.specrepository.core.FilterOperator;
 
+@API(status = MAINTAINED, since = "1.0.0")
 public record ParsedHttpQuery(List<ParsedFilter> filters, List<ParsedOrGroup> orGroups, Sort sort) {
 
   public ParsedHttpQuery {

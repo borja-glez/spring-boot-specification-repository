@@ -1,10 +1,15 @@
 package com.borjaglez.specrepository.core;
 
+import static org.apiguardian.api.API.Status.STABLE;
+
+import org.apiguardian.api.API;
+
 /**
  * The pessimistic row lock a query takes on the rows it reads, until the transaction ends.
  *
  * @see QueryLock
  */
+@API(status = STABLE, since = "1.0.0")
 public enum LockMode {
   /** No lock: the default. */
   NONE,

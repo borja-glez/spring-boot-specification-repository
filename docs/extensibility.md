@@ -22,6 +22,8 @@ The Boot 3 and Boot 4 starters expose extensibility through beans:
 - `SpecificationRepositoryCustomizer` beans can tweak the `SpecificationRepositoryConfiguration.Builder` before the final repository pipeline is created.
 - Advanced scenarios can provide `PathResolver`, `ConversionService`, `QueryPlanSpecificationFactory`, or a full `SpecificationRepositoryConfiguration` bean.
 
+The extension contracts in `jpa.spi` and `SpecificationRepositoryConfiguration` are `@API(status = MAINTAINED)`. `PathResolver`, `QueryPlanSpecificationFactory` and the rest of `jpa.support` are `@API(status = INTERNAL)`: replacing them works, but their shape may change in any release. See [API stability levels](architecture.md#api-stability-levels).
+
 ## Field whitelisting
 
 When the DSL is exposed through a public HTTP API, restrict which fields clients can filter and sort by using `AllowedFieldsPolicy`. The policy is applied per-query, so each endpoint can define its own restrictions.

@@ -1,10 +1,14 @@
 package com.borjaglez.specrepository.http.spring;
 
+import static org.apiguardian.api.API.Status.STABLE;
+
 import java.lang.annotation.Documented;
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
+
+import org.apiguardian.api.API;
 
 import com.borjaglez.specrepository.core.AllowedFieldsPolicy;
 import com.borjaglez.specrepository.http.HttpFilterParser;
@@ -32,6 +36,7 @@ import com.borjaglez.specrepository.http.HttpFilterParser;
 @Target({ElementType.PARAMETER, ElementType.ANNOTATION_TYPE})
 @Retention(RetentionPolicy.RUNTIME)
 @Documented
+@API(status = STABLE, since = "1.0.0")
 public @interface FilterableQuery {
   Class<?> value();
 

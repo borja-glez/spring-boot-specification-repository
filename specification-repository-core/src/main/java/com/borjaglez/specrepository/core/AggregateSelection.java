@@ -1,7 +1,12 @@
 package com.borjaglez.specrepository.core;
 
+import static org.apiguardian.api.API.Status.MAINTAINED;
+
 import java.util.Objects;
 
+import org.apiguardian.api.API;
+
+@API(status = MAINTAINED, since = "1.0.0")
 public record AggregateSelection(AggregateFunction function, String field, String alias)
     implements Selection {
   public AggregateSelection {

@@ -1,16 +1,20 @@
 package com.borjaglez.specrepository.jpa.support;
 
+import static org.apiguardian.api.API.Status.MAINTAINED;
+
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Objects;
 
+import org.apiguardian.api.API;
 import org.springframework.core.convert.ConversionService;
 import org.springframework.format.support.DefaultFormattingConversionService;
 
 import com.borjaglez.specrepository.jpa.spi.OperatorHandler;
 import com.borjaglez.specrepository.jpa.spi.ValueConverter;
 
+@API(status = MAINTAINED, since = "1.0.0")
 public final class SpecificationRepositoryConfiguration {
   private final List<OperatorHandler> operatorHandlers;
   private final List<ValueConverter> valueConverters;

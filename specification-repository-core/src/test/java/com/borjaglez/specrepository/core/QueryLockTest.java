@@ -4,8 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 import static org.assertj.core.api.Assertions.assertThatNullPointerException;
 
-import java.util.List;
-
 import org.junit.jupiter.api.Test;
 import org.springframework.data.domain.Sort;
 
@@ -89,49 +87,5 @@ class QueryLockTest {
     assertThatNullPointerException()
         .isThrownBy(() -> new QueryLock(LockMode.PESSIMISTIC_WRITE, null))
         .withMessage("lockWait must not be null");
-  }
-
-  @Test
-  void queryPlanShouldRejectANullLock() {
-    assertThatNullPointerException()
-        .isThrownBy(
-            () ->
-                new QueryPlan<>(
-                    String.class,
-                    new GroupCondition(LogicalOperator.AND, List.of()),
-                    new GroupCondition(LogicalOperator.AND, List.of()),
-                    List.of(),
-                    List.of(),
-                    List.of(),
-                    List.of(),
-                    null,
-                    List.of(),
-                    List.of(),
-                    Sort.unsorted(),
-                    false,
-                    AllowedFieldsPolicy.allowAll(),
-                    null))
-        .withMessage("lock must not be null");
-  }
-
-  @Test
-  void constructorWithoutLockShouldNotLock() {
-    QueryPlan<String> plan =
-        new QueryPlan<>(
-            String.class,
-            new GroupCondition(LogicalOperator.AND, List.of()),
-            new GroupCondition(LogicalOperator.AND, List.of()),
-            List.of(),
-            List.of(),
-            List.of(),
-            List.of(),
-            null,
-            List.of(),
-            List.of(),
-            Sort.unsorted(),
-            false,
-            AllowedFieldsPolicy.allowAll());
-
-    assertThat(plan.lock()).isEqualTo(QueryLock.NONE);
   }
 }

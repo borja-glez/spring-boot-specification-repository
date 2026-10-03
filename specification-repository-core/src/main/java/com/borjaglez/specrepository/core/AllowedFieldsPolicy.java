@@ -1,8 +1,13 @@
 package com.borjaglez.specrepository.core;
 
+import static org.apiguardian.api.API.Status.STABLE;
+
 import java.util.Objects;
 import java.util.Set;
 
+import org.apiguardian.api.API;
+
+@API(status = STABLE, since = "1.0.0")
 public final class AllowedFieldsPolicy {
   private static final AllowedFieldsPolicy ALLOW_ALL = new AllowedFieldsPolicy(null, null);
 

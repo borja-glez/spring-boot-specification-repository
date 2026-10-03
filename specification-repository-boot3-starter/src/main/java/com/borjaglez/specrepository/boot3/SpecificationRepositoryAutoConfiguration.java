@@ -1,10 +1,13 @@
 package com.borjaglez.specrepository.boot3;
 
+import static org.apiguardian.api.API.Status.INTERNAL;
+
 import java.lang.annotation.Annotation;
 import java.util.Locale;
 
 import javax.sql.DataSource;
 
+import org.apiguardian.api.API;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
@@ -44,6 +47,7 @@ import com.borjaglez.specrepository.jpa.support.SpecificationRepositoryConfigura
 @ConditionalOnMissingBean({JpaRepositoryFactoryBean.class, JpaRepositoryConfigExtension.class})
 @ConditionalOnBooleanProperty(name = "spring.data.jpa.repositories.enabled", matchIfMissing = true)
 @Import(SpecificationJpaRepositoriesRegistrar.class)
+@API(status = INTERNAL, since = "1.0.0")
 public class SpecificationRepositoryAutoConfiguration {
 
   @Bean

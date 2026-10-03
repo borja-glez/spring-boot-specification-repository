@@ -4,6 +4,89 @@ This guide lists the changes that need action when moving from one minor version
 full list of changes of each release is in [CHANGELOG.md](../CHANGELOG.md), where breaking entries
 are marked with **BREAKING:**.
 
+## Upgrading from 0.4.x to 1.0.0
+
+1.0.0 fixes the public API until 2.0.0. Every public type now declares how stable it is with
+[`@API`](https://github.com/apiguardian-team/apiguardian) (see
+[API stability levels](architecture.md#api-stability-levels)), and `QueryPlan` changes shape so that
+later 1.x releases can add settings to it without breaking code.
+
+### `QueryPlan` is a final class without a public constructor
+
+Issue #121.
+
+Up to 0.4.x `QueryPlan` was a `record` with 14 components and four public constructors. Adding a
+component, as the lock did in 0.4.0, changed the canonical constructor and broke every caller. It is
+now a `final` class:
+
+- The accessors keep their names (`entityType()`, `rootCondition()`, `serverCondition()`, `joins()`,
+  `fetches()`, `projections()`, `selections()`, `projectionType()`, `groupBy()`, `having()`, `sort()`,
+  `distinct()`, `allowedFieldsPolicy()`, `lock()`), as do `toBuilder()`, `hasSelections()` and
+  `hasAggregates()`. Code that reads a plan compiles unchanged, but must be recompiled: the type
+  is no longer a record.
+- `equals`, `hashCode` and `toString` still compare and print every component.
+- The constructors are no longer public. A plan is created only through `SpecificationQueryBuilder`,
+  `QueryPlanBuilder`, the fluent query of a repository, or `plan.toBuilder()` /
+  `SpecificationQueryBuilder.from(plan)` to derive one from another plan.
+- `QueryPlan` is no longer a `java.lang.Record`: record patterns (`case QueryPlan(var type, ...)`)
+  and code that reflects on its record components no longer work. Use the accessors instead.
+
+Before:
+
+```java
+QueryPlan<Order> plan = new QueryPlan<>(Order.class, rootCondition, List.of(), List.of(),
+    List.of(), List.of(), null, List.of(), List.of(), Sort.by("placedAt"), false,
+    AllowedFieldsPolicy.allowAll());
+
+QueryPlan<Order> locked = new QueryPlan<>(plan.entityType(), plan.rootCondition(),
+    plan.serverCondition(), plan.joins(), plan.fetches(), plan.projections(), plan.selections(),
+    plan.projectionType(), plan.groupBy(), plan.having(), plan.sort(), plan.distinct(),
+    plan.allowedFieldsPolicy(), new QueryLock(LockMode.PESSIMISTIC_WRITE, LockWait.SKIP_LOCKED));
+```
+
+After:
+
+```java
+QueryPlan<Order> plan = SpecificationQueryBuilder.forEntity(Order.class)
+    .where("status", Operators.EQUALS, "PLACED")
+    .sort(Sort.by("placedAt"))
+    .build();
+
+QueryPlan<Order> locked = plan.toBuilder()
+    .lock(LockMode.PESSIMISTIC_WRITE, LockWait.SKIP_LOCKED)
+    .build();
+```
+
+Migration: replace each `new QueryPlan<>(...)` with the builder calls that produce the same plan.
+To change a plan you received, for example from `@FilterableQuery`, call `plan.toBuilder()`: the
+conditions added through it are server conditions, and everything else is kept unless changed (see
+[Extending a plan received over HTTP](../README.md#extending-a-plan-received-over-http)).
+`QueryPlan.withoutFetches()` is public only for the JPA module and is `@API(status = INTERNAL)`.
+
+### Types marked `INTERNAL`
+
+No type changed package or visibility, but the following are now `@API(status = INTERNAL)`: they
+may change in any release, including a patch. Code that uses them directly should move to the
+`STABLE` or `MAINTAINED` types:
+
+- `com.borjaglez.specrepository.jpa.support`: `AggregateExpressionFactory`, `AssociationRegistry`,
+  `DefaultOperatorHandlers`, `DefaultValueConverters`, `OperatorRegistry`, `PathResolver`,
+  `QueryPlanSpecificationFactory`, `ValueConversionService`. `SpecificationRepositoryConfiguration`
+  in the same package is `MAINTAINED`: customise it through a `SpecificationRepositoryCustomizer`.
+- `SpecificationRepositoryImpl` and `SpecificationRepositoryFactoryBean`: use the
+  `SpecificationRepository` interface and `@EnableSpecificationRepositories`.
+- `QueryPlanArgumentResolver` and `HttpFilterAutoConfiguration`: use `@FilterableQuery`.
+- The `SpecificationRepositoryAutoConfiguration` classes of both starters. Excluding them by name
+  (`spring.autoconfigure.exclude`) keeps working.
+
+### `apiguardian-api` is a compile-only dependency
+
+The library modules depend on `org.apiguardian:apiguardian-api` as `compileOnlyApi`, as JUnit 5
+does. Applications do not need it at runtime and nothing changes in their dependencies. A compiler
+that reads the library's classes without the annotation on the classpath may warn about the missing
+`org.apiguardian.api.API`; add `org.apiguardian:apiguardian-api` as a `compileOnly` dependency to
+silence it.
+
 ## Upgrading to 0.4.0
 
 0.4.0 has seven breaking changes. Most applications only need the first three checks:

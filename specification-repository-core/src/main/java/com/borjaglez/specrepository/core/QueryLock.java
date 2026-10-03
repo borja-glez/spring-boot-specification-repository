@@ -1,6 +1,10 @@
 package com.borjaglez.specrepository.core;
 
+import static org.apiguardian.api.API.Status.MAINTAINED;
+
 import java.util.Objects;
+
+import org.apiguardian.api.API;
 
 /**
  * The pessimistic row lock of a {@link QueryPlan}: its {@link LockMode} and what it does with rows
@@ -10,6 +14,7 @@ import java.util.Objects;
  * <p>The lock applies to the entity query only, never to the count query of a page, and it needs an
  * active transaction.
  */
+@API(status = MAINTAINED, since = "1.0.0")
 public record QueryLock(LockMode mode, LockWait lockWait) {
 
   /** No lock. */

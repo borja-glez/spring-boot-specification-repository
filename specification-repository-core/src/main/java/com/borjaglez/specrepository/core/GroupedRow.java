@@ -1,9 +1,14 @@
 package com.borjaglez.specrepository.core;
 
+import static org.apiguardian.api.API.Status.STABLE;
+
 import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 
+import org.apiguardian.api.API;
+
+@API(status = STABLE, since = "1.0.0")
 public final class GroupedRow {
   private final List<String> columns;
   private final Object[] values;

@@ -1,5 +1,7 @@
 package com.borjaglez.specrepository.http;
 
+import static org.apiguardian.api.API.Status.STABLE;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -10,6 +12,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.regex.Pattern;
 
+import org.apiguardian.api.API;
 import org.springframework.data.domain.Sort;
 
 import com.borjaglez.specrepository.core.AllowedFieldsPolicy;
@@ -21,6 +24,7 @@ import com.borjaglez.specrepository.core.SpecificationQueryBuilder;
 import com.borjaglez.specrepository.http.ParsedHttpQuery.ParsedFilter;
 import com.borjaglez.specrepository.http.ParsedHttpQuery.ParsedOrGroup;
 
+@API(status = STABLE, since = "1.0.0")
 public final class HttpFilterParser {
 
   private static final Pattern SAFE_FIELD_NAME =

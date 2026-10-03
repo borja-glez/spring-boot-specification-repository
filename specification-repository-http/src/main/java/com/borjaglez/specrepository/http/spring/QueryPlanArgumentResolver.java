@@ -1,5 +1,7 @@
 package com.borjaglez.specrepository.http.spring;
 
+import static org.apiguardian.api.API.Status.INTERNAL;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -7,6 +9,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import org.apiguardian.api.API;
 import org.springframework.core.MethodParameter;
 import org.springframework.core.annotation.MergedAnnotation;
 import org.springframework.core.annotation.MergedAnnotations;
@@ -20,6 +23,7 @@ import com.borjaglez.specrepository.core.DisallowedFieldException;
 import com.borjaglez.specrepository.core.QueryPlan;
 import com.borjaglez.specrepository.http.HttpFilterParser;
 
+@API(status = INTERNAL, since = "1.0.0")
 public class QueryPlanArgumentResolver implements HandlerMethodArgumentResolver {
 
   private static final String SORTING = "sorting";

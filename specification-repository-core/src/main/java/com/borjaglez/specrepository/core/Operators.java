@@ -1,7 +1,12 @@
 package com.borjaglez.specrepository.core;
 
+import static org.apiguardian.api.API.Status.STABLE;
+
 import java.util.Objects;
 
+import org.apiguardian.api.API;
+
+@API(status = STABLE, since = "1.0.0")
 public final class Operators {
   public static final FilterOperator EQUALS = FilterOperator.of("eq");
   public static final FilterOperator NOT_EQUALS = FilterOperator.of("neq");
