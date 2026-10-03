@@ -10,6 +10,13 @@
 Security fixes go to the latest 1.x minor and to the previous minor for 6 months after the next
 minor is released. See the [versioning and support policy](docs/versioning.md) for details.
 
+## Exposing the HTTP filter API
+
+The `specification-repository-http` module lets clients send filters and sorts. Read
+[docs/security.md](docs/security.md) before exposing it: it describes the threat model, what the
+library guarantees, what the application must do and a complete secure controller. A behaviour
+that contradicts the guarantees listed there is a vulnerability: report it as described below.
+
 ## Reporting a Vulnerability
 
 We take the security of this project seriously. If you discover a security vulnerability, please follow these steps:
