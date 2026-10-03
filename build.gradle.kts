@@ -32,7 +32,20 @@ tasks.register("quality") {
         ":specification-repository-boot4-starter:test",
         ":specification-repository-test-support:test",
         "coverage",
+        "apiCompatibility",
         "spotlessCheckAll"
+    )
+}
+
+tasks.register("apiCompatibility") {
+    group = LifecycleBasePlugin.VERIFICATION_GROUP
+    description = "Checks the published modules for binary-incompatible API changes against apiBaseline."
+    dependsOn(
+        ":specification-repository-core:apiCompatibility",
+        ":specification-repository-jpa:apiCompatibility",
+        ":specification-repository-http:apiCompatibility",
+        ":specification-repository-boot3-starter:apiCompatibility",
+        ":specification-repository-boot4-starter:apiCompatibility"
     )
 }
 

@@ -5,6 +5,7 @@ spring-dependency-management = "1.1.7"
 lombok = "9.2.0"
 spotless = "8.4.0"
 maven-publish = "0.36.0"
+japicmp = "0.4.6"
 testcontainers = "1.21.3"
 junit = "5.14.3"
 assertj = "3.27.7"
@@ -64,3 +65,4 @@ spring-dependency-management = { id = "io.spring.dependency-management", version
 lombok = { id = "io.freefair.lombok", version.ref = "lombok" }
 spotless = { id = "com.diffplug.spotless", version.ref = "spotless" }
 maven-publish = { id = "com.vanniktech.maven.publish", version.ref = "maven-publish" }
+japicmp = { id = "me.champeau.gradle.japicmp", version.ref = "japicmp" }
