@@ -8,8 +8,107 @@ are marked with **BREAKING:**.
 
 1.0.0 fixes the public API until 2.0.0. Every public type now declares how stable it is with
 [`@API`](https://github.com/apiguardian-team/apiguardian) (see
-[API stability levels](architecture.md#api-stability-levels)), and `QueryPlan` changes shape so that
-later 1.x releases can add settings to it without breaking code.
+[API stability levels](architecture.md#api-stability-levels) and the
+[versioning and support policy](versioning.md)), `QueryPlan` changes shape so that later 1.x
+releases can add settings to it without breaking code, and the HTTP module gets safer defaults.
+
+Checklist, most applications first:
+
+1. **HTTP endpoints:** invalid filters now answer **400 Problem Details** instead of 500. Remove
+   exception handlers that only did that, and update tests or alerts that expected a 500
+   ([details](#client-filter-errors-answer-400-problem-details-by-default)).
+2. **Code that creates or deconstructs a `QueryPlan`:** replace `new QueryPlan<>(...)` with the
+   builders and record patterns with the accessors, then recompile
+   ([details](#queryplan-is-a-final-class-without-a-public-constructor)).
+3. **HTTP endpoints with large `in` lists or long values:** raise `max-values-per-filter` (100) or
+   `max-value-length` (1000) if clients legitimately exceed them
+   ([details](#http-filters-limit-the-number-and-the-length-of-values)).
+4. **Code that passes request values to `having(...)` or to `sort(...)` / `sortedByDefault(...)`
+   on a derived builder:** the policy no longer checks them; validate them yourself
+   ([details](#having-and-a-sort-set-on-a-derived-builder-are-no-longer-checked)).
+5. **Code that uses `jpa.support`, `SpecificationRepositoryImpl` or the auto-configuration classes
+   directly:** they are now `INTERNAL` ([details](#types-marked-internal)).
+6. Nothing to do for the case-insensitive search term, now always a bind parameter
+   ([details](#the-case-insensitive-search-term-is-a-bind-parameter)), nor for the new features
+   ([details](#new-features-in-100)).
+
+### Client filter errors answer 400 Problem Details by default
+
+Issue #153.
+
+In a Spring MVC application with Spring Boot, the HTTP module now registers a
+`@RestControllerAdvice` that answers the client errors of the filter API with **400** and an RFC
+9457 Problem Details body (`application/problem+json`). Without a handler of your own, these
+requests used to end in a **500**:
+
+| Exception | Before | Now |
+|---|---|---|
+| `HttpFilterSyntaxException` | 500 | 400 |
+| `HttpUnknownOperatorException` | 500 | 400 |
+| `DisallowedFieldException` (argument resolver, or `Pageable` sort when the query runs) | 500 | 400 |
+| `InvalidFilterException` | 500 | 400 |
+| `InvalidFilterValueException` | 500 | 400 |
+| `UndeclaredFieldListException` | 400, empty body | 400, Problem Details body |
+
+The exceptions raised when the query runs are handled also when they arrive as the cause of an
+`InvalidDataAccessApiUsageException`. The body's `detail` is the exception message, and `field`
+names the field when the exception carries one. `IllegalStateException`, any other
+`IllegalArgumentException` and an `InvalidDataAccessApiUsageException` with another cause keep
+their status.
+
+Before (0.4.x, every application had to map the exceptions itself):
+
+```java
+@RestControllerAdvice
+class FilterErrorHandler {
+
+  @ExceptionHandler({
+    HttpFilterSyntaxException.class,
+    HttpUnknownOperatorException.class,
+    DisallowedFieldException.class,
+    InvalidFilterException.class
+  })
+  ProblemDetail badFilter(IllegalArgumentException ex) {
+    return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, ex.getMessage());
+  }
+}
+```
+
+After: delete such a handler, the default advice answers the same way. Keep it only if it
+customises the response; it still wins, because the advice has the lowest precedence:
+
+```java
+@RestControllerAdvice
+class FilterErrorHandler {
+
+  // Only the types whose response you change; the default advice answers the others.
+  @ExceptionHandler(InvalidFilterValueException.class)
+  ProblemDetail invalidValue(InvalidFilterValueException ex) {
+    ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, ex.getMessage());
+    problem.setProperty("expectedType", ex.targetType().getSimpleName());
+    return problem;
+  }
+}
+```
+
+Check:
+
+- dashboards, alerts or tests that expected a 500 (or a servlet exception in `MockMvc`) for an
+  invalid filter;
+- application advices with a catch-all `@ExceptionHandler(Exception.class)`: it still receives
+  these exceptions, so they keep the status it returns.
+
+To keep the previous behaviour, set:
+
+```yaml
+specrepository:
+  http:
+    problem-details:
+      enabled: false
+```
+
+WebFlux applications are not covered. See
+[HTTP status of each exception](security.md#http-status-of-each-exception).
 
 ### `QueryPlan` is a final class without a public constructor
 
@@ -63,6 +162,117 @@ conditions added through it are server conditions, and everything else is kept u
 [Extending a plan received over HTTP](../README.md#extending-a-plan-received-over-http)).
 `QueryPlan.withoutFetches()` is public only for the JPA module and is `@API(status = INTERNAL)`.
 
+### HTTP filters limit the number and the length of values
+
+Issue #123.
+
+`HttpFilterParser` now bounds two inputs it used to accept without a limit, and rejects a request
+above either of them with `HttpFilterSyntaxException` (a 400 Problem Details response with the
+default advice) before any SQL runs:
+
+- **`maxValuesPerFilter`** (default 100): the number of values of an `in` or `notin` filter. Before,
+  `?filter=id:in:1|2|...` could reach the database as an `IN` list of any size. `between` keeps its
+  rule of exactly two non-empty values and its error message.
+- **`maxValueLength`** (default 1000): the length, in characters, of a single value, in `filter` and
+  in `orFilter` groups. Each value of a multi-value filter is checked on its own.
+
+The message names the field and the limit, without echoing the value:
+
+```text
+Invalid filter expression 'id:in': too many values (max 100) for field 'id'
+Invalid filter expression 'name:contains': value too long (max 1000 characters) for field 'name'
+```
+
+Before (0.4.x, accepted):
+
+```text
+GET /api/products?filter=id:in:1|2|3|...|5000
+```
+
+After: the same request gets a 400. If your clients legitimately send more values or longer
+values, raise the limits (both must be at least 1). With the Spring Boot starters, set the
+properties:
+
+```yaml
+specrepository:
+  http:
+    max-values-per-filter: 500
+    max-value-length: 4000
+```
+
+Without Spring Boot, or with your own `HttpFilterParser` bean (which makes the starter ignore the
+properties), set them on the parser configuration:
+
+```java
+HttpFilterParserConfiguration config = HttpFilterParserConfiguration.builder()
+        .maxValuesPerFilter(500)
+        .maxValueLength(4000)
+        .build();
+HttpFilterParser parser = new HttpFilterParser(config);
+```
+
+### `having` and a sort set on a derived builder are no longer checked
+
+Issue #120.
+
+`AllowedFieldsPolicy` guards client input: the client conditions, the plan's own sort (the `sort`
+request parameter) and the sort of a sorted `Pageable`. In 0.4.x it also checked two parts of a
+plan that only code can set. It no longer does:
+
+- **`having(...)` conditions**, on a plain or a derived builder. The HTTP syntax has no `having`.
+- **A sort set with `sort(...)` or `sortedByDefault(...)` on a derived builder** (`plan.toBuilder()`,
+  `SpecificationQueryBuilder.from(plan)`, `repository.query(plan)`). `sortedByDefault(...)` only
+  counts as a server sort when it applies, that is, when the client sent no sort. A client sort the
+  derived builder keeps, and the `Pageable` sort, are still checked.
+
+No plan that worked before fails now, so most applications need no change, and a report or a
+default sort on a field the client may not use no longer needs the `allowAll()` workaround (which
+also turned off the `Pageable` sort check):
+
+```java
+return orderRepository.query(plan)
+    .where("customerId", Operators.EQUALS, customer.id())
+    .sortedByDefault(Sort.by(Sort.Direction.DESC, "internalPriority"))   // not sortable by the client
+    .findAll(pageable);
+```
+
+**Action needed** only if an application passed a client value to one of these methods and relied
+on the policy to reject it. That value is now trusted, so validate it yourself.
+
+Before (0.4.x, a disallowed `orderBy` was rejected by the policy):
+
+```java
+@GetMapping("/orders")
+Page<Order> orders(
+        @FilterableQuery(value = Order.class, filterableFields = {"status"},
+                sortableFields = {"placedAt", "total"}) QueryPlan<Order> plan,
+        @RequestParam String orderBy,
+        Pageable pageable) {
+    return orderRepository.query(plan).sort(Sort.by(orderBy)).findAll(pageable);
+}
+```
+
+After (map the request value from a fixed set of options):
+
+```java
+private static final Set<String> ORDER_BY = Set.of("placedAt", "total");
+
+@GetMapping("/orders")
+Page<Order> orders(
+        @FilterableQuery(value = Order.class, filterableFields = {"status"},
+                sortableFields = {"placedAt", "total"}) QueryPlan<Order> plan,
+        @RequestParam String orderBy,
+        Pageable pageable) {
+    if (!ORDER_BY.contains(orderBy)) {
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unknown orderBy: " + orderBy);
+    }
+    return orderRepository.query(plan).sort(Sort.by(orderBy)).findAll(pageable);
+}
+```
+
+The same applies to a field or a threshold of `having(...)` taken from the request. Better still,
+let the client sort through the `sort` parameter, which the policy checks.
+
 ### Types marked `INTERNAL`
 
 No type changed package or visibility, but the following are now `@API(status = INTERNAL)`: they
@@ -87,81 +297,50 @@ that reads the library's classes without the annotation on the classpath may war
 `org.apiguardian.api.API`; add `org.apiguardian:apiguardian-api` as a `compileOnly` dependency to
 silence it.
 
-### HTTP filters limit the number and the length of values
+### The case-insensitive search term is a bind parameter
 
-Issue #123.
+Issue #152.
 
-`HttpFilterParser` now bounds two inputs it used to accept without a limit, and rejects a request
-above either of them with `HttpFilterSyntaxException` (HTTP 400 with the usual mapping) before any SQL
-runs:
+With `ignoreCase` (`where(field, op, value, true, ...)` or `@FilterableQuery(caseInsensitiveFields
+= ...)`) and the default handlers, the search term of `eq`, `neq`, `contains`, `notcontains`,
+`startswith` and `endswith` was passed through `CriteriaBuilder.literal(...)`, so Hibernate
+rendered it in the SQL as an escaped string literal. It is now always sent as a bind parameter,
+with standard JPA only. The results do not change: the normalisation is still
+`unaccent(upper(...))` on both sides, in the database.
 
-- **`maxValuesPerFilter`** (default 100): the number of values of an `in` or `notin` filter. Before,
-  `?filter=id:in:1|2|...` could reach the database as an `IN` list of any size. `between` keeps its
-  rule of exactly two non-empty values and its error message.
-- **`maxValueLength`** (default 1000): the length, in characters, of a single value, in `filter` and
-  in `orFilter` groups. Each value of a multi-value filter is checked on its own.
+Before:
 
-The message names the field and the limit, without echoing the value:
-
-```text
-Invalid filter expression 'id:in': too many values (max 100) for field 'id'
-Invalid filter expression 'name:contains': value too long (max 1000 characters) for field 'name'
+```sql
+... where unaccent(upper(p.name)) like unaccent(upper('%CAFE''s%')) escape '\'
 ```
 
-Requests that succeeded before and exceed a limit now get a 400. If your clients legitimately send
-more values or longer values, raise the limits on the parser configuration (both must be at least 1):
+After:
 
-```java
-HttpFilterParserConfiguration config = HttpFilterParserConfiguration.builder()
-        .maxValuesPerFilter(500)
-        .maxValueLength(4000)
-        .build();
+```sql
+... where unaccent(upper(p.name)) like unaccent(upper((?||''))) escape '\'
 ```
 
-With the Spring Boot starters, declare an `HttpFilterParser` bean built with that configuration; it
-takes precedence over the auto-configured one.
+No code change is needed. Tests that assert on the generated SQL see the new form. The 0.4.x
+advice to avoid `caseInsensitiveFields` on databases that treat backslashes in string literals as
+escapes (MySQL without `NO_BACKSLASH_ESCAPES`) no longer applies.
 
-### Client filter errors answer 400 Problem Details by default
+### New features in 1.0.0
 
-Issue #153.
+Non-breaking additions worth knowing when upgrading:
 
-In a Spring MVC application with Spring Boot, the HTTP module now registers a
-`@RestControllerAdvice` that answers the client errors of the filter API with **400** and an RFC
-9457 Problem Details body (`application/problem+json`). Without a handler of your own, these
-requests used to end in a **500**:
-
-| Exception | Before | Now |
-|---|---|---|
-| `HttpFilterSyntaxException` | 500 | 400 |
-| `HttpUnknownOperatorException` | 500 | 400 |
-| `DisallowedFieldException` (argument resolver, or `Pageable` sort when the query runs) | 500 | 400 |
-| `InvalidFilterException` | 500 | 400 |
-| `InvalidFilterValueException` | 500 | 400 |
-| `UndeclaredFieldListException` | 400, empty body | 400, Problem Details body |
-
-The exceptions raised when the query runs are handled also when they arrive as the cause of an
-`InvalidDataAccessApiUsageException`. The body's `detail` is the exception message, and `field`
-names the field when the exception carries one. `IllegalStateException`, any other
-`IllegalArgumentException` and an `InvalidDataAccessApiUsageException` with another cause keep
-their status.
-
-Applications that already map these exceptions are unaffected: the advice has the lowest
-precedence, so a controller `@ExceptionHandler` or an application `@RestControllerAdvice` for the
-same types still wins. Check:
-
-- dashboards, alerts or tests that expected a 500 (or a servlet exception in `MockMvc`) for an
-  invalid filter;
-- application advices with a catch-all `@ExceptionHandler(Exception.class)`: it still receives
-  these exceptions, so they keep the status it returns.
-
-To keep the previous behaviour, set:
-
-```yaml
-specrepository:
-  http:
-    problem-details:
-      enabled: false
-```
+- **BOM** (#126): import `com.borjaglez.specrepository:specification-repository-bom` and declare
+  the modules without a version (see [Quick Start](../README.md#quick-start)).
+- **`specrepository.http.*` properties** (#124): parameter names, separators, limits and allowed
+  operators of the auto-configured `HttpFilterParser`, without a custom parser bean (see
+  [Configuration Properties](../README.md#configuration-properties)).
+- **Security guide** (#128): [docs/security.md](security.md) lists what the HTTP filter API
+  exposes, what the library guarantees and what the application must still do.
+- **Versioning policy** (#127): [docs/versioning.md](versioning.md) defines what semantic
+  versioning covers, the deprecation process and the support matrix.
+- **`Automatic-Module-Name`** (#125): every published jar declares a stable JPMS name
+  (`com.borjaglez.specrepository.core`, `.jpa`, `.http`, `.boot3`, `.boot4`).
+- **Binary compatibility check** (#122): from 1.0.0 on, the build fails on a binary-incompatible
+  change to a `STABLE` or `MAINTAINED` element.
 
 ## Upgrading to 0.4.0
 
@@ -362,7 +541,9 @@ Migration:
   `InvalidDataAccessApiUsageException`). An `@ExceptionHandler(DisallowedFieldException.class)`
   keeps working; code that caught the exception inside the handler method no longer sees it.
 - The derived plan keeps the client policy, so a sort set with `sort(...)` or `sortedByDefault(...)`
-  is still checked against the sortable fields: pick a default sort among them.
+  is still checked against the sortable fields: pick a default sort among them. (1.0.0 no longer
+  checks that sort, nor `having`: see
+  [the 1.0.0 change](#having-and-a-sort-set-on-a-derived-builder-are-no-longer-checked).)
 
 ### The `Pageable` sort is checked against the plan's policy
 

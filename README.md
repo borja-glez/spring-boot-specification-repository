@@ -22,7 +22,16 @@ Extensible Spring Data JPA query library with a fluent DSL and native-friendly a
 - Pluggable operators, predicate factories, converters, and dialect extensions
 - GraalVM-aware path resolution based on JPA metamodel metadata instead of reflection-heavy lookup
   (`selectInto(...)` DTOs need a reflection hint in a native image, see [GraalVM Native Image](#graalvm-native-image))
-- Spring Boot 3 and Spring Boot 4 starter modules
+- Spring Boot 3 and Spring Boot 4 starter modules, plus a BOM (`specification-repository-bom`) that
+  aligns the versions of every module (see [Quick Start](#quick-start))
+- Stable public API: every public type is annotated with
+  [`@API`](https://github.com/apiguardian-team/apiguardian) (`STABLE`, `MAINTAINED` or `INTERNAL`),
+  and the build checks binary compatibility against the last release; see the
+  [versioning and support policy](docs/versioning.md)
+- HTTP filter API (`@FilterableQuery`) with deny-by-default field lists, input limits, client
+  errors answered with 400 Problem Details (RFC 9457) out of the box, and
+  [`specrepository.http.*` configuration properties](#configuration-properties); see the
+  [security guide](docs/security.md) before exposing it
 - 100% JaCoCo coverage enforced (no exclusions)
 - Testcontainers-backed integration coverage and runnable demo applications
 
@@ -62,7 +71,7 @@ Boot keeps owning every third-party version.
 **Gradle**
 
 ```kotlin
-implementation(platform("com.borjaglez.specrepository:specification-repository-bom:0.4.0"))
+implementation(platform("com.borjaglez.specrepository:specification-repository-bom:1.0.0"))
 implementation("com.borjaglez.specrepository:specification-repository-boot3-starter")
 // Optional: HTTP query-string binding for Spring MVC controllers
 implementation("com.borjaglez.specrepository:specification-repository-http")
@@ -76,7 +85,7 @@ implementation("com.borjaglez.specrepository:specification-repository-http")
         <dependency>
             <groupId>com.borjaglez.specrepository</groupId>
             <artifactId>specification-repository-bom</artifactId>
-            <version>0.4.0</version>
+            <version>1.0.0</version>
             <type>pom</type>
             <scope>import</scope>
         </dependency>
@@ -101,7 +110,7 @@ implementation("com.borjaglez.specrepository:specification-repository-http")
 **Gradle**
 
 ```kotlin
-implementation(platform("com.borjaglez.specrepository:specification-repository-bom:0.4.0"))
+implementation(platform("com.borjaglez.specrepository:specification-repository-bom:1.0.0"))
 implementation("com.borjaglez.specrepository:specification-repository-boot4-starter")
 // Optional: HTTP query-string binding for Spring MVC controllers
 implementation("com.borjaglez.specrepository:specification-repository-http")
@@ -115,7 +124,7 @@ implementation("com.borjaglez.specrepository:specification-repository-http")
         <dependency>
             <groupId>com.borjaglez.specrepository</groupId>
             <artifactId>specification-repository-bom</artifactId>
-            <version>0.4.0</version>
+            <version>1.0.0</version>
             <type>pom</type>
             <scope>import</scope>
         </dependency>
@@ -695,6 +704,8 @@ With the default operator handlers, `ignoreCase = true` normalizes the database 
 `unaccent(UPPER(path))`. That behavior is demonstrated in the PostgreSQL demos and requires the
 PostgreSQL `unaccent` extension to be enabled.
 
+The search term is always sent as a bind parameter, never rendered as an SQL literal.
+
 Important: this is NOT a portable SQL abstraction yet. If you run the same overload on another
 dialect, you must provide a compatible database function or replace the operator handling strategy.
 
@@ -980,6 +991,11 @@ ValueConverter uuidConverter = new ValueConverter() {
 
 Extend `SpecificationRepositoryImpl` and override the `QueryPlanSpecificationFactory` with your own `OperatorRegistry`, `ValueConversionService`, and `PathResolver`.
 
+These classes are `@API(status = INTERNAL)`: they work as extension points, but their shape may
+change in any release. Prefer the `MAINTAINED` contracts (`OperatorHandler`, `ValueConverter`,
+`SpecificationRepositoryCustomizer`, `SpecificationRepositoryConfiguration`) where they are enough
+(see [API stability levels](docs/architecture.md#api-stability-levels)).
+
 ### Spring Boot Customization
 
 When you use the Boot 3 or Boot 4 starter, the extension points are exposed as beans:
@@ -987,7 +1003,7 @@ When you use the Boot 3 or Boot 4 starter, the extension points are exposed as b
 - register `OperatorHandler` beans to add or replace operators
 - register `ValueConverter` beans to customize value conversion
 - register `SpecificationRepositoryCustomizer` beans to adjust the repository pipeline
-- optionally provide `PathResolver`, `ConversionService`, `QueryPlanSpecificationFactory`, or a full `SpecificationRepositoryConfiguration` bean
+- optionally provide `PathResolver`, `ConversionService`, `QueryPlanSpecificationFactory` (both `INTERNAL`), or a full `SpecificationRepositoryConfiguration` bean
 
 ```java
 @Configuration(proxyBeanMethods = false)
@@ -1031,7 +1047,7 @@ size, server conditions, indexes, timeouts) and a complete secure controller.
 **Gradle**
 
 ```kotlin
-implementation("com.borjaglez.specrepository:specification-repository-http:0.4.0")
+implementation("com.borjaglez.specrepository:specification-repository-http:1.0.0")
 ```
 
 ### Query Parameter Contract
@@ -1121,8 +1137,9 @@ attribute:
 Field 'name' is not allowed for filtering: @FilterableQuery declares no filterableFields. Declare filterableFields, or set allowAllFields = true to allow every field.
 ```
 
-The exception is annotated with `@ResponseStatus(BAD_REQUEST)`, so Spring MVC answers 400 even
-without an exception handler; a handler for `DisallowedFieldException` catches it as well. A request
+Like the other client errors, it is answered with 400 Problem Details by default (see
+[HTTP status of the client errors](#http-status-of-the-client-errors)); it is also annotated with
+`@ResponseStatus(BAD_REQUEST)`, and a handler for `DisallowedFieldException` catches it as well. A request
 without `filter`, `orFilter` or `sort` parameters is still accepted. The annotation is not checked
 at startup.
 
