@@ -19,3 +19,10 @@ dependencies {
     testImplementation(libs.spring.boot.starter.test)
     testImplementation(libs.spring.boot.starter.web)
 }
+
+// The configuration processor only reads the Javadoc of the classes it compiles: an incremental
+// compile regenerates spring-configuration-metadata.json without the descriptions of the property
+// classes it skipped, and that output would then be cached. Compile the module in full every time.
+tasks.compileJava {
+    options.isIncremental = false
+}

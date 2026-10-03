@@ -1206,7 +1206,8 @@ Outside Spring MVC, pass the same set to
 `HttpFilterAutoConfiguration` is also registered for the `@WebMvcTest` slice on Spring Boot 3 and
 Spring Boot 4, so controller slice tests resolve `@FilterableQuery QueryPlan<T>` parameters without
 an extra `@ImportAutoConfiguration(HttpFilterAutoConfiguration.class)`. Custom `HttpFilterParser` or
-`QueryPlanArgumentResolver` beans still take precedence.
+`QueryPlanArgumentResolver` beans still take precedence, and the parser honours the
+[configuration properties](#configuration-properties).
 
 ### Programmatic Usage (no Spring)
 
@@ -1255,6 +1256,46 @@ The parser bounds every client input before any SQL runs. A request above a limi
 
 Every limit must be at least 1. The value limits keep a request from sending, for example, an `IN`
 list with thousands of bind parameters or a multi-megabyte `contains` term to the database.
+
+### Configuration Properties
+
+With Spring Boot, the auto-configured `HttpFilterParser` is built from `specrepository.http`
+properties, so you do not need your own parser bean to change a name, a separator or a limit. The
+values below are the defaults:
+
+```yaml
+specrepository:
+  http:
+    filter-param: filter
+    or-filter-param: orFilter
+    sort-param: sort
+    multi-value-separator: "|"
+    or-group-separator: ";"
+    max-filters: 20
+    max-sort-fields: 5
+    max-values-per-filter: 100
+    max-value-length: 1000
+    allowed-operators: []   # empty = every registered operator, e.g. [eq, neq, in]
+```
+
+| Property | Default | Builder method |
+|----------|---------|----------------|
+| `specrepository.http.filter-param` | `filter` | `filterParam` |
+| `specrepository.http.or-filter-param` | `orFilter` | `orFilterParam` |
+| `specrepository.http.sort-param` | `sort` | `sortParam` |
+| `specrepository.http.multi-value-separator` | `\|` | `multiValueSeparator` |
+| `specrepository.http.or-group-separator` | `;` | `orGroupSeparator` |
+| `specrepository.http.max-filters` | 20 | `maxFilters` |
+| `specrepository.http.max-sort-fields` | 5 | `maxSortFields` |
+| `specrepository.http.max-values-per-filter` | 100 | `maxValuesPerFilter` |
+| `specrepository.http.max-value-length` | 1000 | `maxValueLength` |
+| `specrepository.http.allowed-operators` | empty (all operators) | `allowedOperators` |
+
+The properties are mapped onto `HttpFilterParserConfiguration.builder()`, so the same validation
+applies: a limit below 1 fails application startup. The module ships
+`spring-configuration-metadata.json`, so IDEs complete and document the keys. The properties work
+on Spring Boot 3 and Spring Boot 4, and in the `@WebMvcTest` slice. A user-defined
+`HttpFilterParser` bean replaces the auto-configured parser, and the properties are then ignored.
 
 ### Error Handling
 

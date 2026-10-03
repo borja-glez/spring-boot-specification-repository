@@ -9,6 +9,7 @@ import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.web.method.support.HandlerMethodArgumentResolver;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
@@ -18,13 +19,14 @@ import com.borjaglez.specrepository.http.HttpFilterParser;
 @AutoConfiguration
 @ConditionalOnClass(HandlerMethodArgumentResolver.class)
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
+@EnableConfigurationProperties(HttpFilterProperties.class)
 @API(status = INTERNAL, since = "1.0.0")
 public class HttpFilterAutoConfiguration {
 
   @Bean
   @ConditionalOnMissingBean
-  HttpFilterParser httpFilterParser() {
-    return new HttpFilterParser();
+  HttpFilterParser httpFilterParser(HttpFilterProperties properties) {
+    return new HttpFilterParser(properties.toParserConfiguration());
   }
 
   @Bean
