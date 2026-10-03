@@ -47,6 +47,13 @@ public final class QueryPlan<T> {
   private final List<String> groupBy;
   private final List<HavingCondition> having;
   private final Sort sort;
+
+  /**
+   * Whether {@link #sort} was set on a builder derived from a plan ({@link #toBuilder()}): then it
+   * is server input and the {@link AllowedFieldsPolicy} does not check it.
+   */
+  private final boolean serverSort;
+
   private final boolean distinct;
   private final AllowedFieldsPolicy allowedFieldsPolicy;
   private final QueryLock lock;
@@ -63,6 +70,7 @@ public final class QueryPlan<T> {
       List<String> groupBy,
       List<HavingCondition> having,
       Sort sort,
+      boolean serverSort,
       boolean distinct,
       AllowedFieldsPolicy allowedFieldsPolicy,
       QueryLock lock) {
@@ -81,6 +89,7 @@ public final class QueryPlan<T> {
     this.groupBy = groupBy;
     this.having = Objects.requireNonNull(having, "having must not be null");
     this.sort = sort;
+    this.serverSort = serverSort;
     this.distinct = distinct;
     this.allowedFieldsPolicy =
         Objects.requireNonNull(allowedFieldsPolicy, "allowedFieldsPolicy must not be null");
@@ -135,6 +144,15 @@ public final class QueryPlan<T> {
     return sort;
   }
 
+  /**
+   * Whether the sort is server input: it was set with {@link QueryPlanBuilder#sort(Sort)} or {@link
+   * QueryPlanBuilder#sortedByDefault(Sort)} on a builder derived from a plan. The policy checks
+   * only a client sort.
+   */
+  boolean serverSort() {
+    return serverSort;
+  }
+
   public boolean distinct() {
     return distinct;
   }
@@ -153,8 +171,9 @@ public final class QueryPlan<T> {
    * conditions: they go to {@link #serverCondition()}, ANDed with the client conditions, and are
    * not checked against the policy. The policy, the client conditions and the other components are
    * kept unless changed; {@link QueryPlanBuilder#sort(Sort)} replaces the sort and {@link
-   * QueryPlanBuilder#sortedByDefault(Sort)} sets it only when the plan has none. This plan is not
-   * changed.
+   * QueryPlanBuilder#sortedByDefault(Sort)} sets it only when the plan has none. A sort set through
+   * it is a server sort and is not checked against the policy; the client sort it keeps when none
+   * is set still is. This plan is not changed.
    */
   public QueryPlanBuilder<T> toBuilder() {
     return new QueryPlanBuilder<>(this);
@@ -186,6 +205,7 @@ public final class QueryPlan<T> {
         groupBy,
         having,
         sort,
+        serverSort,
         distinct,
         allowedFieldsPolicy,
         lock);
@@ -228,6 +248,8 @@ public final class QueryPlan<T> {
         + having
         + ", sort="
         + sort
+        + ", serverSort="
+        + serverSort
         + ", distinct="
         + distinct
         + ", allowedFieldsPolicy="
@@ -250,6 +272,7 @@ public final class QueryPlan<T> {
       groupBy,
       having,
       sort,
+      serverSort,
       distinct,
       allowedFieldsPolicy,
       lock

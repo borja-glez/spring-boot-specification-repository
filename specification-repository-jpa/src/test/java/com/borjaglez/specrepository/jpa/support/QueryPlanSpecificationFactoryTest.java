@@ -1178,6 +1178,7 @@ class QueryPlanSpecificationFactoryTest {
               List.of(),
               sort,
               false,
+              false,
               policy,
               QueryLock.NONE);
     } catch (ReflectiveOperationException e) {

@@ -55,6 +55,10 @@ List<Order> mine = orderRepository.query(planFromClient)
     .findAll();
 ```
 
+A sort set with `sort(...)` or `sortedByDefault(...)` on a derived builder is server input too and
+is not checked; the client sort the derived plan keeps and the sort of a sorted `Pageable` still
+are.
+
 `AllowedFieldsPolicy.validate(plan)` runs the same check on demand; the HTTP argument resolver
 calls it so that a disallowed client field fails before the controller runs.
 

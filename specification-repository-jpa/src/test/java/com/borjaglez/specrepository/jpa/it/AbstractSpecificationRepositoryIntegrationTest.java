@@ -2117,6 +2117,106 @@ abstract class AbstractSpecificationRepositoryIntegrationTest {
     assertThat(orders.count(fromClient)).isEqualTo(2);
   }
 
+  // -- A sort set on a derived builder is server input: the policy does not check it --
+
+  /** Not sortable under {@link #ORDER_CLIENT_POLICY}: Diego's PENDING 40 comes before PAID 30. */
+  private static final Sort SERVER_SORT =
+      Sort.by(Sort.Direction.DESC, "status").and(Sort.by("customer.name"));
+
+  private static void assertDisallowedSort(
+      org.assertj.core.api.ThrowableAssert.ThrowingCallable call, String field) {
+    assertThatThrownBy(call)
+        .isInstanceOfSatisfying(
+            DisallowedFieldException.class,
+            exception -> {
+              assertThat(exception.field()).isEqualTo(field);
+              assertThat(exception.usage()).isEqualTo("sorting");
+            });
+  }
+
+  @Test
+  void aClientPlanWithADisallowedSortShouldStillBeRejected() {
+    saveOrdersOfTwoCustomers();
+    QueryPlan<TestOrder> fromClient =
+        orders.query().sort(Sort.by("status")).allowedFields(ORDER_CLIENT_POLICY).plan();
+
+    assertDisallowedSort(() -> orders.query(fromClient).findAll(), "status");
+    assertDisallowedSort(
+        () -> orders.query(fromClient).where("customer.name", Operators.EQUALS, "Diego").findAll(),
+        "status");
+    assertDisallowedSort(
+        () -> orders.query(fromClient).sortedByDefault(SERVER_SORT).findAll(PageRequest.of(0, 5)),
+        "status");
+  }
+
+  @Test
+  void aServerSortOnANonSortableFieldShouldReplaceTheClientSort() {
+    saveOrdersOfTwoCustomers();
+    QueryPlan<TestOrder> fromClient =
+        orders.query().sort(Sort.by("status")).allowedFields(ORDER_CLIENT_POLICY).plan();
+
+    List<TestOrder> fluent =
+        orders
+            .query(fromClient)
+            .where("customer.name", Operators.EQUALS, "Diego")
+            .sort(SERVER_SORT)
+            .findAll();
+    QueryPlan<TestOrder> derived =
+        fromClient.toBuilder()
+            .where("customer.name", Operators.EQUALS, "Diego")
+            .sort(SERVER_SORT)
+            .build();
+
+    assertThat(fluent)
+        .extracting(TestOrder::getTotal)
+        .containsExactly(new BigDecimal("40.00"), new BigDecimal("30.00"));
+    assertThat(orders.findAll(derived, PageRequest.of(0, 5)).getContent())
+        .extracting(TestOrder::getTotal)
+        .containsExactly(new BigDecimal("40.00"), new BigDecimal("30.00"));
+  }
+
+  @Test
+  void aServerDefaultSortOnANonSortableFieldShouldApplyWithoutAClientSort() {
+    saveOrdersOfTwoCustomers();
+    QueryPlan<TestOrder> unsorted = orders.query().allowedFields(ORDER_CLIENT_POLICY).plan();
+
+    Page<TestOrder> page =
+        orders
+            .query(unsorted)
+            .where("customer.name", Operators.EQUALS, "Diego")
+            .sortedByDefault(SERVER_SORT)
+            .findAll(PageRequest.of(0, 5));
+
+    assertThat(page.getContent())
+        .extracting(TestOrder::getTotal)
+        .containsExactly(new BigDecimal("40.00"), new BigDecimal("30.00"));
+  }
+
+  @Test
+  void aPageableSortShouldStillBeCheckedOverAServerSort() {
+    saveOrdersOfTwoCustomers();
+    QueryPlan<TestOrder> unsorted = orders.query().allowedFields(ORDER_CLIENT_POLICY).plan();
+    QueryPlan<TestOrder> derived = unsorted.toBuilder().sort(SERVER_SORT).build();
+
+    assertDisallowedSort(
+        () ->
+            orders
+                .query(unsorted)
+                .sort(SERVER_SORT)
+                .findAll(PageRequest.of(0, 5, Sort.by("customer.name"))),
+        "customer.name");
+    assertDisallowedSortOnStatus(() -> orders.findSlice(derived, PAGE_SORTED_BY_STATUS));
+    assertThat(
+            orders
+                .query(unsorted)
+                .where("customer.name", Operators.EQUALS, "Diego")
+                .sort(SERVER_SORT)
+                .findAll(PageRequest.of(0, 5, Sort.by("total")))
+                .getContent())
+        .extracting(TestOrder::getTotal)
+        .containsExactly(new BigDecimal("30.00"), new BigDecimal("40.00"));
+  }
+
   // -- Unknown operators and fields --
 
   @Test
