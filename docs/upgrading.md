@@ -87,6 +87,40 @@ that reads the library's classes without the annotation on the classpath may war
 `org.apiguardian.api.API`; add `org.apiguardian:apiguardian-api` as a `compileOnly` dependency to
 silence it.
 
+### HTTP filters limit the number and the length of values
+
+Issue #123.
+
+`HttpFilterParser` now bounds two inputs it used to accept without a limit, and rejects a request
+above either of them with `HttpFilterSyntaxException` (HTTP 400 with the usual mapping) before any SQL
+runs:
+
+- **`maxValuesPerFilter`** (default 100): the number of values of an `in` or `notin` filter. Before,
+  `?filter=id:in:1|2|...` could reach the database as an `IN` list of any size. `between` keeps its
+  rule of exactly two non-empty values and its error message.
+- **`maxValueLength`** (default 1000): the length, in characters, of a single value, in `filter` and
+  in `orFilter` groups. Each value of a multi-value filter is checked on its own.
+
+The message names the field and the limit, without echoing the value:
+
+```text
+Invalid filter expression 'id:in': too many values (max 100) for field 'id'
+Invalid filter expression 'name:contains': value too long (max 1000 characters) for field 'name'
+```
+
+Requests that succeeded before and exceed a limit now get a 400. If your clients legitimately send
+more values or longer values, raise the limits on the parser configuration (both must be at least 1):
+
+```java
+HttpFilterParserConfiguration config = HttpFilterParserConfiguration.builder()
+        .maxValuesPerFilter(500)
+        .maxValueLength(4000)
+        .build();
+```
+
+With the Spring Boot starters, declare an `HttpFilterParser` bean built with that configuration; it
+takes precedence over the auto-configured one.
+
 ## Upgrading to 0.4.0
 
 0.4.0 has seven breaking changes. Most applications only need the first three checks:

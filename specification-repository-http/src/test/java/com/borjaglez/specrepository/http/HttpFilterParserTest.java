@@ -265,6 +265,145 @@ class HttpFilterParserTest {
   }
 
   @Nested
+  class ValueLimitTests {
+
+    private String values(int count) {
+      var sb = new StringBuilder();
+      for (int i = 0; i < count; i++) {
+        if (i > 0) {
+          sb.append('|');
+        }
+        sb.append(i);
+      }
+      return sb.toString();
+    }
+
+    @Test
+    void shouldAcceptInWithMaxValuesByDefault() {
+      var result = parser.parse(Map.of("filter", List.of("id:in:" + values(100))));
+      assertThat((List<?>) result.filters().get(0).value()).hasSize(100);
+    }
+
+    @Test
+    void shouldRejectInAboveMaxValuesByDefault() {
+      assertThatThrownBy(() -> parser.parse(Map.of("filter", List.of("id:in:" + values(101)))))
+          .isInstanceOf(HttpFilterSyntaxException.class)
+          .hasMessageContaining("field 'id'")
+          .hasMessageContaining("too many values (max 100)");
+    }
+
+    @Test
+    void shouldAcceptNotInWithMaxValuesByDefault() {
+      var result = parser.parse(Map.of("filter", List.of("id:notin:" + values(100))));
+      assertThat((List<?>) result.filters().get(0).value()).hasSize(100);
+    }
+
+    @Test
+    void shouldRejectNotInAboveMaxValuesByDefault() {
+      assertThatThrownBy(() -> parser.parse(Map.of("filter", List.of("id:notin:" + values(101)))))
+          .isInstanceOf(HttpFilterSyntaxException.class)
+          .hasMessageContaining("field 'id'")
+          .hasMessageContaining("too many values (max 100)");
+    }
+
+    @Test
+    void shouldRejectInAboveCustomMaxValues() {
+      var p =
+          new HttpFilterParser(
+              HttpFilterParserConfiguration.builder().maxValuesPerFilter(2).build());
+
+      assertThat((List<?>) p.parse(Map.of("filter", List.of("id:in:1|2"))).filters().get(0).value())
+          .hasSize(2);
+      assertThatThrownBy(() -> p.parse(Map.of("filter", List.of("id:in:1|2|3"))))
+          .isInstanceOf(HttpFilterSyntaxException.class)
+          .hasMessageContaining("too many values (max 2)");
+    }
+
+    @Test
+    void shouldRejectInAboveMaxValuesInOrFilter() {
+      assertThatThrownBy(
+              () -> parser.parse(Map.of("orFilter", List.of("name:eq:A;id:in:" + values(101)))))
+          .isInstanceOf(HttpFilterSyntaxException.class)
+          .hasMessageContaining("field 'id'")
+          .hasMessageContaining("too many values (max 100)");
+    }
+
+    @Test
+    void shouldKeepBetweenRulesWhenMaxValuesIsBelowTwo() {
+      var p =
+          new HttpFilterParser(
+              HttpFilterParserConfiguration.builder().maxValuesPerFilter(1).build());
+
+      assertThat(
+              p.parse(Map.of("filter", List.of("price:between:10|100"))).filters().get(0).value())
+          .isEqualTo(List.of("10", "100"));
+      assertThatThrownBy(() -> p.parse(Map.of("filter", List.of("price:between:10|20|30"))))
+          .isInstanceOf(HttpFilterSyntaxException.class)
+          .hasMessageContaining("requires exactly 2 non-empty values");
+    }
+
+    @Test
+    void shouldAcceptValueWithMaxLengthByDefault() {
+      String value = "a".repeat(1000);
+      var result = parser.parse(Map.of("filter", List.of("name:contains:" + value)));
+      assertThat(result.filters().get(0).value()).isEqualTo(value);
+    }
+
+    @Test
+    void shouldRejectValueAboveMaxLengthInFilter() {
+      String value = "a".repeat(1001);
+      assertThatThrownBy(() -> parser.parse(Map.of("filter", List.of("name:contains:" + value))))
+          .isInstanceOf(HttpFilterSyntaxException.class)
+          .hasMessageContaining("field 'name'")
+          .hasMessageContaining("value too long (max 1000 characters)")
+          .hasMessageNotContaining(value);
+    }
+
+    @Test
+    void shouldRejectValueAboveMaxLengthInOrFilter() {
+      String value = "a".repeat(1001);
+      assertThatThrownBy(
+              () ->
+                  parser.parse(
+                      Map.of("orFilter", List.of("name:eq:A;description:contains:" + value))))
+          .isInstanceOf(HttpFilterSyntaxException.class)
+          .hasMessageContaining("field 'description'")
+          .hasMessageContaining("value too long (max 1000 characters)");
+    }
+
+    @Test
+    void shouldRejectMultiValueElementAboveMaxLength() {
+      String value = "a".repeat(1001);
+      assertThatThrownBy(() -> parser.parse(Map.of("filter", List.of("name:in:A|" + value))))
+          .isInstanceOf(HttpFilterSyntaxException.class)
+          .hasMessageContaining("field 'name'")
+          .hasMessageContaining("value too long (max 1000 characters)");
+    }
+
+    @Test
+    void shouldAcceptMultiValueWhoseTotalLengthExceedsMaxLength() {
+      String element = "a".repeat(600);
+      var result = parser.parse(Map.of("filter", List.of("name:in:" + element + "|" + element)));
+      assertThat(result.filters().get(0).value()).isEqualTo(List.of(element, element));
+    }
+
+    @Test
+    void shouldRejectValueAboveCustomMaxLength() {
+      var p =
+          new HttpFilterParser(HttpFilterParserConfiguration.builder().maxValueLength(3).build());
+
+      assertThat(p.parse(Map.of("filter", List.of("name:eq:abc"))).filters().get(0).value())
+          .isEqualTo("abc");
+      assertThatThrownBy(() -> p.parse(Map.of("filter", List.of("name:eq:abcd"))))
+          .isInstanceOf(HttpFilterSyntaxException.class)
+          .hasMessageContaining("value too long (max 3 characters)");
+      assertThatThrownBy(() -> p.parse(Map.of("filter", List.of("price:between:1|1000"))))
+          .isInstanceOf(HttpFilterSyntaxException.class)
+          .hasMessageContaining("value too long (max 3 characters)");
+    }
+  }
+
+  @Nested
   class OrGroupTests {
 
     @Test
