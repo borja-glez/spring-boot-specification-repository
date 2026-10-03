@@ -24,6 +24,7 @@ include(
     ":specification-repository-boot3-starter",
     ":specification-repository-boot4-starter",
     ":specification-repository-test-support",
+    ":specification-repository-bom",
     ":examples:boot3-demo",
     ":examples:boot3-postgres-demo",
     ":examples:boot4-demo",
