@@ -1,5 +1,8 @@
 package com.borjaglez.specrepository.http.spring;
 
+import static org.apiguardian.api.API.Status.STABLE;
+
+import org.apiguardian.api.API;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.ResponseStatus;
 
@@ -15,6 +18,7 @@ import com.borjaglez.specrepository.core.DisallowedFieldException;
  * Without such a handler, Spring MVC answers with HTTP 400.
  */
 @ResponseStatus(HttpStatus.BAD_REQUEST)
+@API(status = STABLE, since = "1.0.0")
 public class UndeclaredFieldListException extends DisallowedFieldException {
 
   private final String attribute;

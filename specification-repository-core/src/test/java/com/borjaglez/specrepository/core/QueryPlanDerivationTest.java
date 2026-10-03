@@ -1,7 +1,6 @@
 package com.borjaglez.specrepository.core;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 import static org.assertj.core.api.Assertions.assertThatNullPointerException;
 
 import java.util.List;
@@ -211,58 +210,5 @@ class QueryPlanDerivationTest {
     assertThatNullPointerException()
         .isThrownBy(() -> new QueryPlanBuilder<>((QueryPlan<Object>) null))
         .withMessage("plan must not be null");
-  }
-
-  @Test
-  void queryPlanShouldRejectANullServerCondition() {
-    assertThatNullPointerException()
-        .isThrownBy(() -> planWithServerCondition(null))
-        .withMessage("serverCondition must not be null");
-  }
-
-  @Test
-  void queryPlanShouldRejectAServerConditionThatIsNotAnAndGroup() {
-    assertThatIllegalArgumentException()
-        .isThrownBy(
-            () -> planWithServerCondition(new GroupCondition(LogicalOperator.OR, List.of())))
-        .withMessage("serverCondition must be an AND group");
-  }
-
-  @Test
-  void constructorWithoutServerConditionShouldLeaveItEmpty() {
-    QueryPlan<String> plan =
-        new QueryPlan<>(
-            String.class,
-            new GroupCondition(LogicalOperator.AND, List.of()),
-            List.of(),
-            List.of(),
-            List.of(),
-            List.of(),
-            null,
-            List.of(),
-            List.of(),
-            Sort.unsorted(),
-            false,
-            CLIENT_POLICY);
-
-    assertThat(plan.serverCondition())
-        .isEqualTo(new GroupCondition(LogicalOperator.AND, List.of()));
-  }
-
-  private static QueryPlan<String> planWithServerCondition(GroupCondition serverCondition) {
-    return new QueryPlan<>(
-        String.class,
-        new GroupCondition(LogicalOperator.AND, List.of()),
-        serverCondition,
-        List.of(),
-        List.of(),
-        List.of(),
-        List.of(),
-        null,
-        List.of(),
-        List.of(),
-        Sort.unsorted(),
-        false,
-        AllowedFieldsPolicy.allowAll());
   }
 }

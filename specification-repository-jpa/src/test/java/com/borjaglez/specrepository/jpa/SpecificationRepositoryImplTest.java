@@ -9,7 +9,6 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
-import java.util.List;
 import java.util.Set;
 
 import jakarta.persistence.EntityManager;
@@ -23,8 +22,6 @@ import org.springframework.data.jpa.repository.support.JpaEntityInformation;
 
 import com.borjaglez.specrepository.core.AllowedFieldsPolicy;
 import com.borjaglez.specrepository.core.DisallowedFieldException;
-import com.borjaglez.specrepository.core.GroupCondition;
-import com.borjaglez.specrepository.core.LogicalOperator;
 import com.borjaglez.specrepository.core.QueryPlan;
 import com.borjaglez.specrepository.core.SpecificationQueryBuilder;
 import com.borjaglez.specrepository.jpa.support.SpecificationRepositoryConfiguration;
@@ -34,18 +31,7 @@ class SpecificationRepositoryImplTest {
   @Test
   void shouldRejectMissingProjectionTypeMetadata() {
     QueryPlan<Object> plan =
-        new QueryPlan<>(
-            Object.class,
-            new GroupCondition(LogicalOperator.AND, List.of()),
-            List.of(),
-            List.of(),
-            List.of("name"),
-            List.of(),
-            null,
-            List.of(),
-            Sort.unsorted(),
-            false,
-            AllowedFieldsPolicy.allowAll());
+        SpecificationQueryBuilder.forEntity(Object.class).select("name").build();
 
     assertThatIllegalStateException()
         .isThrownBy(() -> SpecificationRepositoryImpl.requiredProjectionType(plan))

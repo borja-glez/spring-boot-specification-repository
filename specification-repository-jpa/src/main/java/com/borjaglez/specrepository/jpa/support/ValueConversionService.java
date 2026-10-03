@@ -1,15 +1,19 @@
 package com.borjaglez.specrepository.jpa.support;
 
+import static org.apiguardian.api.API.Status.INTERNAL;
+
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.stream.StreamSupport;
 
+import org.apiguardian.api.API;
 import org.springframework.core.convert.ConversionService;
 
 import com.borjaglez.specrepository.core.FilterOperator;
 import com.borjaglez.specrepository.jpa.spi.ValueConverter;
 
+@API(status = INTERNAL, since = "1.0.0")
 public class ValueConversionService {
   private final ConversionService conversionService;
   private final List<ValueConverter> converters;

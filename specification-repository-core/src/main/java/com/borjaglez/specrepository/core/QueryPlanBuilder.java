@@ -1,13 +1,17 @@
 package com.borjaglez.specrepository.core;
 
+import static org.apiguardian.api.API.Status.STABLE;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 import java.util.function.Consumer;
 
+import org.apiguardian.api.API;
 import org.springframework.data.domain.Sort;
 
+@API(status = STABLE, since = "1.0.0")
 public class QueryPlanBuilder<T> {
   private final Class<T> entityType;
   private final ConditionGroupBuilder<T> rootGroup =

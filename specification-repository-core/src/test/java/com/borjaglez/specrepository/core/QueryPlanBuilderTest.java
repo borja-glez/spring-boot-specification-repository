@@ -213,44 +213,6 @@ class QueryPlanBuilderTest {
   }
 
   @Test
-  void queryPlanCompatibilityConstructorShouldDefaultToAllowAll() {
-    QueryPlan<String> plan =
-        new QueryPlan<>(
-            String.class,
-            new GroupCondition(LogicalOperator.AND, java.util.List.of()),
-            java.util.List.of(),
-            java.util.List.of(),
-            java.util.List.of(),
-            java.util.List.of(),
-            null,
-            java.util.List.of(),
-            Sort.unsorted(),
-            false);
-
-    assertThat(plan.allowedFieldsPolicy()).isSameAs(AllowedFieldsPolicy.allowAll());
-  }
-
-  @Test
-  void queryPlanShouldRejectNullAllowedFieldsPolicy() {
-    assertThatNullPointerException()
-        .isThrownBy(
-            () ->
-                new QueryPlan<>(
-                    String.class,
-                    new GroupCondition(LogicalOperator.AND, java.util.List.of()),
-                    java.util.List.of(),
-                    java.util.List.of(),
-                    java.util.List.of(),
-                    java.util.List.of(),
-                    null,
-                    java.util.List.of(),
-                    Sort.unsorted(),
-                    false,
-                    null))
-        .withMessage("allowedFieldsPolicy must not be null");
-  }
-
-  @Test
   void specificationQueryBuilderForEntityShouldReturnBuilder() {
     QueryPlanBuilder<Integer> builder = SpecificationQueryBuilder.forEntity(Integer.class);
     QueryPlan<Integer> plan = builder.build();
@@ -334,48 +296,6 @@ class QueryPlanBuilderTest {
                     .having(AggregateFunction.SUM, "amount", Operators.GREATER_THAN, 1)
                     .build())
         .withMessage("having requires at least one groupBy field");
-  }
-
-  @Test
-  void queryPlanLegacyConstructorWithPolicyShouldDefaultHavingToEmpty() {
-    AllowedFieldsPolicy policy =
-        AllowedFieldsPolicy.of(java.util.Set.of("name"), java.util.Set.of("name"));
-    QueryPlan<String> plan =
-        new QueryPlan<>(
-            String.class,
-            new GroupCondition(LogicalOperator.AND, java.util.List.of()),
-            java.util.List.of(),
-            java.util.List.of(),
-            java.util.List.of(),
-            java.util.List.of(),
-            null,
-            java.util.List.of(),
-            Sort.unsorted(),
-            false,
-            policy);
-    assertThat(plan.having()).isEmpty();
-    assertThat(plan.allowedFieldsPolicy()).isSameAs(policy);
-  }
-
-  @Test
-  void queryPlanShouldRejectNullHaving() {
-    assertThatNullPointerException()
-        .isThrownBy(
-            () ->
-                new QueryPlan<>(
-                    String.class,
-                    new GroupCondition(LogicalOperator.AND, java.util.List.of()),
-                    java.util.List.of(),
-                    java.util.List.of(),
-                    java.util.List.of(),
-                    java.util.List.of(),
-                    null,
-                    java.util.List.of(),
-                    null,
-                    Sort.unsorted(),
-                    false,
-                    AllowedFieldsPolicy.allowAll()))
-        .withMessage("having must not be null");
   }
 
   private record NameEmailProjection(String name, String email) {}

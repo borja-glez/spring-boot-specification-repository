@@ -1,5 +1,7 @@
 package com.borjaglez.specrepository.jpa.support;
 
+import static org.apiguardian.api.API.Status.INTERNAL;
+
 import jakarta.persistence.criteria.Fetch;
 import jakarta.persistence.criteria.From;
 import jakarta.persistence.criteria.Path;
@@ -10,9 +12,12 @@ import jakarta.persistence.metamodel.PluralAttribute;
 import jakarta.persistence.metamodel.SingularAttribute;
 import jakarta.persistence.metamodel.Type;
 
+import org.apiguardian.api.API;
+
 import com.borjaglez.specrepository.core.InvalidFilterException;
 import com.borjaglez.specrepository.core.JoinMode;
 
+@API(status = INTERNAL, since = "1.0.0")
 public class PathResolver {
 
   public Path<?> resolve(

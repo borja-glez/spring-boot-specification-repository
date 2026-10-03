@@ -1,13 +1,18 @@
 package com.borjaglez.specrepository.jpa.support;
 
+import static org.apiguardian.api.API.Status.INTERNAL;
+
 import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
 
+import org.apiguardian.api.API;
+
 import com.borjaglez.specrepository.core.FilterOperator;
 import com.borjaglez.specrepository.jpa.spi.OperatorHandler;
 
+@API(status = INTERNAL, since = "1.0.0")
 public class OperatorRegistry {
   private final Map<FilterOperator, OperatorHandler> handlers = new LinkedHashMap<>();
 

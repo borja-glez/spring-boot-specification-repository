@@ -1,5 +1,7 @@
 package com.borjaglez.specrepository.jpa.support;
 
+import static org.apiguardian.api.API.Status.INTERNAL;
+
 import java.util.Collection;
 import java.util.List;
 
@@ -8,11 +10,14 @@ import jakarta.persistence.criteria.Expression;
 import jakarta.persistence.criteria.Path;
 import jakarta.persistence.criteria.Predicate;
 
+import org.apiguardian.api.API;
+
 import com.borjaglez.specrepository.core.FilterOperator;
 import com.borjaglez.specrepository.core.Operators;
 import com.borjaglez.specrepository.jpa.spi.OperatorContext;
 import com.borjaglez.specrepository.jpa.spi.OperatorHandler;
 
+@API(status = INTERNAL, since = "1.0.0")
 public final class DefaultOperatorHandlers {
   private static final String UNACCENT = "unaccent";
   private static final char LIKE_ESCAPE = '\\';

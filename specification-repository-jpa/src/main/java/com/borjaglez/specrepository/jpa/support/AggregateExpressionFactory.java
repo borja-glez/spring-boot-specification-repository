@@ -1,11 +1,16 @@
 package com.borjaglez.specrepository.jpa.support;
 
+import static org.apiguardian.api.API.Status.INTERNAL;
+
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.Expression;
 import jakarta.persistence.criteria.Path;
 
+import org.apiguardian.api.API;
+
 import com.borjaglez.specrepository.core.AggregateFunction;
 
+@API(status = INTERNAL, since = "1.0.0")
 public final class AggregateExpressionFactory {
   private AggregateExpressionFactory() {}
 

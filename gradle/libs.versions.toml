@@ -14,6 +14,7 @@ jakarta-persistence = "3.1.0"
 spring-data = "3.5.10"
 spring-framework = "6.2.17"
 postgresql-driver = "42.7.7"
+apiguardian = "1.1.2"
 
 [libraries]
 spring-boot-starter-test = { module = "org.springframework.boot:spring-boot-starter-test" }
@@ -33,6 +34,7 @@ spring-core = { module = "org.springframework:spring-core", version.ref = "sprin
 spring-web = { module = "org.springframework:spring-web", version.ref = "spring-framework" }
 spring-webmvc = { module = "org.springframework:spring-webmvc", version.ref = "spring-framework" }
 jakarta-persistence-api = { module = "jakarta.persistence:jakarta.persistence-api", version.ref = "jakarta-persistence" }
+apiguardian-api = { module = "org.apiguardian:apiguardian-api", version.ref = "apiguardian" }
 
 spring-boot4-autoconfigure = { module = "org.springframework.boot:spring-boot-autoconfigure", version.ref = "spring-boot4" }
 spring-boot4-configuration-processor = { module = "org.springframework.boot:spring-boot-configuration-processor", version.ref = "spring-boot4" }

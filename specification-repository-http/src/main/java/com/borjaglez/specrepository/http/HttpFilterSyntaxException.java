@@ -1,5 +1,10 @@
 package com.borjaglez.specrepository.http;
 
+import static org.apiguardian.api.API.Status.STABLE;
+
+import org.apiguardian.api.API;
+
+@API(status = STABLE, since = "1.0.0")
 public class HttpFilterSyntaxException extends IllegalArgumentException {
   private final String rawExpression;
   private final String reason;

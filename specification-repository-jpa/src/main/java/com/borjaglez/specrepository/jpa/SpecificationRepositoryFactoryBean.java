@@ -1,10 +1,13 @@
 package com.borjaglez.specrepository.jpa;
 
+import static org.apiguardian.api.API.Status.INTERNAL;
+
 import java.io.Serializable;
 import java.util.Map;
 
 import jakarta.persistence.EntityManager;
 
+import org.apiguardian.api.API;
 import org.springframework.beans.factory.BeanFactory;
 import org.springframework.beans.factory.BeanFactoryAware;
 import org.springframework.beans.factory.BeanFactoryUtils;
@@ -21,6 +24,7 @@ import org.springframework.util.Assert;
 
 import com.borjaglez.specrepository.jpa.support.SpecificationRepositoryConfiguration;
 
+@API(status = INTERNAL, since = "1.0.0")
 public class SpecificationRepositoryFactoryBean<
         R extends Repository<T, I>, T, I extends Serializable>
     extends JpaRepositoryFactoryBean<R, T, I> implements BeanFactoryAware {

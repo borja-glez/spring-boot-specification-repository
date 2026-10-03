@@ -1,5 +1,7 @@
 package com.borjaglez.specrepository.jpa;
 
+import static org.apiguardian.api.API.Status.INTERNAL;
+
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -25,6 +27,7 @@ import jakarta.persistence.criteria.Root;
 import jakarta.persistence.criteria.Selection;
 import jakarta.persistence.metamodel.Attribute;
 
+import org.apiguardian.api.API;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
@@ -50,6 +53,7 @@ import com.borjaglez.specrepository.jpa.support.PathResolver;
 import com.borjaglez.specrepository.jpa.support.QueryPlanSpecificationFactory;
 import com.borjaglez.specrepository.jpa.support.SpecificationRepositoryConfiguration;
 
+@API(status = INTERNAL, since = "1.0.0")
 public class SpecificationRepositoryImpl<T, ID extends Serializable>
     extends SimpleJpaRepository<T, ID> implements SpecificationRepository<T, ID> {
 
@@ -264,7 +268,7 @@ public class SpecificationRepositoryImpl<T, ID extends Serializable>
       QueryPlan<T> plan, Sort sort, long offset, int limit, CriteriaBuilder builder) {
     CriteriaQuery<Tuple> query = builder.createTupleQuery();
     Root<T> root = query.from(getDomainClass());
-    specificationFactory.create(withoutFetches(plan)).toPredicate(root, query, builder);
+    specificationFactory.create(plan.withoutFetches()).toPredicate(root, query, builder);
     for (FetchInstruction fetch : plan.fetches()) {
       if (fetch.mode() == JoinMode.INNER) {
         pathResolver.join(root, new AssociationRegistry(), fetch.path(), JoinMode.INNER);
@@ -285,24 +289,6 @@ public class SpecificationRepositoryImpl<T, ID extends Serializable>
     // A sort over a collection returns a root once per element: each id is kept once, in the
     // position of its first row.
     return typedQuery.getResultList().stream().map(row -> row.get(0)).distinct().toList();
-  }
-
-  private static <X> QueryPlan<X> withoutFetches(QueryPlan<X> plan) {
-    return new QueryPlan<>(
-        plan.entityType(),
-        plan.rootCondition(),
-        plan.serverCondition(),
-        plan.joins(),
-        List.of(),
-        plan.projections(),
-        plan.selections(),
-        plan.projectionType(),
-        plan.groupBy(),
-        plan.having(),
-        plan.sort(),
-        plan.distinct(),
-        plan.allowedFieldsPolicy(),
-        plan.lock());
   }
 
   /**

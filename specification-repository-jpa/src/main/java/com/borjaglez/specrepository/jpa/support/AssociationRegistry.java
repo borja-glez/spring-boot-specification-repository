@@ -1,5 +1,7 @@
 package com.borjaglez.specrepository.jpa.support;
 
+import static org.apiguardian.api.API.Status.INTERNAL;
+
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -8,8 +10,11 @@ import jakarta.persistence.criteria.From;
 import jakarta.persistence.criteria.Join;
 import jakarta.persistence.criteria.JoinType;
 
+import org.apiguardian.api.API;
+
 import com.borjaglez.specrepository.core.JoinMode;
 
+@API(status = INTERNAL, since = "1.0.0")
 public class AssociationRegistry {
   private final Map<String, Join<?, ?>> joins = new LinkedHashMap<>();
   private final Map<String, Fetch<?, ?>> fetches = new LinkedHashMap<>();

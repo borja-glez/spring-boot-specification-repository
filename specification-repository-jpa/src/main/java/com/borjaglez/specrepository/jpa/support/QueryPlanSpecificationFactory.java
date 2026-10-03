@@ -1,5 +1,7 @@
 package com.borjaglez.specrepository.jpa.support;
 
+import static org.apiguardian.api.API.Status.INTERNAL;
+
 import java.time.DateTimeException;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -21,6 +23,7 @@ import jakarta.persistence.criteria.Root;
 import jakarta.persistence.criteria.Subquery;
 import jakarta.persistence.metamodel.ManagedType;
 
+import org.apiguardian.api.API;
 import org.springframework.core.convert.ConversionException;
 import org.springframework.data.jpa.domain.Specification;
 
@@ -43,6 +46,7 @@ import com.borjaglez.specrepository.core.SubqueryCondition;
 import com.borjaglez.specrepository.jpa.spi.OperatorContext;
 import com.borjaglez.specrepository.jpa.spi.OperatorHandler;
 
+@API(status = INTERNAL, since = "1.0.0")
 public class QueryPlanSpecificationFactory {
   private final OperatorRegistry operatorRegistry;
   private final ValueConversionService valueConversionService;
