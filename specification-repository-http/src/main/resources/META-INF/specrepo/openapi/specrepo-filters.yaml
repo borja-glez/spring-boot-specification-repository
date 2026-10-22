@@ -1,0 +1,145 @@
+openapi: 3.0.3
+info:
+  title: Specification Repository HTTP filters
+  version: 1.0.0
+  description: |
+    Reusable OpenAPI fragment that describes the query parameters read by the
+    specification-repository HTTP module (`filter`, `orFilter` and `sort`), the filter operators
+    and the 400 problem returned for an invalid filter. Reference its components from your own
+    contract, for example `$ref: 'specrepo-filters.yaml#/components/parameters/SpecrepoFilter'`.
+    The fragment sticks to the subset of OpenAPI shared by 3.0 and 3.1.
+
+    The parameter names are the defaults of `HttpFilterParserConfiguration`; if you rename them in
+    the configuration, rename them in your contract too.
+
+    Extension `x-specrepo-filterable-fields`: an operation may declare, as a list of field names
+    (dot notation allowed, for example `profile.city`), the fields a client may filter and sort
+    on. It is documentation for contract tooling; the server enforces its own allow-list.
+paths: {}
+components:
+  parameters:
+    SpecrepoFilter:
+      name: filter
+      in: query
+      required: false
+      style: form
+      explode: true
+      description: |
+        Conditions combined with AND. Repeat the parameter for several conditions:
+        `filter=name:contains:john&filter=age:gte:18`.
+
+        Syntax: `field:operator[:value]`. The field is a property path in dot notation. The
+        operator is one of `SpecrepoFilterOperator`; the operators that test null or emptiness
+        take no value. Operators with several values (`in`, `notin`) take a list `a|b|c`;
+        `between` takes a range `from|to`. There is no escape character: a value cannot contain
+        the `|` separator.
+      schema:
+        type: array
+        items:
+          type: string
+          pattern: '^[A-Za-z0-9_.]+:[a-z]+(:.*)?$'
+    SpecrepoOrFilter:
+      name: orFilter
+      in: query
+      required: false
+      style: form
+      explode: true
+      description: |
+        Groups of conditions. The conditions inside a group are separated by `;` and combined
+        with AND; the groups are combined with OR, and the result with the `filter` conditions
+        with AND. Repeat the parameter for several groups:
+        `orFilter=status:eq:ACTIVE;age:gte:18&orFilter=role:eq:ADMIN`. Each condition has the
+        syntax `field:operator[:value]`, with the same value rules as `filter`.
+      schema:
+        type: array
+        items:
+          type: string
+          pattern: '^[A-Za-z0-9_.]+:[a-z]+(:.*)?(;[A-Za-z0-9_.]+:[a-z]+(:.*)?)*$'
+    SpecrepoSort:
+      name: sort
+      in: query
+      required: false
+      style: form
+      explode: true
+      description: |
+        Sort order, `field[,asc|desc]`; the direction defaults to ascending. Repeat the parameter
+        to sort by several fields: `sort=name,asc&sort=createdAt,desc`.
+      schema:
+        type: array
+        items:
+          type: string
+          pattern: '^[A-Za-z0-9_.]+(,(asc|desc))?$'
+  schemas:
+    SpecrepoFilterOperator:
+      type: string
+      description: |
+        Operator of a filter condition.
+
+        - `eq`: equal to the value.
+        - `neq`: not equal to the value.
+        - `isnull`: the field is null (no value).
+        - `isnotnull`: the field is not null (no value).
+        - `isempty`: the field is an empty string or collection (no value).
+        - `isnotempty`: the field is not an empty string or collection (no value).
+        - `contains`: the text contains the value.
+        - `notcontains`: the text does not contain the value.
+        - `startswith`: the text starts with the value.
+        - `endswith`: the text ends with the value.
+        - `gt`: greater than the value.
+        - `gte`: greater than or equal to the value.
+        - `lt`: less than the value.
+        - `lte`: less than or equal to the value.
+        - `between`: between the two values `from|to`, both included.
+        - `in`: equal to any of the values `a|b|c`.
+        - `notin`: equal to none of the values `a|b|c`.
+      enum:
+        - eq
+        - neq
+        - isnull
+        - isnotnull
+        - isempty
+        - isnotempty
+        - contains
+        - notcontains
+        - startswith
+        - endswith
+        - gt
+        - gte
+        - lt
+        - lte
+        - between
+        - in
+        - notin
+    SpecrepoInvalidFilterProblem:
+      type: object
+      description: |
+        RFC 9457 problem returned with status 400 when a filter, an or-filter or a sort is
+        invalid.
+      properties:
+        type:
+          type: string
+          format: uri-reference
+          description: Problem type; `about:blank` unless the application overrides it.
+        title:
+          type: string
+          description: Short summary of the problem type.
+        status:
+          type: integer
+          description: HTTP status code, always 400.
+        detail:
+          type: string
+          description: Explanation of what is wrong with the request.
+        instance:
+          type: string
+          format: uri-reference
+          description: URI of the request that caused the problem.
+        field:
+          type: string
+          description: Field the problem refers to. Present only when the error names a field.
+  responses:
+    SpecrepoInvalidFilter:
+      description: The filter, orFilter or sort parameter is invalid.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/SpecrepoInvalidFilterProblem'

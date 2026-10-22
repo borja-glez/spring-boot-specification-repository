@@ -18,6 +18,7 @@ dependencies {
     testImplementation(libs.spring.boot.autoconfigure)
     testImplementation(libs.spring.boot.starter.test)
     testImplementation(libs.spring.boot.starter.web)
+    testImplementation(libs.snakeyaml)
 }
 
 // The configuration processor only reads the Javadoc of the classes it compiles: an incremental

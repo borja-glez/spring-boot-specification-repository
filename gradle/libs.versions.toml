@@ -19,6 +19,7 @@ apiguardian = "1.1.2"
 
 [libraries]
 spring-boot-starter-test = { module = "org.springframework.boot:spring-boot-starter-test" }
+snakeyaml = { module = "org.yaml:snakeyaml" }
 spring-boot-starter-web = { module = "org.springframework.boot:spring-boot-starter-web" }
 # Boot 4 only: the @WebMvcTest slice moved to its own module.
 spring-boot-starter-webmvc-test = { module = "org.springframework.boot:spring-boot-starter-webmvc-test" }
