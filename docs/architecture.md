@@ -10,6 +10,16 @@ The project is split into a pure query core and JPA/Spring adapters.
 
 All library code lives under the `com.borjaglez.specrepository` package hierarchy.
 
+## From an HTTP request to SQL
+
+<p align="center"><img src="assets/diagrams/query-pipeline.svg" alt="Query pipeline: an HTTP request is parsed and bounded by HttpFilterParser (specrepository.http limits and allowed operators), becomes a QueryPlan checked against an AllowedFieldsPolicy, gets server conditions from repository.query(plan).where(...), is turned into a Specification when the query runs, and then into SQL with bound parameters; a request rejected by the parser, the allow-list or the Specification is answered with a 400 Problem Details response" width="100%"></p>
+
+The `http` module parses and bounds the client input, the `core` plan carries the field allow-list,
+server conditions are added in code, and the `jpa` module checks the plan again while it builds the
+`Specification`. Every client error is answered with a 400 before any SQL runs. See
+[security.md](security.md) for the limits and the status of each exception, and
+[contract-first.md](contract-first.md) for APIs written as an OpenAPI document first.
+
 ## Design goals
 
 - Builders only build.

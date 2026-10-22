@@ -5,6 +5,8 @@ implementing interfaces generated from it (OpenAPI Generator, for example). It s
 the `filter`, `orFilter` and `sort` parameters in the contract, and how to turn what the generated
 interface hands you into a `QueryPlan`.
 
+<p align="center"><img src="assets/diagrams/contract-first.svg" alt="Contract-first flow: at build time the specrepo-filters.yaml fragment from the specification-repository-http jar is copied next to your OpenAPI contract, which references its parameters and its SpecrepoInvalidFilter 400 response, and OpenAPI Generator turns the contract into the ProductsApi interface; at run time ProductsController implements it, passes the filter, orFilter and sort lists to HttpFilterParser.toQueryPlan with an AllowedFieldsPolicy, validates the plan and hands it to repository.query(plan) with a tenant server condition; a disallowed field is answered with a 400 Problem Details response" width="100%"></p>
+
 Read [security.md](security.md) first: the field allow-list is still mandatory here.
 
 ## 1. Contract-first or code-first
