@@ -14,4 +14,5 @@ dependencies {
     implementation("com.diffplug.spotless:spotless-plugin-gradle:8.4.0")
     implementation("com.vanniktech:gradle-maven-publish-plugin:0.36.0")
     implementation("me.champeau.gradle:japicmp-gradle-plugin:0.4.6")
+    implementation("info.solidsoft.gradle.pitest:gradle-pitest-plugin:1.19.0")
 }

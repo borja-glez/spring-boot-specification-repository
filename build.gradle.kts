@@ -117,3 +117,13 @@ tasks.register("spotlessApplyAll") {
         ":examples:boot4-postgres-demo:spotlessApply"
     )
 }
+
+tasks.register("mutationReport") {
+    group = LifecycleBasePlugin.VERIFICATION_GROUP
+    description = "Generates PIT mutation testing reports (report only, not part of quality)."
+    dependsOn(
+        ":specification-repository-core:pitest",
+        ":specification-repository-jpa:pitest",
+        ":specification-repository-http:pitest"
+    )
+}
