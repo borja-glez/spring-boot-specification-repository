@@ -14,12 +14,15 @@ import org.springframework.data.domain.Sort;
 import com.borjaglez.specrepository.core.AllowedFieldsPolicy;
 import com.borjaglez.specrepository.core.DisallowedFieldException;
 import com.borjaglez.specrepository.core.GroupCondition;
+import com.borjaglez.specrepository.core.LogicalOperator;
+import com.borjaglez.specrepository.core.Operators;
 import com.borjaglez.specrepository.core.PredicateCondition;
 import com.borjaglez.specrepository.core.QueryPlan;
 
 /**
- * Compiles and exercises the Java code of docs/contract-first.md. {@code ProductSearch} is quoted
- * verbatim in the guide.
+ * Compiles and exercises the Java code of docs/contract-first.md. The body of {@code ProductSearch}
+ * between the snippet markers is the one in the guide, where the class is a top-level
+ * {@code @Component} instead of a static nested class.
  */
 class ContractFirstGuideExampleTest {
 
@@ -70,9 +73,16 @@ class ContractFirstGuideExampleTest {
             List.of("createdAt,desc"));
 
     assertThat(plan.entityType()).isEqualTo(Product.class);
-    assertThat(plan.rootCondition().conditions()).hasSize(2);
-    assertThat(plan.rootCondition().conditions().get(0)).isInstanceOf(PredicateCondition.class);
-    assertThat(plan.rootCondition().conditions().get(1)).isInstanceOf(GroupCondition.class);
+    assertThat(plan.rootCondition().logicalOperator()).isEqualTo(LogicalOperator.AND);
+    assertThat(plan.rootCondition().conditions())
+        .containsExactly(
+            new PredicateCondition("name", Operators.CONTAINS, "john", true, false),
+            new GroupCondition(
+                LogicalOperator.OR,
+                List.of(
+                    new PredicateCondition("status", Operators.EQUALS, "ACTIVE", false, false),
+                    new PredicateCondition(
+                        "category.name", Operators.EQUALS, "Books", false, false))));
     assertThat(plan.sort()).isEqualTo(Sort.by(Sort.Order.desc("createdAt")));
   }
 

@@ -14,7 +14,7 @@ Read [security.md](security.md) first: the field allow-list is still mandatory h
 | Source of truth | the controller (`@FilterableQuery`) | the OpenAPI document |
 | Parameters bound by | `QueryPlanArgumentResolver` | the generated interface, then your code |
 | Allow-list declared in | the annotation | your code, mirrored in the contract |
-| OpenAPI document | generated from the annotation (springdoc integration, milestone 1.1.0) | written by you |
+| OpenAPI document | generated from the code; springdoc does not describe the `@FilterableQuery` parameters yet (planned in [#133](https://github.com/borja-glez/spring-boot-specification-repository/issues/133)) | written by you |
 
 Choose code-first when the Java code is the source of truth. Choose contract-first when the contract
 is reviewed, published or shared before the code exists, or when other teams generate clients from
@@ -37,14 +37,21 @@ dependencies {
 
 val extractSpecrepoFragment by tasks.registering(Copy::class) {
     from(zipTree(specrepoOpenApi.singleFile)) { include("META-INF/specrepo/openapi/specrepo-filters.yaml") }
-    into(layout.projectDirectory.dir("src/main/resources/api"))
+    into(layout.projectDirectory.dir("src/main/openapi"))
     eachFile { path = name }
     includeEmptyDirs = false
 }
 ```
 
-`<version>` is the library version you use. Make the generator task depend on
-`extractSpecrepoFragment` so the file exists when the contract is resolved.
+`<version>` is the library version you use. Keep your contract in `src/main/openapi` too, so that
+`./specrepo-filters.yaml` resolves next to it, and make the generator task depend on
+`extractSpecrepoFragment` so the file exists when the contract is resolved. The copy is a build
+output: add `src/main/openapi/specrepo-filters.yaml` to `.gitignore`.
+
+The target is not `src/main/resources` on purpose: that folder is an input of `processResources`,
+and Gradle fails the build when `processResources` uses an output of `extractSpecrepoFragment`
+without depending on it. If the contract must live in the resources, add
+`tasks.processResources { dependsOn(extractSpecrepoFragment) }`.
 
 Then reference the components from an endpoint:
 
@@ -54,6 +61,7 @@ paths:
     get:
       operationId: searchProducts
       x-specrepo-filterable-fields: [name, status, category.name]
+      x-specrepo-sortable-fields: [name, createdAt]
       parameters:
         - $ref: './specrepo-filters.yaml#/components/parameters/SpecrepoFilter'
         - $ref: './specrepo-filters.yaml#/components/parameters/SpecrepoOrFilter'
@@ -65,16 +73,25 @@ paths:
           $ref: './specrepo-filters.yaml#/components/responses/SpecrepoInvalidFilter'
 ```
 
-The parameter names in the fragment are the defaults of `HttpFilterParserConfiguration`. If you
-rename them with `specrepository.http.*`, rename them in the contract as well.
+`filter` conditions are combined with AND. The conditions of one `orFilter` group, separated by
+`;`, are combined with OR, and each group is ANDed with the `filter` conditions and with the other
+groups: `filter=name:contains:john&orFilter=status:eq:ACTIVE;category.name:eq:Books` means
+`name contains john AND (status = ACTIVE OR category.name = Books)`.
+
+The parameter names and the separators in the fragment (`|` between the values of `in`, `notin`
+and `between`, `;` between the conditions of an `orFilter` group) are the defaults of
+`HttpFilterParserConfiguration`. If you change them with `specrepository.http.*` (`filter-param`,
+`or-filter-param`, `sort-param`, `multi-value-separator`, `or-group-separator`), change the
+parameter names, descriptions and patterns in the contract as well.
 
 ## 3. Declaring the allow-list in the contract
 
 The generic `field:operator:value` syntax accepts any field, so narrow it per endpoint. Two ways,
 which you can combine:
 
-- Give the items a `pattern` that lists the fields that endpoint allows. Define the parameter
-  inline (or in your own components) instead of referencing `SpecrepoFilter` as is:
+- Give the items a `pattern` that lists the fields that endpoint allows. Define the parameters
+  inline (or in your own components) instead of referencing `SpecrepoFilter` and `SpecrepoSort`
+  as is:
 
   ```yaml
   - name: filter
@@ -85,11 +102,25 @@ which you can combine:
       type: array
       items:
         type: string
-        pattern: '^(name|status|category\.name):[a-z]+(:.*)?$'
+        pattern: '^(name|status|category\.name):[A-Za-z][A-Za-z0-9_]*(:.*)?$'
+  - name: sort
+    in: query
+    style: form
+    explode: true
+    schema:
+      type: array
+      items:
+        type: string
+        pattern: '^(name|createdAt)(,(asc|desc))?$'
   ```
 
-- Declare `x-specrepo-filterable-fields` on the operation, as in the example above. It is
-  documentation for contract tooling (linters, generated docs); the library does not read it.
+  Narrow `orFilter` the same way, repeating the condition after `;` as the pattern of
+  `SpecrepoOrFilter` does.
+
+- Declare `x-specrepo-filterable-fields` and `x-specrepo-sortable-fields` on the operation, as in
+  the example above: the first mirrors the filterable fields of the policy (the first argument of
+  `AllowedFieldsPolicy.of`), the second its sortable fields. They are documentation for contract
+  tooling (linters, generated docs); the library does not read them.
 
 Neither is a security control. A client can ignore the contract, so the server must enforce the
 list itself, which is what the next section does. Review the contract and the Java list together so
@@ -136,6 +167,14 @@ class ProductSearch {
 ```
 
 This code is compiled and run by `ContractFirstGuideExampleTest`.
+
+The fourth argument of `toQueryPlan`, `Set.of("name")`, lists the fields matched
+case-insensitively, like `caseInsensitiveFields` of `@FilterableQuery`. On `name`, the `eq`, `neq`,
+`contains`, `notcontains`, `startswith` and `endswith` conditions compare `unaccent(upper(name))`
+with the value normalized the same way, so they are accent-insensitive too and, on PostgreSQL,
+need the `unaccent` extension (see [Case-insensitive fields](../README.md#case-insensitive-fields)).
+A plain index on `name` does not serve that expression. Pass `Set.of()` to keep the default,
+case-sensitive matching.
 
 `HttpFilterParser` is an auto-configured bean (`HttpFilterAutoConfiguration`, active in a servlet web
 application) built from the `specrepository.http.*` properties, so inject it rather than calling
@@ -201,7 +240,7 @@ fields, and the REST adapter only copies the generated parameters into the recor
 
 ## 7. Limitations
 
-- The `|` separator of `in`, `notin` and `between`, and the `;` separator of `orFilter`, have no
-  escape character: a value cannot contain them.
+- The separators have no escape character: a value of `in`, `notin` or `between` cannot contain
+  `|`, and a value inside `orFilter` cannot contain `;`.
 - An empty value cannot be expressed.
 - Contract patterns validate the syntax only; they do not know which operators suit which type.
