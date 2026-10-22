@@ -7,14 +7,23 @@ info:
     specification-repository HTTP module (`filter`, `orFilter` and `sort`), the filter operators
     and the 400 problem returned for an invalid filter. Reference its components from your own
     contract, for example `$ref: 'specrepo-filters.yaml#/components/parameters/SpecrepoFilter'`.
-    The fragment sticks to the subset of OpenAPI shared by 3.0 and 3.1.
+    The fragment sticks to the subset of OpenAPI shared by 3.0 and 3.1. `info.version` is the
+    version of this fragment, not the version of the library.
 
-    The parameter names are the defaults of `HttpFilterParserConfiguration`; if you rename them in
-    the configuration, rename them in your contract too.
+    The parameter names (`filter`, `orFilter`, `sort`) and the separators (`|` between the values
+    of `in`, `notin` and `between`, `;` between the conditions of an `orFilter` group) are the
+    defaults of `HttpFilterParserConfiguration`. They can be changed with the
+    `specrepository.http` properties `filter-param`, `or-filter-param`, `sort-param`,
+    `multi-value-separator` and `or-group-separator`; if you change them, change the parameter
+    names, descriptions and patterns in your contract too.
 
-    Extension `x-specrepo-filterable-fields`: an operation may declare, as a list of field names
-    (dot notation allowed, for example `profile.city`), the fields a client may filter and sort
-    on. It is documentation for contract tooling; the server enforces its own allow-list.
+    Extensions `x-specrepo-filterable-fields` and `x-specrepo-sortable-fields`: an operation may
+    declare, each as a list of field names (dot notation allowed, for example `profile.city`), the
+    fields a client may filter on, in `filter` and `orFilter`, and the fields a client may sort
+    on. They mirror the two lists of the server's allow-list: the first and the second argument
+    of `AllowedFieldsPolicy.of`, or `filterableFields` and `sortableFields` of
+    `@FilterableQuery`. They are documentation for contract tooling; the library does not read
+    them, and the server enforces its own allow-list.
 paths: {}
 components:
   parameters:
@@ -28,16 +37,22 @@ components:
         Conditions combined with AND. Repeat the parameter for several conditions:
         `filter=name:contains:john&filter=age:gte:18`.
 
-        Syntax: `field:operator[:value]`. The field is a property path in dot notation. The
-        operator is one of `SpecrepoFilterOperator`; the operators that test null or emptiness
-        take no value. Operators with several values (`in`, `notin`) take a list `a|b|c`;
-        `between` takes a range `from|to`. There is no escape character: a value cannot contain
-        the `|` separator.
+        Syntax: `field:operator[:value]`. The field is a property path in dot notation; each
+        segment starts with a letter, followed by letters, digits or `_`. Operator names are
+        case-insensitive: `SpecrepoFilterOperator` lists the built-in ones, and an application may
+        register custom operators (for example `jsonb_eq`) or restrict them with
+        `specrepository.http.allowed-operators`. The operators that test null or emptiness take no
+        value. `in` and `notin` take a list `a|b|c`; `between` takes a range `from|to`. There is
+        no escape character: a value of `in`, `notin` or `between` cannot contain the `|`
+        separator.
       schema:
         type: array
         items:
           type: string
-          pattern: '^[A-Za-z0-9_.]+:[a-z]+(:.*)?$'
+          pattern: '^[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z][A-Za-z0-9_]*)*:[A-Za-z][A-Za-z0-9_]*(:.*)?$'
+      example:
+        - 'name:contains:john'
+        - 'age:gte:18'
     SpecrepoOrFilter:
       name: orFilter
       in: query
@@ -45,16 +60,22 @@ components:
       style: form
       explode: true
       description: |
-        Groups of conditions. The conditions inside a group are separated by `;` and combined
-        with AND; the groups are combined with OR, and the result with the `filter` conditions
-        with AND. Repeat the parameter for several groups:
-        `orFilter=status:eq:ACTIVE;age:gte:18&orFilter=role:eq:ADMIN`. Each condition has the
-        syntax `field:operator[:value]`, with the same value rules as `filter`.
+        Groups of alternative conditions. Inside a group the conditions are separated by `;`, and
+        the conditions of a group are combined with OR. Each group is ANDed with the `filter`
+        conditions and with the other groups. Repeat the parameter for several groups:
+        `filter=name:contains:john&orFilter=status:eq:ACTIVE;status:eq:PENDING&orFilter=age:lt:18;age:gt:65`
+        means
+        `name contains john AND (status = ACTIVE OR status = PENDING) AND (age < 18 OR age > 65)`.
+
+        Each condition has the syntax and the value rules of `filter`. The `;` separator has no
+        escape character either: a value inside `orFilter` cannot contain it.
       schema:
         type: array
         items:
           type: string
-          pattern: '^[A-Za-z0-9_.]+:[a-z]+(:.*)?(;[A-Za-z0-9_.]+:[a-z]+(:.*)?)*$'
+          pattern: '^[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z][A-Za-z0-9_]*)*:[A-Za-z][A-Za-z0-9_]*(:[^;]*)?(;[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z][A-Za-z0-9_]*)*:[A-Za-z][A-Za-z0-9_]*(:[^;]*)?)*$'
+      example:
+        - 'status:eq:ACTIVE;status:eq:PENDING'
     SpecrepoSort:
       name: sort
       in: query
@@ -62,25 +83,30 @@ components:
       style: form
       explode: true
       description: |
-        Sort order, `field[,asc|desc]`; the direction defaults to ascending. Repeat the parameter
-        to sort by several fields: `sort=name,asc&sort=createdAt,desc`.
+        Sort order, `field[,asc|desc]`; the direction defaults to ascending. The field follows the
+        rules of `filter`. Repeat the parameter to sort by several fields:
+        `sort=name,asc&sort=createdAt,desc`.
       schema:
         type: array
         items:
           type: string
-          pattern: '^[A-Za-z0-9_.]+(,(asc|desc))?$'
+          pattern: '^[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z][A-Za-z0-9_]*)*(,(asc|desc))?$'
+      example:
+        - 'name,asc'
+        - 'createdAt,desc'
   schemas:
     SpecrepoFilterOperator:
       type: string
       description: |
-        Operator of a filter condition.
+        Built-in operator of a filter condition. The parser also accepts these names in upper or
+        mixed case.
 
         - `eq`: equal to the value.
         - `neq`: not equal to the value.
         - `isnull`: the field is null (no value).
         - `isnotnull`: the field is not null (no value).
-        - `isempty`: the field is an empty string or collection (no value).
-        - `isnotempty`: the field is not an empty string or collection (no value).
+        - `isempty`: the collection is empty (no value).
+        - `isnotempty`: the collection is not empty (no value).
         - `contains`: the text contains the value.
         - `notcontains`: the text does not contain the value.
         - `startswith`: the text starts with the value.
