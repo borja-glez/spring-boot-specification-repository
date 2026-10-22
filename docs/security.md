@@ -218,6 +218,9 @@ not map to a status.
   expect the client to send them as a `filter`, and never list those fields in `filterableFields`
   or `sortableFields`: a sortable or filterable hidden field is an oracle even when the response
   does not include it.
+- **Contract-first APIs need the list too.** An OpenAPI `pattern` or `x-specrepo-filterable-fields`
+  does not stop a client; pass an `AllowedFieldsPolicy` to `HttpFilterParser#toQueryPlan` (see
+  [contract-first.md](contract-first.md)).
 - **Whitelist narrowly.** Declare only the fields the screen needs. Avoid `allowAllFields = true`
   on public endpoints, and avoid paths through associations the endpoint should not reveal. Return
   a DTO rather than the entity, and decide in code which associations are fetched and serialized.
