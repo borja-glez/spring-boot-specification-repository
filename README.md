@@ -31,7 +31,8 @@ Extensible Spring Data JPA query library with a fluent DSL and native-friendly a
 - HTTP filter API (`@FilterableQuery`) with deny-by-default field lists, input limits, client
   errors answered with 400 Problem Details (RFC 9457) out of the box, and
   [`specrepository.http.*` configuration properties](#configuration-properties); see the
-  [security guide](docs/security.md) before exposing it
+  [security guide](docs/security.md) before exposing it; for APIs written as OpenAPI first, see the
+  [contract-first guide](docs/contract-first.md)
 - 100% JaCoCo coverage enforced (no exclusions)
 - Testcontainers-backed integration coverage and runnable demo applications
 
