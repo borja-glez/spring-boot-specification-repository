@@ -1041,9 +1041,13 @@ required dependencies include `specification-repository-core` and Spring Data Co
 exposes a Spring MVC argument resolver that is auto-configured when Spring Web is on the
 classpath. Works with both Spring Boot 3 and Spring Boot 4.
 
+<p align="center"><img src="docs/assets/diagrams/query-pipeline.svg" alt="Query pipeline: an HTTP request is parsed and bounded by HttpFilterParser (specrepository.http limits and allowed operators), becomes a QueryPlan carrying an AllowedFieldsPolicy (validated at once by the @FilterableQuery argument resolver, otherwise when the query runs), gets server conditions from repository.query(plan).where(...), is turned into a Specification when the query runs, and then into SQL with bound parameters; a request rejected by the parser, the allow-list or the Specification is answered with a 400 Problem Details response" width="100%"></p>
+
 Before exposing it on a public endpoint, read [docs/security.md](docs/security.md): the threat
 model, what the library guarantees, what the application must still do (exception handling, page
-size, server conditions, indexes, timeouts) and a complete secure controller.
+size, server conditions, indexes, timeouts) and a complete secure controller. For APIs written
+as an OpenAPI document first, with controllers implementing generated interfaces, see
+[docs/contract-first.md](docs/contract-first.md).
 
 **Gradle**
 

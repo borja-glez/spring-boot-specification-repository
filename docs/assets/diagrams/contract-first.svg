@@ -1,0 +1,226 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="978" viewBox="0 0 1000 978" role="img" aria-labelledby="cf-title cf-desc">
+<title id="cf-title">Contract-first HTTP filters</title>
+<desc id="cf-desc">At build time, the specification-repository-http jar ships the OpenAPI fragment META-INF/specrepo/openapi/specrepo-filters.yaml with the parameters SpecrepoFilter, SpecrepoOrFilter and SpecrepoSort, the schemas SpecrepoFilterOperator and SpecrepoInvalidFilterProblem, and the response SpecrepoInvalidFilter. A Gradle Copy task, extractSpecrepoFragment, copies it next to the service's own OpenAPI contract so that each $ref resolves. The contract references those components from its searchProducts operation, declares its 400 response as SpecrepoInvalidFilter and documents the fields a client may filter on with x-specrepo-filterable-fields, the fields it may sort on with x-specrepo-sortable-fields, or a pattern. OpenAPI Generator turns the contract into the interface ProductsApi, whose searchProducts method receives filter, orFilter and sort as List&lt;String&gt;, each null when the client did not send it. At run time, ProductsController implements ProductsApi and calls search.toPlan on the application's own ProductSearch component. ProductSearch copies the non-null lists into a parameter map and calls the auto-configured HttpFilterParser: parser.toQueryPlan(Product.class, params, POLICY, Set.of("name")). The parser parses the parameters, applies the limits configured with the specrepository.http properties and stores POLICY in the plan, but checks no field. ProductSearch then calls POLICY.validate(plan) itself, so a disallowed field fails before the query. The allow-list lives in two places: in the contract it is documentation that a client can ignore, and the AllowedFieldsPolicy in Java is what the server enforces, so both are reviewed together. The controller then passes the plan to repository.query(plan), which adds the server condition tenantId equal to the current tenant, kept out of the allow-list, checks the policy again when the query runs, and runs findAll. A filter error from the parser, from POLICY.validate or from the query is answered by HttpFilterProblemDetailsExceptionHandler with 400 Bad Request and an application/problem+json body, the SpecrepoInvalidFilter response that the contract declares. The animation shows the fragment flowing into the contract and the generated interface, a request filtering on status, filterable in the contract and in POLICY, reaching the repository, and a request filtering on tenantId, filterable in neither the contract nor POLICY, that the parser accepts and POLICY.validate rejects with a 400 whose detail is: Field 'tenantId' is not allowed for filtering.</desc>
+<defs>
+<filter id="sh" x="-10%" y="-10%" width="120%" height="130%"><feDropShadow dx="0" dy="2" stdDeviation="4" flood-color="#000" flood-opacity="0.45"/></filter>
+<filter id="gl" x="-150%" y="-150%" width="400%" height="400%"><feGaussianBlur stdDeviation="2.4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+<linearGradient id="panel" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0f141b"/><stop offset="1" stop-color="#0d1117"/></linearGradient>
+<marker id="a-blue" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="#58a6ff"/></marker><marker id="a-orange" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="#f0883e"/></marker><marker id="a-amber" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="#d29922"/></marker><marker id="a-teal" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="#39c5bb"/></marker><marker id="a-purple" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="#bc8cff"/></marker><marker id="a-green" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="#3fb950"/></marker><marker id="a-red" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="#f85149"/></marker><marker id="a-pink" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="#db61a2"/></marker><marker id="a-muted" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="#8b949e"/></marker><marker id="a-text" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="#e6edf3"/></marker>
+</defs>
+<style>
+text{font-family:-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif}
+.m{font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace}
+.s{font-family:-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif}
+.flow{stroke-dasharray:6 5;animation:dash 1.1s linear infinite}
+@keyframes dash{to{stroke-dashoffset:-11}}
+@keyframes c1{0%{opacity:0}41.76%{opacity:0}42.9%{opacity:1}45.17%{opacity:1}46.31%{opacity:0}100%{opacity:0}}
+.c1{animation:c1 17.6s linear infinite}
+@keyframes c2{0%{opacity:0}71.31%{opacity:0}72.44%{opacity:1}77.84%{opacity:1}78.98%{opacity:0}100%{opacity:0}}
+.c2{animation:c2 17.6s linear infinite}
+@keyframes c3{0%{opacity:0}47.73%{opacity:0}49.15%{opacity:1}54.55%{opacity:1}55.97%{opacity:0}100%{opacity:0}}
+.c3{animation:c3 17.6s linear infinite}
+@keyframes c4{0%{opacity:1}55.68%{opacity:1}57.1%{opacity:0}97.44%{opacity:0}98.86%{opacity:1}100%{opacity:1}}
+.c4{animation:c4 17.6s linear infinite}
+@keyframes c5{0%{opacity:0}57.39%{opacity:0}58.81%{opacity:1}97.44%{opacity:1}98.86%{opacity:0}100%{opacity:0}}
+.c5{animation:c5 17.6s linear infinite}
+@keyframes c6{0%{opacity:1}76.99%{opacity:1}78.12%{opacity:0}97.16%{opacity:0}98.3%{opacity:1}100%{opacity:1}}
+.c6{animation:c6 17.6s linear infinite}
+@keyframes c7{0%{opacity:0}76.99%{opacity:0}78.12%{opacity:1}97.16%{opacity:1}98.3%{opacity:0}100%{opacity:0}}
+.c7{animation:c7 17.6s linear infinite}
+@keyframes c8{0%{opacity:0}1.7%{opacity:0}2.84%{opacity:1}6.25%{opacity:1}7.39%{opacity:0}100%{opacity:0}}
+.c8{animation:c8 17.6s linear infinite}
+@keyframes c9{0%{opacity:0;transform:translate(282px,236px)}5.68%{opacity:0;transform:translate(282px,236px)}6.25%{opacity:1}7.95%{opacity:1;transform:translate(340px,236px)}8.98%{opacity:0}100%{opacity:0;transform:translate(340px,236px)}}
+.c9{animation:c9 17.6s linear infinite}
+@keyframes c10{0%{opacity:0}7.67%{opacity:0}8.81%{opacity:1}13.07%{opacity:1}14.2%{opacity:0}100%{opacity:0}}
+.c10{animation:c10 17.6s linear infinite}
+@keyframes c11{0%{opacity:0;transform:translate(674px,236px)}12.5%{opacity:0;transform:translate(674px,236px)}13.07%{opacity:1}14.77%{opacity:1;transform:translate(736px,236px)}15.8%{opacity:0}100%{opacity:0;transform:translate(736px,236px)}}
+.c11{animation:c11 17.6s linear infinite}
+@keyframes c12{0%{opacity:0}14.49%{opacity:0}15.62%{opacity:1}19.32%{opacity:1}20.45%{opacity:0}100%{opacity:0}}
+.c12{animation:c12 17.6s linear infinite}
+@keyframes c13{0%{opacity:0;transform:translate(853px,290px)}18.75%{opacity:0;transform:translate(853px,290px)}19.32%{opacity:1}22.73%{opacity:1;transform:translate(853px,418px)}23.75%{opacity:0}100%{opacity:0;transform:translate(853px,418px)}}
+.c13{animation:c13 17.6s linear infinite}
+@keyframes c14{0%{opacity:0}22.44%{opacity:0}23.58%{opacity:1}26.14%{opacity:1}27.27%{opacity:0}33.52%{opacity:0}34.66%{opacity:1}37.5%{opacity:1}38.64%{opacity:0}63.07%{opacity:0}64.2%{opacity:1}67.05%{opacity:1}68.18%{opacity:0}100%{opacity:0}}
+.c14{animation:c14 17.6s linear infinite}
+@keyframes c15{0%{opacity:0}27.84%{opacity:0}28.98%{opacity:1}32.39%{opacity:1}33.52%{opacity:0}57.95%{opacity:0}59.09%{opacity:1}61.93%{opacity:1}63.07%{opacity:0}100%{opacity:0}}
+.c15{animation:c15 17.6s linear infinite}
+@keyframes c16{0%{opacity:0;transform:translate(560px,470px)}31.82%{opacity:0;transform:translate(560px,470px)}32.39%{opacity:1}33.81%{opacity:1;transform:translate(598px,470px)}34.83%{opacity:0}100%{opacity:0;transform:translate(598px,470px)}}
+.c16{animation:c16 17.6s linear infinite}
+@keyframes c17{0%{opacity:0;transform:translate(784px,520px)}36.93%{opacity:0;transform:translate(784px,520px)}37.5%{opacity:1}38.92%{opacity:1;transform:translate(784px,544px)}39.94%{opacity:0}100%{opacity:0;transform:translate(784px,544px)}}
+.c17{animation:c17 17.6s linear infinite}
+@keyframes c18{0%{opacity:0;transform:translate(560px,470px)}61.36%{opacity:0;transform:translate(560px,470px)}61.93%{opacity:1}63.35%{opacity:1;transform:translate(598px,470px)}64.38%{opacity:0}100%{opacity:0;transform:translate(598px,470px)}}
+.c18{animation:c18 17.6s linear infinite}
+@keyframes c19{0%{opacity:0;transform:translate(784px,520px)}66.48%{opacity:0;transform:translate(784px,520px)}67.05%{opacity:1}68.47%{opacity:1;transform:translate(784px,544px)}69.49%{opacity:0}100%{opacity:0;transform:translate(784px,544px)}}
+.c19{animation:c19 17.6s linear infinite}
+@keyframes c20{0%{opacity:0}38.92%{opacity:0}40.06%{opacity:1}42.33%{opacity:1}43.47%{opacity:0}68.47%{opacity:0}69.6%{opacity:1}71.87%{opacity:1}73.01%{opacity:0}100%{opacity:0}}
+.c20{animation:c20 17.6s linear infinite}
+@keyframes c21{0%{opacity:0}41.76%{opacity:0}42.9%{opacity:1}46.02%{opacity:1}47.16%{opacity:0}71.31%{opacity:0}72.44%{opacity:1}77.84%{opacity:1}78.98%{opacity:0}100%{opacity:0}}
+.c21{animation:c21 17.6s linear infinite}
+@keyframes c22{0%{opacity:0}38.64%{opacity:0}39.77%{opacity:1}44.89%{opacity:1}46.02%{opacity:0}100%{opacity:0}}
+.c22{animation:c22 17.6s linear infinite}
+@keyframes c23{0%{opacity:0;transform:translate(784px,760px)}44.6%{opacity:0;transform:translate(784px,760px)}45.17%{opacity:1}46.59%{opacity:1;transform:translate(784px,784px)}47.61%{opacity:0}100%{opacity:0;transform:translate(784px,784px)}}
+.c23{animation:c23 17.6s linear infinite}
+@keyframes c24{0%{opacity:0}46.31%{opacity:0}47.44%{opacity:1}53.41%{opacity:1}54.55%{opacity:0}100%{opacity:0}}
+.c24{animation:c24 17.6s linear infinite}
+@keyframes c25{0%{opacity:0}68.18%{opacity:0}69.32%{opacity:1}76.7%{opacity:1}77.84%{opacity:0}100%{opacity:0}}
+.c25{animation:c25 17.6s linear infinite}
+@keyframes c26{0%{opacity:0;transform:translate(600px,752px)}73.86%{opacity:0;transform:translate(600px,752px)}74.31%{transform:translate(586px,752px)}74.43%{opacity:1}76.5%{transform:translate(586px,820px)}77.27%{opacity:1;transform:translate(562px,820px)}78.3%{opacity:0}100%{opacity:0;transform:translate(562px,820px)}}
+.c26{animation:c26 17.6s linear infinite}
+@keyframes c27{0%{opacity:0}76.99%{opacity:0}78.12%{opacity:1}97.16%{opacity:1}98.3%{opacity:0}100%{opacity:0}}
+.c27{animation:c27 17.6s linear infinite}
+@media (prefers-reduced-motion: reduce){*{animation:none!important}.tok{display:none}}
+</style>
+<rect x="0.5" y="0.5" width="999" height="977" rx="16" fill="url(#panel)" stroke="#30363d"/>
+<text x="32" y="44" font-size="22" fill="#e6edf3" font-weight="600">Contract-first HTTP filters</text>
+<text x="32" y="67" font-size="13" fill="#8b949e">the contract reuses the library's fragment; your controller turns the generated parameters into a QueryPlan</text>
+<text x="32" y="100" font-size="12" fill="#e6edf3" letter-spacing="0.6"><tspan font-weight="600" fill="#8b949e">BUILD TIME</tspan><tspan fill="#8b949e">  ·  Gradle, before the code compiles</tspan></text>
+<path d="M32,384 H968" fill="none" stroke="#30363d" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="4 5"/>
+<text x="32" y="408" font-size="12" fill="#e6edf3" letter-spacing="0.6"><tspan font-weight="600" fill="#8b949e">RUN TIME</tspan><tspan fill="#8b949e">  ·  every request</tspan></text>
+<rect x="32" y="112" width="250" height="250" rx="12" fill="#161b22" stroke="#d29922" stroke-width="1.2" filter="url(#sh)"/>
+<circle cx="54" cy="134" r="11" fill="#d29922" fill-opacity="0.14" stroke="#d29922" stroke-width="1.2"/>
+<text x="54" y="138.5" font-size="12.5" font-weight="700" fill="#d29922" text-anchor="middle">1</text>
+<text x="74" y="139" font-size="14" fill="#e6edf3" class="m" font-weight="600">specrepo-filters.yaml</text>
+<text x="48" y="160" font-size="12" fill="#8b949e" class="m">specification-repository-http</text>
+<text x="48" y="176" font-size="12" fill="#8b949e" class="m">META-INF/specrepo/openapi/</text>
+<path d="M44,188 H270" fill="none" stroke="#30363d" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="48" y="207" font-size="12" fill="#8b949e">parameters</text>
+<text x="48" y="224" font-size="12.5" fill="#e6edf3" class="m">SpecrepoFilter</text>
+<text x="48" y="240" font-size="12.5" fill="#e6edf3" class="m">SpecrepoOrFilter</text>
+<text x="48" y="256" font-size="12.5" fill="#e6edf3" class="m">SpecrepoSort</text>
+<text x="48" y="277" font-size="12" fill="#8b949e">schemas</text>
+<text x="48" y="294" font-size="12.5" fill="#e6edf3" class="m">SpecrepoFilterOperator</text>
+<text x="48" y="310" font-size="12.5" fill="#e6edf3" class="m">SpecrepoInvalidFilterProblem</text>
+<text x="48" y="330" font-size="12" fill="#8b949e">responses</text>
+<text x="48" y="347" font-size="12.5" fill="#f85149" class="m">SpecrepoInvalidFilter</text>
+<rect x="342" y="112" width="332" height="250" rx="12" fill="#161b22" stroke="#58a6ff" stroke-width="1.2" filter="url(#sh)"/>
+<circle cx="364" cy="134" r="11" fill="#58a6ff" fill-opacity="0.14" stroke="#58a6ff" stroke-width="1.2"/>
+<text x="364" y="138.5" font-size="12.5" font-weight="700" fill="#58a6ff" text-anchor="middle">2</text>
+<text x="384" y="139" font-size="15" fill="#e6edf3" font-weight="600">your OpenAPI contract</text>
+<text x="358" y="158" font-size="12" fill="#8b949e" class="m">… = ./specrepo-filters.yaml#/components/…</text>
+<rect x="374" y="218" width="288" height="30" rx="5" fill="#bc8cff" fill-opacity="0.13"/>
+<rect x="374" y="326" width="288" height="31" rx="5" fill="#f85149" fill-opacity="0.12"/>
+<text x="358" y="181" font-size="12" fill="#e6edf3" class="m">/products:</text>
+<text x="370" y="196.5" font-size="12" fill="#e6edf3" class="m">get:</text>
+<text x="382" y="212" font-size="12" fill="#e6edf3" class="m">operationId: searchProducts</text>
+<text x="382" y="227.5" font-size="12" fill="#bc8cff" class="m">x-specrepo-filterable-fields:</text>
+<text x="394" y="243" font-size="12" fill="#bc8cff" class="m">[name, status, category.name]</text>
+<text x="382" y="258.5" font-size="12" fill="#e6edf3" class="m">parameters:</text>
+<text x="394" y="274" font-size="12" fill="#e6edf3" class="m">- $ref: '…/SpecrepoFilter'</text>
+<text x="394" y="289.5" font-size="12" fill="#e6edf3" class="m">- $ref: '…/SpecrepoOrFilter'</text>
+<text x="394" y="305" font-size="12" fill="#e6edf3" class="m">- $ref: '…/SpecrepoSort'</text>
+<text x="382" y="320.5" font-size="12" fill="#e6edf3" class="m">responses:</text>
+<text x="394" y="336" font-size="12" fill="#f85149" class="m">'400':</text>
+<text x="406" y="351.5" font-size="12" fill="#f85149" class="m">$ref: '…/SpecrepoInvalidFilter'</text>
+<rect x="738" y="112" width="230" height="178" rx="12" fill="#161b22" stroke="#db61a2" stroke-width="1.2" filter="url(#sh)"/>
+<circle cx="760" cy="134" r="11" fill="#db61a2" fill-opacity="0.14" stroke="#db61a2" stroke-width="1.2"/>
+<text x="760" y="138.5" font-size="12.5" font-weight="700" fill="#db61a2" text-anchor="middle">3</text>
+<text x="780" y="139" font-size="15" fill="#e6edf3" font-weight="600">generated interface</text>
+<text x="754" y="163" font-size="12.5" fill="#db61a2" class="m">interface ProductsApi</text>
+<text x="754" y="186" font-size="12" fill="#e6edf3" class="m">searchProducts(</text>
+<text x="768" y="202" font-size="12" fill="#e6edf3" class="m">List&lt;String&gt; filter,</text>
+<text x="768" y="218" font-size="12" fill="#e6edf3" class="m">List&lt;String&gt; orFilter,</text>
+<text x="768" y="234" font-size="12" fill="#e6edf3" class="m">List&lt;String&gt; sort)</text>
+<text x="754" y="258" font-size="12" fill="#8b949e">a list is null when the</text>
+<text x="754" y="274" font-size="12" fill="#8b949e">client did not send it</text>
+<path d="M282,236 H340" fill="none" stroke="#d29922" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#a-amber)"/>
+<text x="312" y="211" font-size="12" fill="#8b949e" text-anchor="middle">Gradle</text>
+<text x="312" y="226" font-size="12" fill="#8b949e" text-anchor="middle">Copy</text>
+<path d="M674,236 H736" fill="none" stroke="#58a6ff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#a-blue)"/>
+<text x="706" y="211" font-size="12" fill="#8b949e" text-anchor="middle">OpenAPI</text>
+<text x="706" y="226" font-size="12" fill="#8b949e" text-anchor="middle">Generator</text>
+<path d="M853,290 V416" fill="none" stroke="#db61a2" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#a-pink)" stroke-dasharray="5 4"/>
+<text x="861" y="345" font-size="12" fill="#8b949e">implements</text>
+<rect x="600" y="420" width="368" height="100" rx="12" fill="#161b22" stroke="#8b949e" stroke-width="1.2" filter="url(#sh)"/>
+<circle cx="622" cy="442" r="11" fill="#8b949e" fill-opacity="0.14" stroke="#8b949e" stroke-width="1.2"/>
+<text x="622" y="446.5" font-size="12.5" font-weight="700" fill="#8b949e" text-anchor="middle">4</text>
+<text x="642" y="447" font-size="14.5" fill="#e6edf3" class="m" font-weight="600">ProductsController</text>
+<text x="616" y="469" font-size="12" fill="#db61a2" class="m">implements ProductsApi</text>
+<text x="616" y="489" font-size="12.5" fill="#e6edf3" class="m">search.toPlan(filter, orFilter, sort)</text>
+<text x="616" y="509" font-size="12" fill="#e6edf3"><tspan fill="#8b949e">then </tspan><tspan class="m" fill="#e6edf3">repository.query(plan)</tspan><tspan fill="#8b949e">, step 6</tspan></text>
+<path d="M784,520 V542" fill="none" stroke="#8b949e" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#a-muted)"/>
+<rect x="600" y="546" width="368" height="214" rx="12" fill="#161b22" stroke="#8b949e" stroke-width="1.2" filter="url(#sh)"/>
+<circle cx="622" cy="568" r="11" fill="#8b949e" fill-opacity="0.14" stroke="#8b949e" stroke-width="1.2"/>
+<text x="622" y="572.5" font-size="12.5" font-weight="700" fill="#8b949e" text-anchor="middle">5</text>
+<text x="642" y="573" font-size="14.5" fill="#e6edf3" class="m" font-weight="600">ProductSearch</text>
+<text x="952" y="573" font-size="12" fill="#8b949e" text-anchor="end">your component</text>
+<text x="616" y="595" font-size="12" fill="#8b949e">copies the non-null lists into a parameter map</text>
+<rect x="612" y="606" width="344" height="102" rx="9" fill="#17140f" stroke="#d29922" stroke-width="1.2"/>
+<text x="628" y="627" font-size="13.5" fill="#e6edf3" class="m" font-weight="600">HttpFilterParser</text>
+<text x="944" y="627" font-size="12" fill="#d29922" text-anchor="end">auto-configured bean</text>
+<text x="628" y="647" font-size="12.5" fill="#e6edf3" class="m">parser.toQueryPlan(Product.class,</text>
+<text x="646" y="663" font-size="12.5" fill="#e6edf3" class="m">params, POLICY, Set.of("name"))</text>
+<text x="628" y="682" font-size="12" fill="#e6edf3"><tspan fill="#8b949e">limits from </tspan><tspan class="m" fill="#e6edf3">specrepository.http.*</tspan></text>
+<text x="628" y="699" font-size="12" fill="#8b949e">stores POLICY in the plan; checks no field</text>
+<rect class="c1" x="608" y="714" width="352" height="42" rx="6" fill="#bc8cff" fill-opacity="0.16" opacity="0"/>
+<rect class="c2" x="608" y="714" width="352" height="42" rx="6" fill="#f85149" fill-opacity="0.16" opacity="0"/>
+<text x="616" y="730" font-size="12.5" fill="#bc8cff" class="m">POLICY.validate(plan)</text>
+<text x="952" y="730" font-size="12" fill="#8b949e" text-anchor="end">fails before the query</text>
+<text x="616" y="748" font-size="12" fill="#8b949e">your code checks the allow-list here</text>
+<path d="M784,760 V782" fill="none" stroke="#8b949e" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#a-muted)"/>
+<rect x="600" y="786" width="368" height="136" rx="12" fill="#161b22" stroke="#39c5bb" stroke-width="1.2" filter="url(#sh)"/>
+<circle cx="622" cy="808" r="11" fill="#39c5bb" fill-opacity="0.14" stroke="#39c5bb" stroke-width="1.2"/>
+<text x="622" y="812.5" font-size="12.5" font-weight="700" fill="#39c5bb" text-anchor="middle">6</text>
+<text x="642" y="813" font-size="14.5" fill="#e6edf3" class="m" font-weight="600">repository.query(plan)</text>
+<text x="952" y="813" font-size="12" fill="#39c5bb" text-anchor="end">server condition</text>
+<text x="616" y="836" font-size="12.5" fill="#39c5bb" class="m">.where("tenantId", FilterOperator.EQ,</text>
+<text x="640" y="853" font-size="12.5" fill="#39c5bb" class="m">currentTenantId())</text>
+<text x="616" y="870" font-size="12.5" fill="#e6edf3" class="m">.findAll()</text>
+<text x="616" y="892" font-size="12" fill="#8b949e">tenantId stays out of the allow-list</text>
+<text x="616" y="909" font-size="12" fill="#8b949e">checks the policy again when the query runs</text>
+<g class="c3" opacity="0"><rect x="884" y="858" width="68" height="20" rx="10" fill="#3fb950" fill-opacity="0.16" stroke="#3fb950" stroke-opacity="0.7"/><text x="918" y="872.5" font-size="12" font-weight="600" fill="#3fb950" text-anchor="middle">200 OK</text></g>
+<rect x="32" y="428" width="528" height="84" rx="12" fill="#161b22" stroke="#58a6ff" stroke-width="1.2" filter="url(#sh)"/>
+<text x="48" y="452" font-size="13" fill="#58a6ff" font-weight="600">HTTP request</text>
+<text x="544" y="452" font-size="12" fill="#58a6ff" class="m" text-anchor="end">untrusted client input</text>
+<text x="48" y="476" font-size="12.5" fill="#e6edf3" class="m c4">GET /products?filter=status:eq:ACTIVE</text>
+<text x="48" y="496" font-size="12" fill="#8b949e" class="c4">status: filterable in the contract and in POLICY</text>
+<text x="48" y="476" font-size="12.5" fill="#e6edf3" class="m c5" opacity="0">GET /products?filter=tenantId:eq:42</text>
+<text x="48" y="496" font-size="12" fill="#8b949e" class="c5" opacity="0">tenantId: filterable in neither the contract nor POLICY</text>
+<path d="M560,470 H598" fill="none" stroke="#58a6ff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#a-blue)"/>
+<rect x="32" y="557" width="528" height="189" rx="12" fill="#14111c" stroke="#bc8cff" stroke-width="1.2" stroke-dasharray="5 4"/>
+<text x="48" y="581" font-size="13" fill="#bc8cff" font-weight="600">the allow-list lives in two places</text>
+<text x="48" y="605" font-size="12" fill="#8b949e">contract</text>
+<text x="120" y="605" font-size="12" fill="#e6edf3" class="m">x-specrepo-filterable-fields</text>
+<text x="120" y="622" font-size="12" fill="#e6edf3" class="m">x-specrepo-sortable-fields, pattern</text>
+<text x="120" y="639" font-size="12" fill="#8b949e">documentation for tooling: a client can ignore it</text>
+<text x="48" y="663" font-size="12" fill="#8b949e">server</text>
+<text x="120" y="663" font-size="12" fill="#bc8cff" class="m">POLICY = AllowedFieldsPolicy.of(…)</text>
+<text x="120" y="680" font-size="12" fill="#8b949e">the list the server enforces: review both together</text>
+<text x="48" y="706" font-size="12" fill="#8b949e">checks</text>
+<text x="120" y="706" font-size="12" fill="#e6edf3"><tspan fill="#8b949e">your code: </tspan><tspan class="m" fill="#bc8cff">POLICY.validate(plan)</tspan></text>
+<text x="120" y="723" font-size="12" fill="#e6edf3"><tspan fill="#8b949e">not </tspan><tspan class="m" fill="#e6edf3">toQueryPlan</tspan><tspan fill="#8b949e">; the repository checks again</tspan></text>
+<path d="M560,730 H598" fill="none" stroke="#bc8cff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#a-purple)" stroke-dasharray="4 4"/>
+<rect x="32" y="770" width="528" height="152" rx="12" fill="#1a1215" stroke="#f85149" stroke-width="1.2" filter="url(#sh)"/>
+<text x="48" y="794" font-size="15" fill="#f85149" font-weight="600">400 Bad Request</text>
+<text x="544" y="794" font-size="12" fill="#8b949e" class="m" text-anchor="end">application/problem+json</text>
+<text x="48" y="815" font-size="12" fill="#8b949e" class="m">HttpFilterProblemDetailsExceptionHandler</text>
+<text x="48" y="838" font-size="12" fill="#8b949e" class="m">detail</text>
+<text x="48" y="857" font-size="12" fill="#8b949e" class="m">field</text>
+<text x="112" y="838" font-size="12.5" fill="#8b949e" class="c6">the exception message</text>
+<text x="112" y="857" font-size="12.5" fill="#8b949e" class="c6">the field, when the exception names one</text>
+<text x="112" y="838" font-size="12.5" fill="#e6edf3" class="m c7" opacity="0">Field 'tenantId' is not allowed for filtering</text>
+<text x="112" y="857" font-size="12.5" fill="#e6edf3" class="m c7" opacity="0">tenantId</text>
+<text x="48" y="880" font-size="12" fill="#e6edf3"><tspan fill="#8b949e">the </tspan><tspan class="m" fill="#e6edf3">'400'</tspan><tspan fill="#8b949e"> response that the contract declares:</tspan></text>
+<text x="48" y="896" font-size="12" fill="#e6edf3"><tspan class="m" fill="#f85149">SpecrepoInvalidFilter</tspan><tspan fill="#8b949e"> from the fragment</tspan></text>
+<path d="M600,752 H586 V820 H562" fill="none" stroke="#f85149" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#a-red)"/>
+<path d="M600,880 H562" fill="none" stroke="#f85149" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#a-red)"/>
+<text x="500" y="956" font-size="12" fill="#e6edf3" text-anchor="middle"><tspan fill="#8b949e">the Gradle task </tspan><tspan class="m" fill="#8b949e">extractSpecrepoFragment</tspan><tspan fill="#8b949e"> copies the fragment next to the contract so that each </tspan><tspan class="m" fill="#8b949e">$ref</tspan><tspan fill="#8b949e"> resolves</tspan></text>
+<rect class="c8" x="29" y="109" width="256" height="256" rx="15" fill="#d29922" fill-opacity="0.07" stroke="#d29922" stroke-width="2.2" opacity="0"/>
+<circle class="tok c9" r="5.5" fill="#d29922" filter="url(#gl)" opacity="0"/>
+<rect class="c10" x="339" y="109" width="338" height="256" rx="15" fill="#58a6ff" fill-opacity="0.07" stroke="#58a6ff" stroke-width="2.2" opacity="0"/>
+<circle class="tok c11" r="5.5" fill="#58a6ff" filter="url(#gl)" opacity="0"/>
+<rect class="c12" x="735" y="109" width="236" height="184" rx="15" fill="#db61a2" fill-opacity="0.07" stroke="#db61a2" stroke-width="2.2" opacity="0"/>
+<circle class="tok c13" r="5.5" fill="#db61a2" filter="url(#gl)" opacity="0"/>
+<rect class="c14" x="597" y="417" width="374" height="106" rx="15" fill="#e6edf3" fill-opacity="0.07" stroke="#e6edf3" stroke-width="2.2" opacity="0"/>
+<rect class="c15" x="29" y="425" width="534" height="90" rx="15" fill="#58a6ff" fill-opacity="0.07" stroke="#58a6ff" stroke-width="2.2" opacity="0"/>
+<circle class="tok c16" r="5.5" fill="#58a6ff" filter="url(#gl)" opacity="0"/>
+<circle class="tok c17" r="5.5" fill="#58a6ff" filter="url(#gl)" opacity="0"/>
+<circle class="tok c18" r="5.5" fill="#58a6ff" filter="url(#gl)" opacity="0"/>
+<circle class="tok c19" r="5.5" fill="#58a6ff" filter="url(#gl)" opacity="0"/>
+<rect class="c20" x="609" y="603" width="350" height="108" rx="11" fill="#d29922" fill-opacity="0.07" stroke="#d29922" stroke-width="2.2" opacity="0"/>
+<rect class="c21" x="29" y="554" width="534" height="195" rx="15" fill="#bc8cff" fill-opacity="0.07" stroke="#bc8cff" stroke-width="2.2" opacity="0"/>
+<rect class="c22" x="597" y="543" width="374" height="220" rx="15" fill="#e6edf3" fill-opacity="0.07" stroke="#e6edf3" stroke-width="2.2" opacity="0"/>
+<circle class="tok c23" r="5.5" fill="#58a6ff" filter="url(#gl)" opacity="0"/>
+<rect class="c24" x="597" y="783" width="374" height="142" rx="15" fill="#39c5bb" fill-opacity="0.07" stroke="#39c5bb" stroke-width="2.2" opacity="0"/>
+<rect class="c25" x="597" y="543" width="374" height="220" rx="15" fill="#f85149" fill-opacity="0.07" stroke="#f85149" stroke-width="2.2" opacity="0"/>
+<circle class="tok c26" r="5.5" fill="#f85149" filter="url(#gl)" opacity="0"/>
+<rect class="c27" x="29" y="767" width="534" height="158" rx="15" fill="#f85149" fill-opacity="0.07" stroke="#f85149" stroke-width="2.2" opacity="0"/>
+</svg>

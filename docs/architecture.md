@@ -10,6 +10,18 @@ The project is split into a pure query core and JPA/Spring adapters.
 
 All library code lives under the `com.borjaglez.specrepository` package hierarchy.
 
+## From an HTTP request to SQL
+
+<p align="center"><img src="assets/diagrams/query-pipeline.svg" alt="Query pipeline: an HTTP request is parsed and bounded by HttpFilterParser (specrepository.http limits and allowed operators), becomes a QueryPlan carrying an AllowedFieldsPolicy (validated at once by the @FilterableQuery argument resolver, otherwise when the query runs), gets server conditions from repository.query(plan).where(...), is turned into a Specification when the query runs, and then into SQL with bound parameters; a request rejected by the parser, the allow-list or the Specification is answered with a 400 Problem Details response" width="100%"></p>
+
+The `http` module parses and bounds the client input, the `core` plan carries the field allow-list,
+server conditions are added in code, and the `jpa` module checks the plan again while it builds the
+`Specification`. Every client error is answered with a 400 before any SQL runs. See
+[security.md](security.md) for the limits and the status of each exception, and
+[contract-first.md](contract-first.md) for APIs written as an OpenAPI document first:
+
+<p align="center"><img src="assets/diagrams/contract-first.svg" alt="Contract-first flow: at build time the specrepo-filters.yaml fragment from the specification-repository-http jar is copied next to your OpenAPI contract, which references its parameters and its SpecrepoInvalidFilter 400 response, and OpenAPI Generator turns the contract into the ProductsApi interface; at run time ProductsController implements it and calls your ProductSearch component, which passes the filter, orFilter and sort lists to HttpFilterParser.toQueryPlan (the parser stores the AllowedFieldsPolicy in the plan but checks no field) and then calls POLICY.validate(plan) itself; the plan goes to repository.query(plan) with a tenant server condition and is checked again when the query runs; a disallowed field is answered with a 400 Problem Details response" width="100%"></p>
+
 ## Design goals
 
 - Builders only build.
