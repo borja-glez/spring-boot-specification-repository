@@ -44,6 +44,18 @@ both.
 - A test that cannot run on one database is overridden in that database's subclass with
   `@Test @Disabled("<database>: <reason>")`.
 
+### Mutation testing report (PIT)
+
+```bash
+./gradlew mutationReport
+```
+
+Runs [PIT](https://pitest.org) on `core`, `jpa` and `http` and writes an HTML and an XML report to
+`<module>/build/reports/pitest/` (open `index.html`). It is report-only: there is no threshold, and it
+is not part of `quality` or CI. The PostgreSQL (Testcontainers) test classes are excluded by name
+(`*Postgres*`), so it needs no Docker; the run takes a couple of minutes. Surviving mutants point at
+behavior the tests do not pin down.
+
 ## Code Style
 
 - Formatting is managed by **Spotless** with Google Java Format.

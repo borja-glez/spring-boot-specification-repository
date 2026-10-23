@@ -1,6 +1,7 @@
 plugins {
     id("specification-library-conventions")
     id("specification-publish-conventions")
+    id("specification-mutation-conventions")
 }
 
 dependencies {
